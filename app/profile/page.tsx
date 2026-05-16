@@ -88,16 +88,12 @@ export default function ProfilePage() {
     id: string
   ) {
 
-    const { data, error } =
+    const { data } =
       await supabase
         .from("profiles")
         .select("*")
         .eq("id", id)
         .maybeSingle()
-
-    console.log("PROFILE:", data)
-
-    console.log("PROFILE ERROR:", error)
 
     if (data) {
 
@@ -127,8 +123,6 @@ export default function ProfilePage() {
 
     if (error) {
 
-      console.log(error)
-
       alert("Gagal update nama")
       return
     }
@@ -144,22 +138,15 @@ export default function ProfilePage() {
 
     try {
 
-      console.log("UPLOAD DIMULAI")
-
       setUploading(true)
 
       const file =
         e.target.files[0]
 
-      console.log("FILE:", file)
-
       if (!file) {
-
-        alert("File tidak ada")
         return
       }
 
-      // VALIDASI
       if (
         file.size >
         2 * 1024 * 1024
@@ -177,11 +164,7 @@ export default function ProfilePage() {
       const fileName =
         `${Date.now()}.${fileExt}`
 
-      console.log("FILE NAME:", fileName)
-
-      // UPLOAD STORAGE
       const {
-        data: uploadData,
         error: uploadError
       } =
         await supabase.storage
@@ -194,16 +177,6 @@ export default function ProfilePage() {
             }
           )
 
-      console.log(
-        "UPLOAD DATA:",
-        uploadData
-      )
-
-      console.log(
-        "UPLOAD ERROR:",
-        uploadError
-      )
-
       if (uploadError) {
 
         alert(
@@ -213,7 +186,6 @@ export default function ProfilePage() {
         return
       }
 
-      // GET URL
       const {
         data: urlData
       } =
@@ -223,20 +195,9 @@ export default function ProfilePage() {
             fileName
           )
 
-      console.log(
-        "URL DATA:",
-        urlData
-      )
-
       const imageUrl =
         urlData.publicUrl
 
-      console.log(
-        "IMAGE URL:",
-        imageUrl
-      )
-
-      // SAVE DATABASE
       const {
         error: dbError
       } =
@@ -246,11 +207,6 @@ export default function ProfilePage() {
             foto: imageUrl
           })
           .eq("id", userId)
-
-      console.log(
-        "DB ERROR:",
-        dbError
-      )
 
       if (dbError) {
 
@@ -263,16 +219,9 @@ export default function ProfilePage() {
 
       setFoto(imageUrl)
 
-      await getProfile(userId)
-
       alert("Upload berhasil")
 
     } catch (err) {
-
-      console.log(
-        "CATCH ERROR:",
-        err
-      )
 
       alert("Terjadi error")
 
@@ -365,7 +314,7 @@ export default function ProfilePage() {
         <div className="
           text-2xl
           font-bold
-          text-blue-600
+          text-blue-700
         ">
           Loading...
         </div>
@@ -383,12 +332,15 @@ export default function ProfilePage() {
 
       {/* HEADER */}
       <div className="
-        bg-[#1e3a8a]
+        bg-gradient-to-r
+        from-blue-900
+        via-blue-800
+        to-blue-700
         text-white
         px-6 py-5
         flex justify-between
         items-center
-        shadow-md
+        shadow-lg
       ">
 
         <div>
@@ -396,13 +348,15 @@ export default function ProfilePage() {
           <p className="
             text-sm
             text-blue-200
+            tracking-[3px]
           ">
             LAMPUNG CERDAS
           </p>
 
           <h1 className="
             text-3xl
-            font-bold
+            font-black
+            mt-1
           ">
             Profile Akademik
           </h1>
@@ -418,11 +372,11 @@ export default function ProfilePage() {
           className="
             bg-white
             text-blue-700
-            px-5 py-2
-            rounded-xl
-            font-semibold
+            px-5 py-2.5
+            rounded-2xl
+            font-bold
             hover:bg-blue-100
-            transition
+            transition-all
           "
         >
           ← Dashboard
@@ -440,8 +394,9 @@ export default function ProfilePage() {
         {/* PROFILE CARD */}
         <div className="
           bg-white
-          rounded-3xl
+          rounded-[32px]
           shadow-sm
+          border border-slate-200
           p-6
           mb-6
         ">
@@ -483,12 +438,12 @@ export default function ProfilePage() {
                   <div className="
                     w-28 h-28
                     rounded-full
-                    bg-blue-600
+                    bg-blue-700
                     text-white
                     flex items-center
                     justify-center
                     text-4xl
-                    font-bold
+                    font-black
                   ">
                     {nama
                       .slice(0, 2)
@@ -497,14 +452,13 @@ export default function ProfilePage() {
 
                 )}
 
-                {/* UPLOAD */}
                 <label
                   className="
                     absolute
                     bottom-0 right-0
                     w-10 h-10
                     rounded-full
-                    bg-blue-600
+                    bg-blue-700
                     text-white
                     flex items-center
                     justify-center
@@ -535,15 +489,16 @@ export default function ProfilePage() {
 
                 <h2 className="
                   text-3xl
-                  font-bold
-                  text-gray-800
+                  font-black
+                  text-slate-800
                 ">
                   {nama}
                 </h2>
 
                 <p className="
-                  text-gray-500
+                  text-slate-600
                   mt-1
+                  font-medium
                 ">
                   {email}
                 </p>
@@ -556,7 +511,7 @@ export default function ProfilePage() {
                   px-4 py-2
                   rounded-full
                   text-sm
-                  font-semibold
+                  font-bold
                 ">
                   {getProgress()}
                 </div>
@@ -567,22 +522,24 @@ export default function ProfilePage() {
 
             {/* RIGHT */}
             <div className="
-              bg-[#f4f7fb]
-              rounded-2xl
+              bg-slate-50
+              border border-slate-200
+              rounded-3xl
               p-5
               min-w-[220px]
             ">
 
               <p className="
-                text-gray-500
+                text-slate-600
                 text-sm
+                font-semibold
               ">
                 Status Akademik
               </p>
 
               <h3 className="
                 text-2xl
-                font-bold
+                font-black
                 text-blue-700
                 mt-2
               ">
@@ -591,7 +548,7 @@ export default function ProfilePage() {
 
               <p className="
                 text-sm
-                text-gray-500
+                text-slate-500
                 mt-3
               ">
                 Bergabung sejak Mei 2026
@@ -642,16 +599,17 @@ export default function ProfilePage() {
         {/* INFORMASI */}
         <div className="
           bg-white
-          rounded-3xl
+          rounded-[32px]
           shadow-sm
+          border border-slate-200
           p-6
           mb-6
         ">
 
           <h2 className="
             text-2xl
-            font-bold
-            text-gray-800
+            font-black
+            text-slate-800
             mb-6
           ">
             Informasi Akun
@@ -668,7 +626,8 @@ export default function ProfilePage() {
 
               <label className="
                 text-sm
-                text-gray-500
+                text-slate-600
+                font-semibold
               ">
                 Nama Lengkap
               </label>
@@ -683,11 +642,13 @@ export default function ProfilePage() {
                 className="
                   w-full
                   border
-                  border-gray-200
+                  border-slate-300
                   rounded-2xl
                   p-4
                   mt-2
                   outline-none
+                  text-slate-700
+                  font-medium
                   focus:border-blue-500
                 "
               />
@@ -696,12 +657,13 @@ export default function ProfilePage() {
                 onClick={saveNama}
                 className="
                   mt-4
-                  bg-blue-600
-                  hover:bg-blue-700
+                  bg-blue-700
+                  hover:bg-blue-800
                   text-white
                   px-5 py-3
                   rounded-2xl
-                  font-semibold
+                  font-bold
+                  transition-all
                 "
               >
                 Simpan Perubahan
@@ -714,23 +676,28 @@ export default function ProfilePage() {
 
               <label className="
                 text-sm
-                text-gray-500
+                text-slate-600
+                font-semibold
               ">
                 Email
               </label>
 
               <div className="
-                bg-[#f4f7fb]
+                bg-slate-50
+                border border-slate-200
                 rounded-2xl
                 p-4
                 mt-2
+                text-slate-700
+                font-medium
               ">
                 {email}
               </div>
 
               <label className="
                 text-sm
-                text-gray-500
+                text-slate-600
+                font-semibold
                 mt-5
                 block
               ">
@@ -738,12 +705,13 @@ export default function ProfilePage() {
               </label>
 
               <div className="
-                bg-[#f4f7fb]
+                bg-slate-50
+                border border-slate-200
                 rounded-2xl
                 p-4
                 mt-2
                 text-blue-700
-                font-semibold
+                font-bold
               ">
                 {getProgress()}
               </div>
@@ -774,6 +742,7 @@ function StatCard({
       rounded-3xl
       p-5
       shadow-sm
+      border border-slate-200
     ">
 
       <div className="
@@ -784,8 +753,10 @@ function StatCard({
         <div>
 
           <p className="
-            text-gray-500
+            text-slate-600
             text-sm
+            font-semibold
+            tracking-wide
           ">
             {title}
           </p>
@@ -808,6 +779,7 @@ function StatCard({
           flex items-center
           justify-center
           text-2xl
+          shadow-sm
         ">
           {icon}
         </div>
