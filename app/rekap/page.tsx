@@ -177,82 +177,136 @@ export default function RekapPage() {
 
   async function downloadPDF() {
 
-    if (!printRef.current)
-      return
+  if (!printRef.current)
+    return
 
-    try {
+  try {
 
-      setPdfLoading(true)
+    setPdfLoading(true)
 
-      const element =
-        printRef.current
+    const element =
+      printRef.current
 
-      const originalBackground =
-        element.style.background
+    // =========================
+    // FIX COLOR LAB / OKLAB
+    // =========================
 
-      element.style.background =
-        "#ffffff"
+    const allElements =
+      element.querySelectorAll("*")
 
-      const canvas =
-        await html2canvas(
-          element,
-          {
-            scale: 2,
+    allElements.forEach((el: any) => {
 
-            useCORS: true,
+      const style =
+        window.getComputedStyle(el)
 
-            allowTaint: true,
+      // FIX BACKGROUND
+      if (
+        style.backgroundColor.includes("lab") ||
+        style.backgroundColor.includes("oklab")
+      ) {
+        el.style.backgroundColor =
+          "#ffffff"
+      }
 
-            logging: false,
+      // FIX TEXT COLOR
+      if (
+        style.color.includes("lab") ||
+        style.color.includes("oklab")
+      ) {
+        el.style.color =
+          "#000000"
+      }
 
-            backgroundColor:
-              "#ffffff",
+      // FIX BORDER COLOR
+      if (
+        style.borderColor.includes("lab") ||
+        style.borderColor.includes("oklab")
+      ) {
+        el.style.borderColor =
+          "#d1d5db"
+      }
+    })
 
-            removeContainer: true,
+    // =========================
+    // CREATE CANVAS
+    // =========================
 
-            foreignObjectRendering:
-              false,
-          }
-        )
+    const canvas =
+      await html2canvas(
+        element,
+        {
+          scale: 2,
+          useCORS: true,
+          backgroundColor:
+            "#ffffff",
+          logging: false,
+          allowTaint: true,
+        }
+      )
 
-      element.style.background =
-        originalBackground
+    const imgData =
+      canvas.toDataURL(
+        "image/jpeg",
+        1.0
+      )
 
-      const imgData =
-        canvas.toDataURL(
-          "image/png"
-        )
+    // =========================
+    // PDF
+    // =========================
 
-      const pdf =
-        new jsPDF(
-          "p",
-          "mm",
-          "a4"
-        )
+    const pdf =
+      new jsPDF(
+        "p",
+        "mm",
+        "a4"
+      )
 
-      const pdfWidth =
-        210
+    const pdfWidth =
+      210
 
-      const pdfHeight =
-        297
+    const pdfHeight =
+      297
 
-      const imgWidth =
-        pdfWidth
+    const imgWidth =
+      pdfWidth
 
-      const imgHeight =
-        (canvas.height *
-          imgWidth) /
-        canvas.width
+    const imgHeight =
+      (canvas.height *
+        imgWidth) /
+      canvas.width
 
-      let heightLeft =
+    let heightLeft =
+      imgHeight
+
+    let position = 0
+
+    // PAGE 1
+    pdf.addImage(
+      imgData,
+      "JPEG",
+      0,
+      position,
+      imgWidth,
+      imgHeight
+    )
+
+    heightLeft -=
+      pdfHeight
+
+    // MULTI PAGE
+    while (
+      heightLeft > 0
+    ) {
+
+      position =
+        heightLeft -
         imgHeight
 
-      let position = 0
+      pdf.addPage()
 
-      // PAGE 1
       pdf.addImage(
         imgData,
-        "PNG",
+        "JPEG",
         0,
         position,
         imgWidth,
@@ -261,50 +315,27 @@ export default function RekapPage() {
 
       heightLeft -=
         pdfHeight
-
-      // MULTI PAGE
-      while (
-        heightLeft > 0
-      ) {
-
-        position =
-          heightLeft -
-          imgHeight
-
-        pdf.addPage()
-
-        pdf.addImage(
-          imgData,
-          "PNG",
-          0,
-          position,
-          imgWidth,
-          imgHeight
-        )
-
-        heightLeft -=
-          pdfHeight
-      }
-
-      pdf.save(
-        `rapor_${nama}.pdf`
-      )
-
-    } catch (error) {
-
-      console.log(error)
-
-      alert(
-        "Gagal membuat PDF"
-      )
-
-    } finally {
-
-      setPdfLoading(false)
-
     }
 
+    pdf.save(
+      `rapor_${nama}.pdf`
+    )
+
+  } catch (error) {
+
+    console.log(error)
+
+    alert(
+      "Gagal membuat PDF"
+    )
+
+  } finally {
+
+    setPdfLoading(false)
+
   }
+
+}
 
   if (loading) {
 
