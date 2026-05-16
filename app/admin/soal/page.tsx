@@ -1,15 +1,8 @@
 "use client"
 
-import {
-  useEffect,
-  useState,
-  ChangeEvent,
-} from "react"
-
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-
 import { supabase } from "../../../lib/supabase"
-
 import * as XLSX from "xlsx"
 
 import {
@@ -23,9 +16,7 @@ import {
   Draggable,
 } from "@hello-pangea/dnd"
 
-import type {
-  DropResult,
-} from "@hello-pangea/dnd"
+import type { DropResult } from "@hello-pangea/dnd"
 
 type Soal = {
   id?: number
@@ -43,19 +34,20 @@ type Soal = {
   bacaan?: string
 }
 
-const initialForm: Soal = {
-  pertanyaan: "",
-  opsi_a: "",
-  opsi_b: "",
-  opsi_c: "",
-  opsi_d: "",
-  jawaban_benar: "a",
-  kategori: "Matematika",
-  pembahasan: "",
-  video_url: "",
-  gambar: "",
-  pengantar: "",
-  bacaan: "",
+const mathJaxConfig = {
+  loader: {
+    load: ["input/tex", "output/chtml"],
+  },
+  tex: {
+    inlineMath: [
+      ["$", "$"],
+      ["\\(", "\\)"],
+    ],
+    displayMath: [
+      ["$$", "$$"],
+      ["\\[", "\\]"],
+    ],
+  },
 }
 
 export default function AdminSoal() {
@@ -81,12 +73,21 @@ export default function AdminSoal() {
     setLoading] =
     useState(false)
 
-  const [saving,
-    setSaving] =
-    useState(false)
-
   const [form, setForm] =
-    useState<Soal>(initialForm)
+    useState<Soal>({
+      pertanyaan: "",
+      opsi_a: "",
+      opsi_b: "",
+      opsi_c: "",
+      opsi_d: "",
+      jawaban_benar: "a",
+      kategori: "Matematika",
+      pembahasan: "",
+      video_url: "",
+      gambar: "",
+      pengantar: "",
+      bacaan: "",
+    })
 
   useEffect(() => {
     init()
@@ -100,6 +101,7 @@ export default function AdminSoal() {
     if (!data.user) {
 
       router.push("/login")
+
       return
     }
 
@@ -118,6 +120,7 @@ export default function AdminSoal() {
       alert("Akses ditolak!")
 
       router.push("/dashboard")
+
       return
     }
 
@@ -132,10 +135,7 @@ export default function AdminSoal() {
       await supabase
         .from("soal")
         .select("*")
-        .eq(
-          "kategori",
-          selectedKategori
-        )
+        .eq("kategori", selectedKategori)
         .order("id", {
           ascending: true,
         })
@@ -143,8 +143,6 @@ export default function AdminSoal() {
     if (error) {
 
       console.log(error)
-
-      alert("Gagal mengambil data")
 
       setLoading(false)
 
@@ -159,22 +157,18 @@ export default function AdminSoal() {
   }
 
   function handleChange(
-    e: ChangeEvent<
+    e: React.ChangeEvent<
       HTMLInputElement |
       HTMLTextAreaElement |
       HTMLSelectElement
     >
   ) {
 
-    const {
-      name,
-      value,
-    } = e.target
-
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+    setForm({
+      ...form,
+      [e.target.name]:
+        e.target.value,
+    })
   }
 
   function generatePembahasan() {
@@ -186,91 +180,63 @@ export default function AdminSoal() {
     file: File
   ) {
 
-    try {
+    const fileName =
+      Date.now() + "_" + file.name
 
-      const fileExt =
-        file.name.split(".").pop()
+    const { error } =
+      await supabase
+        .storage
+        .from("soal")
+        .upload(fileName, file)
 
-      const fileName =
-        `${Date.now()}.${fileExt}`
+    if (error) {
 
-      const { error } =
-        await supabase
-          .storage
-          .from("soal")
-          .upload(
-            fileName,
-            file
-          )
-
-      if (error) {
-
-        console.log(error)
-
-        alert("Upload gagal")
-
-        return ""
-      }
-
-      const { data } =
-        supabase
-          .storage
-          .from("soal")
-          .getPublicUrl(fileName)
-
-      return data.publicUrl
-
-    } catch (err) {
-
-      console.log(err)
+      alert("Upload gagal")
 
       return ""
     }
+
+    const { data } =
+      supabase
+        .storage
+        .from("soal")
+        .getPublicUrl(fileName)
+
+    return data.publicUrl
   }
 
   async function handleSubmit() {
 
+    const payload = {
+
+      ...form,
+
+      kategori:
+        form.kategori.trim(),
+
+      jawaban_benar:
+        form.jawaban_benar
+          .toLowerCase(),
+
+      pembahasan:
+        form.pembahasan ||
+        generatePembahasan(),
+    }
+
     try {
-
-      setSaving(true)
-
-      const payload = {
-
-        ...form,
-
-        kategori:
-          form.kategori.trim(),
-
-        jawaban_benar:
-          form.jawaban_benar
-            .toLowerCase()
-            .trim(),
-
-        pembahasan:
-          form.pembahasan ||
-          generatePembahasan(),
-      }
 
       if (form.id) {
 
-        const { error } =
-          await supabase
-            .from("soal")
-            .update(payload)
-            .eq("id", form.id)
-
-        if (error)
-          throw error
+        await supabase
+          .from("soal")
+          .update(payload)
+          .eq("id", form.id)
 
       } else {
 
-        const { error } =
-          await supabase
-            .from("soal")
-            .insert([payload])
-
-        if (error)
-          throw error
+        await supabase
+          .from("soal")
+          .insert([payload])
       }
 
       alert("Berhasil disimpan")
@@ -286,10 +252,6 @@ export default function AdminSoal() {
       console.log(err)
 
       alert("Gagal menyimpan")
-
-    } finally {
-
-      setSaving(false)
     }
   }
 
@@ -298,8 +260,7 @@ export default function AdminSoal() {
   ) {
 
     setForm({
-      ...initialForm,
-      ...item,
+      ...item
     })
 
     setShowModal(true)
@@ -310,40 +271,34 @@ export default function AdminSoal() {
   ) {
 
     const confirmDelete =
-      confirm(
-        "Hapus soal ini?"
-      )
+      confirm("Hapus soal ini?")
 
     if (!confirmDelete)
       return
 
-    try {
+    await supabase
+      .from("soal")
+      .delete()
+      .eq("id", id)
 
-      const { error } =
-        await supabase
-          .from("soal")
-          .delete()
-          .eq("id", id)
-
-      if (error)
-        throw error
-
-      getSoal()
-
-    } catch (err) {
-
-      console.log(err)
-
-      alert("Gagal menghapus")
-    }
+    getSoal()
   }
 
   function resetForm() {
 
     setForm({
-      ...initialForm,
-      kategori:
-        selectedKategori,
+      pertanyaan: "",
+      opsi_a: "",
+      opsi_b: "",
+      opsi_c: "",
+      opsi_d: "",
+      jawaban_benar: "a",
+      kategori: selectedKategori,
+      pembahasan: "",
+      video_url: "",
+      gambar: "",
+      pengantar: "",
+      bacaan: "",
     })
   }
 
@@ -373,7 +328,7 @@ export default function AdminSoal() {
   }
 
   function handleExcelUpload(
-    e: ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<HTMLInputElement>
   ) {
 
     const file =
@@ -386,119 +341,103 @@ export default function AdminSoal() {
       new FileReader()
 
     reader.onload =
-      async (evt) => {
+      async (
+        evt: ProgressEvent<FileReader>
+      ) => {
 
-      try {
+      const data =
+        new Uint8Array(
+          evt.target?.result as ArrayBuffer
+        )
 
-        const data =
-          new Uint8Array(
-            evt.target
-              ?.result as ArrayBuffer
-          )
+      const workbook =
+        XLSX.read(data, {
+          type: "array",
+        })
 
-        const workbook =
-          XLSX.read(data, {
-            type: "array",
-          })
+      const sheet =
+        workbook.Sheets[
+          workbook.SheetNames[0]
+        ]
 
-        const sheet =
-          workbook.Sheets[
-            workbook
-              .SheetNames[0]
-          ]
+      const json =
+        XLSX.utils.sheet_to_json(sheet, {
+          defval: "",
+        })
 
-        const json =
-          XLSX.utils.sheet_to_json(
-            sheet,
-            {
-              defval: "",
-            }
-          )
+      for (
+        const row of json as any[]
+      ) {
 
-        for (
-          const row of json as any[]
-        ) {
+        const payload = {
 
-          const payload = {
+          pengantar:
+            String(
+              row.pengantar || ""
+            ),
 
-            pengantar:
-              String(
-                row.pengantar || ""
-              ),
+          bacaan:
+            String(
+              row.bacaan || ""
+            ),
 
-            bacaan:
-              String(
-                row.bacaan || ""
-              ),
+          pertanyaan:
+            String(
+              row.pertanyaan || ""
+            ),
 
-            pertanyaan:
-              String(
-                row.pertanyaan || ""
-              ),
+          opsi_a:
+            String(
+              row.opsi_a || ""
+            ),
 
-            opsi_a:
-              String(
-                row.opsi_a || ""
-              ),
+          opsi_b:
+            String(
+              row.opsi_b || ""
+            ),
 
-            opsi_b:
-              String(
-                row.opsi_b || ""
-              ),
+          opsi_c:
+            String(
+              row.opsi_c || ""
+            ),
 
-            opsi_c:
-              String(
-                row.opsi_c || ""
-              ),
+          opsi_d:
+            String(
+              row.opsi_d || ""
+            ),
 
-            opsi_d:
-              String(
-                row.opsi_d || ""
-              ),
+          jawaban_benar:
+            String(
+              row.jawaban_benar || ""
+            )
+            .toLowerCase()
+            .trim(),
 
-            jawaban_benar:
-              String(
-                row.jawaban_benar || ""
-              )
-                .toLowerCase()
-                .trim(),
+          kategori:
+            String(
+              row.kategori ||
+              selectedKategori
+            ).trim(),
 
-            kategori:
-              String(
-                row.kategori ||
-                selectedKategori
-              ).trim(),
+          pembahasan:
+            String(
+              row.pembahasan || ""
+            ),
 
-            pembahasan:
-              String(
-                row.pembahasan || ""
-              ),
-
-            video_url:
-              String(
-                row.video_url || ""
-              ),
-          }
-
-          await supabase
-            .from("soal")
-            .insert([payload])
+          video_url:
+            String(
+              row.video_url || ""
+            ),
         }
 
-        alert(
-          "Upload berhasil 🚀"
-        )
-
-        getSoal()
-
-      } catch (err) {
-
-        console.log(err)
-
-        alert(
-          "Upload excel gagal"
-        )
+        await supabase
+          .from("soal")
+          .insert([payload])
       }
+
+      alert("Upload berhasil 🚀")
+
+      getSoal()
     }
 
     reader.readAsArrayBuffer(file)
@@ -515,21 +454,21 @@ export default function AdminSoal() {
 
   return (
 
-    <MathJaxContext>
+    <MathJaxContext config={mathJaxConfig}>
 
-      <div className="bg-gray-100 min-h-screen">
+      <div className="bg-gray-100 min-h-screen text-black">
 
         {/* HEADER */}
         <div className="bg-blue-800 text-white p-6 flex justify-between items-center">
 
           <div>
 
-            <h1 className="text-3xl font-bold">
+            <h1 className="text-3xl font-bold text-white">
               Admin Soal
             </h1>
 
-            <p className="text-sm opacity-80">
-              Kelola bank soal
+            <p className="text-sm text-white opacity-90">
+              Kelola bank soal ujian
             </p>
 
           </div>
@@ -540,7 +479,7 @@ export default function AdminSoal() {
               onClick={() =>
                 router.push("/admin")
               }
-              className="border px-4 py-2 rounded-lg hover:bg-white hover:text-blue-800"
+              className="border border-white px-4 py-2 rounded-lg hover:bg-white hover:text-blue-800 text-white"
             >
               ← Admin
             </button>
@@ -552,7 +491,7 @@ export default function AdminSoal() {
 
                 setShowModal(true)
               }}
-              className="border px-4 py-2 rounded-lg hover:bg-white hover:text-blue-800"
+              className="border border-white px-4 py-2 rounded-lg hover:bg-white hover:text-blue-800 text-white"
             >
               + Tambah Soal
             </button>
@@ -563,6 +502,35 @@ export default function AdminSoal() {
 
         <div className="p-6">
 
+          {/* FILTER */}
+          <div className="flex gap-3 mb-6 flex-wrap">
+
+            {[
+              "Matematika",
+              "Bahasa Indonesia",
+              "Bahasa Inggris",
+              "TPS",
+              "Literasi",
+            ].map((k) => (
+
+              <button
+                key={k}
+                onClick={() =>
+                  setSelectedKategori(k)
+                }
+                className={`px-4 py-2 rounded-xl border transition font-medium ${
+                  selectedKategori === k
+                    ? "bg-white text-black shadow"
+                    : "bg-gray-200 text-black hover:bg-gray-300"
+                }`}
+              >
+                {k}
+              </button>
+
+            ))}
+
+          </div>
+
           {/* SEARCH */}
           <div className="flex gap-4 mb-6 flex-wrap">
 
@@ -570,11 +538,9 @@ export default function AdminSoal() {
               placeholder="Cari soal..."
               value={search}
               onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
+                setSearch(e.target.value)
               }
-              className="flex-1 border p-3 rounded-xl"
+              className="flex-1 border border-gray-300 p-3 rounded-xl bg-white text-black placeholder-gray-500"
             />
 
             <input
@@ -583,7 +549,7 @@ export default function AdminSoal() {
               onChange={
                 handleExcelUpload
               }
-              className="border px-4 py-2 rounded-xl bg-white"
+              className="border border-gray-300 px-4 py-2 rounded-xl bg-white text-black"
             />
 
           </div>
@@ -591,7 +557,7 @@ export default function AdminSoal() {
           {/* LIST */}
           {loading ? (
 
-            <div className="bg-white p-10 rounded-2xl text-center">
+            <div className="bg-white p-10 rounded-2xl text-center text-black">
               Loading...
             </div>
 
@@ -619,14 +585,8 @@ export default function AdminSoal() {
                       ) => (
 
                         <Draggable
-                          key={
-                            item.id?.toString() ||
-                            index.toString()
-                          }
-                          draggableId={
-                            item.id?.toString() ||
-                            `item-${index}`
-                          }
+                          key={String(item.id)}
+                          draggableId={String(item.id)}
                           index={index}
                         >
 
@@ -639,57 +599,75 @@ export default function AdminSoal() {
 
                               {...provided.draggableProps}
 
-                              className="bg-white p-5 mb-4 rounded-2xl shadow-sm"
+                              className="bg-white p-5 mb-4 rounded-2xl flex justify-between items-center shadow-sm border"
                             >
 
-                              <div className="flex justify-between gap-4">
+                              {/* LEFT */}
+                              <div className="flex items-center gap-4 flex-1">
 
-                                <div className="flex gap-4 flex-1">
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="cursor-grab active:cursor-grabbing text-2xl px-2 text-black"
+                                >
+                                  ☰
+                                </div>
 
-                                  <div
-                                    {...provided.dragHandleProps}
-                                    className="cursor-grab text-2xl"
-                                  >
-                                    ☰
+                                <div className="bg-blue-100 text-blue-700 w-10 h-10 flex items-center justify-center rounded-lg font-bold">
+                                  {index + 1}
+                                </div>
+
+                                <div className="flex-1">
+
+                                  <div className="font-semibold leading-7 text-lg text-black">
+
+                                    <MathJax dynamic>
+                                      {item.pertanyaan || ""}
+                                    </MathJax>
+
                                   </div>
 
-                                  <div className="flex-1">
+                                  <div className="flex gap-2 mt-2 flex-wrap">
 
-                                    <div className="font-semibold leading-8 text-lg">
+                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs">
+                                      {item.kategori}
+                                    </span>
 
-                                      <MathJax dynamic>
-                                        {item.pertanyaan || ""}
-                                      </MathJax>
-
-                                    </div>
+                                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs">
+                                      Pilihan Ganda
+                                    </span>
 
                                   </div>
 
                                 </div>
 
-                                <div className="flex gap-2">
+                              </div>
 
-                                  <button
-                                    onClick={() =>
-                                      handleEdit(item)
-                                    }
-                                    className="bg-yellow-400 text-white px-4 py-2 rounded-xl"
-                                  >
-                                    Edit
-                                  </button>
+                              {/* BUTTON */}
+                              <div className="flex gap-2 ml-4">
 
-                                  <button
-                                    onClick={() =>
-                                      handleDelete(
-                                        item.id!
-                                      )
-                                    }
-                                    className="bg-red-500 text-white px-4 py-2 rounded-xl"
-                                  >
-                                    Hapus
-                                  </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleEdit(item)
+                                  }}
+                                  className="bg-yellow-400 hover:bg-yellow-500 text-white px-4 py-2 rounded-xl font-semibold"
+                                >
+                                  Edit
+                                </button>
 
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDelete(
+                                      item.id!
+                                    )
+                                  }}
+                                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-semibold"
+                                >
+                                  Hapus
+                                </button>
 
                               </div>
 
@@ -715,6 +693,172 @@ export default function AdminSoal() {
           )}
 
         </div>
+
+        {/* MODAL */}
+        {showModal && (
+
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6 overflow-y-auto">
+
+            <div className="bg-white w-full max-w-4xl rounded-3xl p-8 text-black">
+
+              <h2 className="text-2xl font-bold mb-6 text-black">
+                {form.id
+                  ? "Edit Soal"
+                  : "Tambah Soal"}
+              </h2>
+
+              <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
+
+                <textarea
+                  name="pengantar"
+                  value={form.pengantar}
+                  onChange={handleChange}
+                  placeholder="Pengantar"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                  rows={3}
+                />
+
+                <textarea
+                  name="bacaan"
+                  value={form.bacaan}
+                  onChange={handleChange}
+                  placeholder="Bacaan"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                  rows={5}
+                />
+
+                <textarea
+                  name="pertanyaan"
+                  value={form.pertanyaan}
+                  onChange={handleChange}
+                  placeholder="Pertanyaan"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                  rows={4}
+                />
+
+                <input
+                  name="opsi_a"
+                  value={form.opsi_a}
+                  onChange={handleChange}
+                  placeholder="Opsi A"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                />
+
+                <input
+                  name="opsi_b"
+                  value={form.opsi_b}
+                  onChange={handleChange}
+                  placeholder="Opsi B"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                />
+
+                <input
+                  name="opsi_c"
+                  value={form.opsi_c}
+                  onChange={handleChange}
+                  placeholder="Opsi C"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                />
+
+                <input
+                  name="opsi_d"
+                  value={form.opsi_d}
+                  onChange={handleChange}
+                  placeholder="Opsi D"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                />
+
+                <select
+                  name="jawaban_benar"
+                  value={form.jawaban_benar}
+                  onChange={handleChange}
+                  className="w-full border p-4 rounded-xl bg-white text-black"
+                >
+                  <option value="a">A</option>
+                  <option value="b">B</option>
+                  <option value="c">C</option>
+                  <option value="d">D</option>
+                </select>
+
+                <textarea
+                  name="pembahasan"
+                  value={form.pembahasan}
+                  onChange={handleChange}
+                  placeholder="Pembahasan"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                  rows={5}
+                />
+
+                <input
+                  name="video_url"
+                  value={form.video_url}
+                  onChange={handleChange}
+                  placeholder="Video URL"
+                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
+                />
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="w-full border p-4 rounded-xl bg-white text-black"
+                  onChange={async (e) => {
+
+                    const file =
+                      e.target.files?.[0]
+
+                    if (!file)
+                      return
+
+                    const url =
+                      await uploadGambar(file)
+
+                    if (url) {
+
+                      setForm({
+                        ...form,
+                        gambar: url,
+                      })
+                    }
+                  }}
+                />
+
+                {form.gambar && (
+
+                  <img
+                    src={form.gambar}
+                    alt="preview"
+                    className="max-h-64 rounded-xl border"
+                  />
+
+                )}
+
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+
+                <button
+                  onClick={() =>
+                    setShowModal(false)
+                  }
+                  className="border px-6 py-3 rounded-xl text-black"
+                >
+                  Batal
+                </button>
+
+                <button
+                  onClick={handleSubmit}
+                  className="bg-blue-700 text-white px-6 py-3 rounded-xl"
+                >
+                  Simpan
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
 
       </div>
 
