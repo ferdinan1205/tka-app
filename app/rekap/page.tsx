@@ -172,83 +172,70 @@ export default function RekapPage() {
   }
 
   // =========================
-  // DOWNLOAD PDF FIX MOBILE
+  // DOWNLOAD PDF FINAL FIX
   // =========================
 
-async function downloadPDF() {
+  async function downloadPDF() {
 
-  if (!printRef.current)
-    return
+    if (!printRef.current)
+      return
 
-  try {
+    try {
 
-    setPdfLoading(true)
+      setPdfLoading(true)
 
-    const canvas =
-      await html2canvas(
-        printRef.current,
-        {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor:
-            "#ffffff",
-        }
-      )
+      const element =
+        printRef.current
 
-    const imgData =
-      canvas.toDataURL(
-        "image/jpeg",
-        1.0
-      )
+      const canvas =
+        await html2canvas(
+          element,
+          {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor:
+              "#ffffff",
+            windowWidth:
+              element.scrollWidth,
+            windowHeight:
+              element.scrollHeight,
+          }
+        )
 
-    const pdf =
-      new jsPDF(
-        "p",
-        "mm",
-        "a4"
-      )
+      const imgData =
+        canvas.toDataURL(
+          "image/jpeg",
+          1.0
+        )
 
-    const pdfWidth = 210
+      const pdf =
+        new jsPDF(
+          "p",
+          "mm",
+          "a4"
+        )
 
-    const pageHeight = 297
+      const pageWidth =
+        210
 
-    const imgWidth = pdfWidth
+      const pageHeight =
+        297
 
-    const imgHeight =
-      (canvas.height *
-        imgWidth) /
-      canvas.width
+      const imgWidth =
+        pageWidth
 
-    let heightLeft =
-      imgHeight
+      const imgHeight =
+        (canvas.height *
+          imgWidth) /
+        canvas.width
 
-    let position = 0
-
-    // HALAMAN PERTAMA
-    pdf.addImage(
-      imgData,
-      "JPEG",
-      0,
-      position,
-      imgWidth,
-      imgHeight
-    )
-
-    heightLeft -=
-      pageHeight
-
-    // MULTI PAGE
-    while (
-      heightLeft > 0
-    ) {
-
-      position =
-        heightLeft -
+      let heightLeft =
         imgHeight
 
-      pdf.addPage()
+      let position = 0
 
+      // HALAMAN PERTAMA
       pdf.addImage(
         imgData,
         "JPEG",
@@ -260,27 +247,50 @@ async function downloadPDF() {
 
       heightLeft -=
         pageHeight
+
+      // MULTI PAGE
+      while (
+        heightLeft > 0
+      ) {
+
+        position =
+          heightLeft -
+          imgHeight
+
+        pdf.addPage()
+
+        pdf.addImage(
+          imgData,
+          "JPEG",
+          0,
+          position,
+          imgWidth,
+          imgHeight
+        )
+
+        heightLeft -=
+          pageHeight
+      }
+
+      pdf.save(
+        `rapor_${nama}.pdf`
+      )
+
+    } catch (error) {
+
+      console.log(error)
+
+      alert(
+        "Gagal membuat PDF"
+      )
+
+    } finally {
+
+      setPdfLoading(false)
+
     }
 
-    pdf.save(
-      `rapor_${nama}.pdf`
-    )
-
-  } catch (error) {
-
-    console.log(error)
-
-    alert(
-      "Gagal membuat PDF"
-    )
-
-  } finally {
-
-    setPdfLoading(false)
-
   }
-
-}
 
   if (loading) {
 
@@ -465,7 +475,6 @@ async function downloadPDF() {
           rounded-[35px]
           shadow-sm
           p-5 md:p-10
-          overflow-hidden
           "
         >
 
@@ -649,188 +658,194 @@ async function downloadPDF() {
           {/* TABLE */}
 
           <div className="
-          overflow-x-auto
           rounded-3xl
           border
           border-gray-200
+          overflow-hidden
           ">
 
-            <table className="
-            w-full
-            min-w-[700px]
-            border-collapse
+            <div className="
+            overflow-x-auto
             ">
 
-              <thead>
+              <table className="
+              w-full
+              min-w-[700px]
+              border-collapse
+              ">
 
-                <tr className="
-                bg-[#f8fafc]
-                text-gray-700
-                ">
+                <thead>
 
-                  <th className="
-                  p-4
-                  text-left
-                  font-bold
+                  <tr className="
+                  bg-[#f8fafc]
+                  text-gray-700
                   ">
-                    No
-                  </th>
 
-                  <th className="
-                  p-4
-                  text-left
-                  font-bold
-                  ">
-                    Mata Pelajaran
-                  </th>
+                    <th className="
+                    p-4
+                    text-left
+                    font-bold
+                    ">
+                      No
+                    </th>
 
-                  <th className="
-                  p-4
-                  text-left
-                  font-bold
-                  ">
-                    Nilai
-                  </th>
+                    <th className="
+                    p-4
+                    text-left
+                    font-bold
+                    ">
+                      Mata Pelajaran
+                    </th>
 
-                  <th className="
-                  p-4
-                  text-left
-                  font-bold
-                  ">
-                    Grade
-                  </th>
+                    <th className="
+                    p-4
+                    text-left
+                    font-bold
+                    ">
+                      Nilai
+                    </th>
 
-                  <th className="
-                  p-4
-                  text-left
-                  font-bold
-                  ">
-                    Tanggal
-                  </th>
+                    <th className="
+                    p-4
+                    text-left
+                    font-bold
+                    ">
+                      Grade
+                    </th>
 
-                </tr>
+                    <th className="
+                    p-4
+                    text-left
+                    font-bold
+                    ">
+                      Tanggal
+                    </th>
 
-              </thead>
+                  </tr>
 
-              <tbody>
+                </thead>
 
-                {hasil.map(
-                  (
-                    item,
-                    i
-                  ) => (
+                <tbody>
 
-                    <tr
-                      key={
-                        item.id
-                      }
-                      className="
-                      border-t
-                      border-gray-100
-                      hover:bg-[#f8fafc]
-                      transition-all
-                      "
-                    >
+                  {hasil.map(
+                    (
+                      item,
+                      i
+                    ) => (
 
-                      <td className="
-                      p-4
-                      font-semibold
-                      text-gray-700
-                      ">
-                        {i + 1}
-                      </td>
+                      <tr
+                        key={
+                          item.id
+                        }
+                        className="
+                        border-t
+                        border-gray-100
+                        hover:bg-[#f8fafc]
+                        transition-all
+                        "
+                      >
 
-                      <td className="
-                      p-4
-                      ">
+                        <td className="
+                        p-4
+                        font-semibold
+                        text-gray-700
+                        ">
+                          {i + 1}
+                        </td>
 
-                        <div className="
-                        flex items-center
-                        gap-3
+                        <td className="
+                        p-4
                         ">
 
                           <div className="
-                          w-10 h-10
-                          rounded-2xl
-                          bg-blue-100
-                          flex
-                          items-center
-                          justify-center
-                          text-lg
+                          flex items-center
+                          gap-3
                           ">
-                            📘
-                          </div>
 
-                          <div>
-
-                            <p className="
-                            font-bold
-                            text-gray-800
+                            <div className="
+                            w-10 h-10
+                            rounded-2xl
+                            bg-blue-100
+                            flex
+                            items-center
+                            justify-center
+                            text-lg
                             ">
-                              {
-                                item.kategori
-                              }
-                            </p>
+                              📘
+                            </div>
+
+                            <div>
+
+                              <p className="
+                              font-bold
+                              text-gray-800
+                              ">
+                                {
+                                  item.kategori
+                                }
+                              </p>
+
+                            </div>
 
                           </div>
 
-                        </div>
+                        </td>
 
-                      </td>
-
-                      <td className="
-                      p-4
-                      ">
-
-                        <div className="
-                        text-2xl
-                        font-black
-                        text-blue-700
+                        <td className="
+                        p-4
                         ">
-                          {
-                            item.skor
-                          }
-                        </div>
 
-                      </td>
+                          <div className="
+                          text-2xl
+                          font-black
+                          text-blue-700
+                          ">
+                            {
+                              item.skor
+                            }
+                          </div>
 
-                      <td className="
-                      p-4
-                      ">
+                        </td>
 
-                        <span className="
-                        bg-green-100
-                        text-green-700
-                        px-4 py-2
-                        rounded-full
-                        font-semibold
-                        text-sm
+                        <td className="
+                        p-4
                         ">
-                          {grade(
-                            item.skor
-                          )}
-                        </span>
 
-                      </td>
+                          <span className="
+                          bg-green-100
+                          text-green-700
+                          px-4 py-2
+                          rounded-full
+                          font-semibold
+                          text-sm
+                          ">
+                            {grade(
+                              item.skor
+                            )}
+                          </span>
 
-                      <td className="
-                      p-4
-                      text-gray-500
-                      font-medium
-                      ">
-                        {new Date(
-                          item.tanggal
-                        ).toLocaleDateString()}
-                      </td>
+                        </td>
 
-                    </tr>
+                        <td className="
+                        p-4
+                        text-gray-500
+                        font-medium
+                        ">
+                          {new Date(
+                            item.tanggal
+                          ).toLocaleDateString()}
+                        </td>
 
-                  )
-                )}
+                      </tr>
 
-              </tbody>
+                    )
+                  )}
 
-            </table>
+                </tbody>
+
+              </table>
+
+            </div>
 
           </div>
 
