@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
 import jsPDF from "jspdf"
-import { toPng } from "html-to-image"
+import html2canvas from "html2canvas"
 
 type Hasil = {
   id: number
@@ -23,6 +23,10 @@ export default function RekapPage() {
   const [loading,
     setLoading] =
     useState(true)
+
+  const [pdfLoading,
+    setPdfLoading] =
+    useState(false)
 
   const [nama,
     setNama] =
@@ -75,7 +79,7 @@ export default function RekapPage() {
 
     setNama(
       profile?.nama ||
-        "Siswa"
+      "Siswa"
     )
 
     setFoto(
@@ -94,7 +98,7 @@ export default function RekapPage() {
 
     setHasil(
       (hasilData as Hasil[]) ||
-        []
+      []
     )
 
     setLoading(false)
@@ -116,7 +120,7 @@ export default function RekapPage() {
 
     return Math.round(
       total /
-        hasil.length
+      hasil.length
     )
   }
 
@@ -167,6 +171,10 @@ export default function RekapPage() {
     return "E"
   }
 
+  // =========================
+  // DOWNLOAD PDF FIX MOBILE
+  // =========================
+
   async function downloadPDF() {
 
     if (!printRef.current)
@@ -174,15 +182,24 @@ export default function RekapPage() {
 
     try {
 
-      const dataUrl =
-        await toPng(
+      setPdfLoading(true)
+
+      const canvas =
+        await html2canvas(
           printRef.current,
           {
-            cacheBust: true,
-            pixelRatio: 2,
+            scale: 2,
+            useCORS: true,
             backgroundColor:
               "#ffffff",
+            scrollY:
+              -window.scrollY,
           }
+        )
+
+      const imgData =
+        canvas.toDataURL(
+          "image/png"
         )
 
       const pdf =
@@ -192,27 +209,59 @@ export default function RekapPage() {
           "a4"
         )
 
-      const imgProps =
-        pdf.getImageProperties(
-          dataUrl
-        )
-
       const pdfWidth =
-        pdf.internal.pageSize.getWidth()
+        210
 
       const pdfHeight =
-        (imgProps.height *
-          pdfWidth) /
-        imgProps.width
+        297
+
+      const imgWidth =
+        pdfWidth
+
+      const imgHeight =
+        (canvas.height *
+          imgWidth) /
+        canvas.width
+
+      let heightLeft =
+        imgHeight
+
+      let position = 0
 
       pdf.addImage(
-        dataUrl,
+        imgData,
         "PNG",
         0,
-        0,
-        pdfWidth,
-        pdfHeight
+        position,
+        imgWidth,
+        imgHeight
       )
+
+      heightLeft -=
+        pdfHeight
+
+      while (
+        heightLeft > 0
+      ) {
+
+        position =
+          heightLeft -
+          imgHeight
+
+        pdf.addPage()
+
+        pdf.addImage(
+          imgData,
+          "PNG",
+          0,
+          position,
+          imgWidth,
+          imgHeight
+        )
+
+        heightLeft -=
+          pdfHeight
+      }
 
       pdf.save(
         `rapor_${nama}.pdf`
@@ -225,7 +274,13 @@ export default function RekapPage() {
       alert(
         "Gagal download PDF"
       )
+
+    } finally {
+
+      setPdfLoading(false)
+
     }
+
   }
 
   if (loading) {
@@ -233,20 +288,20 @@ export default function RekapPage() {
     return (
 
       <div className="
-        min-h-screen
-        flex
-        items-center
-        justify-center
-        bg-[#f4f7fb]
+      min-h-screen
+      flex
+      items-center
+      justify-center
+      bg-[#f4f7fb]
       ">
 
         <div className="
-          bg-white
-          px-8 py-6
-          rounded-3xl
-          shadow-sm
-          text-gray-700
-          font-semibold
+        bg-white
+        px-8 py-6
+        rounded-3xl
+        shadow-sm
+        text-gray-700
+        font-semibold
         ">
 
           Loading rekap...
@@ -260,54 +315,55 @@ export default function RekapPage() {
   return (
 
     <div className="
-      min-h-screen
-      bg-[#f4f7fb]
+    min-h-screen
+    bg-[#f4f7fb]
     ">
 
       {/* HEADER */}
+
       <div className="
-        bg-white
-        border-b
-        border-gray-200
-        sticky top-0
-        z-30
+      bg-white
+      border-b
+      border-gray-200
+      sticky top-0
+      z-30
       ">
 
         <div className="
-          max-w-7xl
-          mx-auto
-          px-5 py-5
-          flex
-          flex-col
-          md:flex-row
-          md:items-center
-          md:justify-between
-          gap-4
+        max-w-7xl
+        mx-auto
+        px-5 py-5
+        flex
+        flex-col
+        md:flex-row
+        md:items-center
+        md:justify-between
+        gap-4
         ">
 
           <div>
 
             <p className="
-              text-blue-600
-              text-sm
-              font-semibold
-              tracking-wide
+            text-blue-600
+            text-sm
+            font-semibold
+            tracking-wide
             ">
               LAMPUNG CERDAS
             </p>
 
             <h1 className="
-              text-3xl
-              font-black
-              text-gray-800
-              mt-1
+            text-3xl
+            font-black
+            text-gray-800
+            mt-1
             ">
               Rekap Akademik
             </h1>
 
             <p className="
-              text-gray-500
-              mt-1
+            text-gray-500
+            mt-1
             ">
               Rapor digital dan
               hasil evaluasi siswa.
@@ -316,8 +372,15 @@ export default function RekapPage() {
           </div>
 
           <div className="
-            flex gap-3
+          flex
+          flex-col
+          sm:flex-row
+          gap-3
+          w-full
+          md:w-auto
           ">
+
+            {/* DASHBOARD */}
 
             <button
               onClick={() =>
@@ -326,35 +389,60 @@ export default function RekapPage() {
                 )
               }
               className="
-                bg-white
-                border
-                border-gray-300
-                hover:bg-gray-100
-                px-5 py-3
-                rounded-2xl
-                font-semibold
-                transition-all
+              bg-white
+              text-gray-800
+              border
+              border-gray-300
+              hover:bg-gray-100
+              px-5 py-3
+              rounded-2xl
+              font-bold
+              transition-all
+              shadow-sm
+              w-full
+              sm:w-auto
               "
             >
+
               Dashboard
+
             </button>
+
+            {/* PDF */}
 
             <button
               onClick={
                 downloadPDF
               }
+              disabled={
+                pdfLoading
+              }
               className="
-                bg-blue-600
-                hover:bg-blue-700
-                text-white
-                px-6 py-3
-                rounded-2xl
-                font-semibold
-                transition-all
-                shadow-lg
+              bg-blue-600
+              hover:bg-blue-700
+              text-white
+              px-6 py-3
+              rounded-2xl
+              font-bold
+              transition-all
+              shadow-lg
+              w-full
+              sm:w-auto
+              disabled:opacity-60
               "
             >
-              Download PDF
+
+              {
+                pdfLoading
+                  ?
+
+                  "Membuat PDF..."
+
+                  :
+
+                  "Download PDF"
+              }
+
             </button>
 
           </div>
@@ -364,70 +452,77 @@ export default function RekapPage() {
       </div>
 
       {/* CONTENT */}
+
       <div className="
-        max-w-7xl
-        mx-auto
-        p-5
+      max-w-7xl
+      mx-auto
+      p-4 md:p-5
       ">
 
-        {/* AREA PDF */}
         <div
           ref={printRef}
           className="
-            bg-white
-            rounded-[35px]
-            shadow-sm
-            p-6 md:p-10
+          bg-white
+          rounded-[35px]
+          shadow-sm
+          p-5 md:p-10
+          overflow-hidden
           "
         >
 
           {/* TOP */}
+
           <div className="
-            flex
-            flex-col
-            md:flex-row
-            md:items-center
-            md:justify-between
-            gap-6
-            border-b
-            border-gray-200
-            pb-8
-            mb-8
+          flex
+          flex-col
+          lg:flex-row
+          lg:items-center
+          lg:justify-between
+          gap-6
+          border-b
+          border-gray-200
+          pb-8
+          mb-8
           ">
 
             {/* LEFT */}
+
             <div className="
-              flex items-center
-              gap-5
+            flex
+            flex-col
+            sm:flex-row
+            sm:items-center
+            gap-5
             ">
 
               {/* FOTO */}
+
               {foto ? (
 
                 <img
                   src={foto}
                   alt="foto"
                   className="
-                    w-24 h-24
-                    rounded-full
-                    object-cover
-                    border-4
-                    border-blue-100
+                  w-24 h-24
+                  rounded-full
+                  object-cover
+                  border-4
+                  border-blue-100
                   "
                 />
 
               ) : (
 
                 <div className="
-                  w-24 h-24
-                  rounded-full
-                  bg-blue-600
-                  text-white
-                  flex
-                  items-center
-                  justify-center
-                  text-3xl
-                  font-black
+                w-24 h-24
+                rounded-full
+                bg-blue-600
+                text-white
+                flex
+                items-center
+                justify-center
+                text-3xl
+                font-black
                 ">
 
                   {nama
@@ -439,42 +534,45 @@ export default function RekapPage() {
               )}
 
               {/* INFO */}
+
               <div>
 
                 <p className="
-                  text-blue-600
-                  font-semibold
-                  text-sm
-                  tracking-wide
+                text-blue-600
+                font-semibold
+                text-sm
+                tracking-wide
                 ">
                   RAPOR DIGITAL
                 </p>
 
                 <h2 className="
-                  text-4xl
-                  font-black
-                  text-gray-800
-                  mt-1
+                text-3xl md:text-4xl
+                font-black
+                text-gray-800
+                mt-1
+                break-words
                 ">
                   {nama}
                 </h2>
 
                 <p className="
-                  text-gray-500
-                  mt-1
+                text-gray-500
+                mt-1
+                break-all
                 ">
                   {email}
                 </p>
 
                 <div className="
-                  mt-4
-                  inline-block
-                  bg-blue-100
-                  text-blue-700
-                  px-4 py-2
-                  rounded-full
-                  text-sm
-                  font-semibold
+                mt-4
+                inline-block
+                bg-blue-100
+                text-blue-700
+                px-4 py-2
+                rounded-full
+                text-sm
+                font-semibold
                 ">
                   Grade {grade(
                     rataRata()
@@ -486,25 +584,28 @@ export default function RekapPage() {
             </div>
 
             {/* RIGHT */}
+
             <div className="
-              bg-[#f4f7fb]
-              rounded-3xl
-              px-8 py-6
-              text-center
+            bg-[#f4f7fb]
+            rounded-3xl
+            px-8 py-6
+            text-center
+            w-full
+            lg:w-auto
             ">
 
               <p className="
-                text-gray-500
-                text-sm
+              text-gray-500
+              text-sm
               ">
                 Total Ujian
               </p>
 
               <h2 className="
-                text-5xl
-                font-black
-                text-blue-700
-                mt-2
+              text-5xl
+              font-black
+              text-blue-700
+              mt-2
               ">
                 {hasil.length}
               </h2>
@@ -514,12 +615,13 @@ export default function RekapPage() {
           </div>
 
           {/* STAT */}
+
           <div className="
-            grid
-            grid-cols-1
-            md:grid-cols-3
-            gap-5
-            mb-8
+          grid
+          grid-cols-1
+          md:grid-cols-3
+          gap-5
+          mb-8
           ">
 
             <StatCard
@@ -546,61 +648,63 @@ export default function RekapPage() {
           </div>
 
           {/* TABLE */}
+
           <div className="
-            overflow-x-auto
-            rounded-3xl
-            border
-            border-gray-200
+          overflow-x-auto
+          rounded-3xl
+          border
+          border-gray-200
           ">
 
             <table className="
-              w-full
-              border-collapse
+            w-full
+            min-w-[700px]
+            border-collapse
             ">
 
               <thead>
 
                 <tr className="
-                  bg-[#f8fafc]
-                  text-gray-700
+                bg-[#f8fafc]
+                text-gray-700
                 ">
 
                   <th className="
-                    p-4
-                    text-left
-                    font-bold
+                  p-4
+                  text-left
+                  font-bold
                   ">
                     No
                   </th>
 
                   <th className="
-                    p-4
-                    text-left
-                    font-bold
+                  p-4
+                  text-left
+                  font-bold
                   ">
                     Mata Pelajaran
                   </th>
 
                   <th className="
-                    p-4
-                    text-left
-                    font-bold
+                  p-4
+                  text-left
+                  font-bold
                   ">
                     Nilai
                   </th>
 
                   <th className="
-                    p-4
-                    text-left
-                    font-bold
+                  p-4
+                  text-left
+                  font-bold
                   ">
                     Grade
                   </th>
 
                   <th className="
-                    p-4
-                    text-left
-                    font-bold
+                  p-4
+                  text-left
+                  font-bold
                   ">
                     Tanggal
                   </th>
@@ -622,38 +726,38 @@ export default function RekapPage() {
                         item.id
                       }
                       className="
-                        border-t
-                        border-gray-100
-                        hover:bg-[#f8fafc]
-                        transition-all
+                      border-t
+                      border-gray-100
+                      hover:bg-[#f8fafc]
+                      transition-all
                       "
                     >
 
                       <td className="
-                        p-4
-                        font-semibold
-                        text-gray-700
+                      p-4
+                      font-semibold
+                      text-gray-700
                       ">
                         {i + 1}
                       </td>
 
                       <td className="
-                        p-4
+                      p-4
                       ">
 
                         <div className="
-                          flex items-center
-                          gap-3
+                        flex items-center
+                        gap-3
                         ">
 
                           <div className="
-                            w-10 h-10
-                            rounded-2xl
-                            bg-blue-100
-                            flex
-                            items-center
-                            justify-center
-                            text-lg
+                          w-10 h-10
+                          rounded-2xl
+                          bg-blue-100
+                          flex
+                          items-center
+                          justify-center
+                          text-lg
                           ">
                             📘
                           </div>
@@ -661,8 +765,8 @@ export default function RekapPage() {
                           <div>
 
                             <p className="
-                              font-bold
-                              text-gray-800
+                            font-bold
+                            text-gray-800
                             ">
                               {
                                 item.kategori
@@ -676,13 +780,13 @@ export default function RekapPage() {
                       </td>
 
                       <td className="
-                        p-4
+                      p-4
                       ">
 
                         <div className="
-                          text-2xl
-                          font-black
-                          text-blue-700
+                        text-2xl
+                        font-black
+                        text-blue-700
                         ">
                           {
                             item.skor
@@ -692,16 +796,16 @@ export default function RekapPage() {
                       </td>
 
                       <td className="
-                        p-4
+                      p-4
                       ">
 
                         <span className="
-                          bg-green-100
-                          text-green-700
-                          px-4 py-2
-                          rounded-full
-                          font-semibold
-                          text-sm
+                        bg-green-100
+                        text-green-700
+                        px-4 py-2
+                        rounded-full
+                        font-semibold
+                        text-sm
                         ">
                           {grade(
                             item.skor
@@ -711,9 +815,9 @@ export default function RekapPage() {
                       </td>
 
                       <td className="
-                        p-4
-                        text-gray-500
-                        font-medium
+                      p-4
+                      text-gray-500
+                      font-medium
                       ">
                         {new Date(
                           item.tanggal
@@ -732,63 +836,65 @@ export default function RekapPage() {
           </div>
 
           {/* EMPTY */}
+
           {hasil.length ===
             0 && (
 
-            <div className="
+              <div className="
               text-center
               py-16
-            ">
-
-              <div className="
-                text-6xl
               ">
-                📚
-              </div>
 
-              <h2 className="
+                <div className="
+                text-6xl
+                ">
+                  📚
+                </div>
+
+                <h2 className="
                 text-2xl
                 font-black
                 text-gray-800
                 mt-4
-              ">
-                Belum Ada Nilai
-              </h2>
+                ">
+                  Belum Ada Nilai
+                </h2>
 
-              <p className="
+                <p className="
                 text-gray-500
                 mt-2
-              ">
-                Kerjakan ujian untuk
-                melihat rekap akademik.
-              </p>
+                ">
+                  Kerjakan ujian untuk
+                  melihat rekap akademik.
+                </p>
 
-            </div>
+              </div>
 
-          )}
+            )}
 
           {/* FOOTER */}
+
           <div className="
-            mt-10
-            pt-6
-            border-t
-            border-gray-200
-            text-center
+          mt-10
+          pt-6
+          border-t
+          border-gray-200
+          text-center
           ">
 
             <p className="
-              text-sm
-              text-gray-400
+            text-sm
+            text-gray-400
             ">
               Dicetak otomatis dari
               sistem akademik
             </p>
 
             <h2 className="
-              text-lg
-              font-bold
-              text-blue-700
-              mt-1
+            text-lg
+            font-bold
+            text-blue-700
+            mt-1
             ">
               Lampung Cerdas
             </h2>
@@ -813,33 +919,33 @@ function StatCard({
   return (
 
     <div className="
-      bg-[#f8fafc]
-      rounded-3xl
-      p-6
-      border
-      border-gray-100
+    bg-[#f8fafc]
+    rounded-3xl
+    p-6
+    border
+    border-gray-100
     ">
 
       <div className="
-        flex
-        items-center
-        justify-between
+      flex
+      items-center
+      justify-between
       ">
 
         <div>
 
           <p className="
-            text-gray-500
-            text-sm
+          text-gray-500
+          text-sm
           ">
             {title}
           </p>
 
           <h2 className="
-            text-5xl
-            font-black
-            text-gray-800
-            mt-3
+          text-5xl
+          font-black
+          text-gray-800
+          mt-3
           ">
             {value}
           </h2>
@@ -847,16 +953,16 @@ function StatCard({
         </div>
 
         <div className={`
-          w-16 h-16
-          rounded-3xl
-          bg-gradient-to-br
-          ${color}
-          text-white
-          flex
-          items-center
-          justify-center
-          text-3xl
-          shadow-lg
+        w-16 h-16
+        rounded-3xl
+        bg-gradient-to-br
+        ${color}
+        text-white
+        flex
+        items-center
+        justify-center
+        text-3xl
+        shadow-lg
         `}>
 
           {icon}
