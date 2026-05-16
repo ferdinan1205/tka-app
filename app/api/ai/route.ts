@@ -1,71 +1,156 @@
+export const runtime = "nodejs"
+
 import { NextResponse } from "next/server"
 
 export async function POST(req: Request) {
-  try {
-    const { soal, jawaban_benar } = await req.json()
 
-    const apiKey = process.env.GROQ_API_KEY
+  try {
+
+    const {
+      soal,
+      jawaban_benar,
+      pertanyaan
+    } = await req.json()
+
+    const apiKey =
+      process.env.GROQ_API_KEY
 
     if (!apiKey) {
+
       return NextResponse.json({
-        text: "API KEY GROQ belum diisi"
+        text:
+          "API KEY belum diisi"
       })
+
     }
 
-    const prompt = `
-Kamu adalah guru profesional.
+    let systemPrompt = ""
+    let userPrompt = ""
 
-Jelaskan soal berikut dengan bahasa sederhana agar siswa paham.
+    // =========================
+    // MODE CHAT AI
+    // =========================
 
+    if (pertanyaan) {
+
+      systemPrompt = `
+Kamu adalah guru les privat yang ramah dan natural.
+
+Jawab pertanyaan siswa dengan singkat, jelas, santai, dan langsung ke inti.
+
+JANGAN mengulang seluruh soal terus menerus.
+
+Kalau siswa bertanya lanjutan:
+- fokus jawab pertanyaannya saja
+- jangan ulang pembahasan panjang
+- gunakan bahasa mudah dipahami siswa
+`
+
+      userPrompt = `
 Soal:
 ${soal}
 
 Jawaban benar:
 ${jawaban_benar}
 
-Berikan pembahasan singkat, jelas, dan mudah dipahami.
+Pertanyaan siswa:
+${pertanyaan}
 `
 
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 0.4
-      })
-    })
-
-    const data = await res.json()
-
-    console.log("GROQ RESPONSE:", data)
-
-    if (data.error) {
-      return NextResponse.json({
-        text: "Error: " + data.error.message
-      })
     }
 
+    // =========================
+    // MODE PEMBAHASAN
+    // =========================
+
+    else {
+
+      systemPrompt = `
+Kamu adalah guru TKA profesional.
+
+Buat pembahasan yang:
+- rapi
+- jelas
+- step by step
+- mudah dipahami siswa
+`
+
+      userPrompt = `
+Soal:
+${soal}
+
+Jawaban benar:
+${jawaban_benar}
+
+Jelaskan pembahasannya.
+`
+
+    }
+
+    const response =
+      await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${apiKey}`
+          },
+
+          body: JSON.stringify({
+
+            model:
+              "llama-3.3-70b-versatile",
+
+            messages: [
+
+              {
+                role: "system",
+                content:
+                  systemPrompt
+              },
+
+              {
+                role: "user",
+                content:
+                  userPrompt
+              }
+
+            ],
+
+            temperature: 0.7,
+            max_tokens: 800
+
+          })
+        }
+      )
+
+    const data =
+      await response.json()
+
     const text =
-      data?.choices?.[0]?.message?.content
+      data?.choices?.[0]
+        ?.message?.content
 
     return NextResponse.json({
-      text: text || "AI tidak memberi respon"
+      text:
+        text ||
+        "AI tidak merespon"
     })
 
   } catch (error) {
+
     console.log(error)
 
     return NextResponse.json({
-      text: "Server Error"
+      text:
+        "Server Error"
     })
+
   }
+
 }
