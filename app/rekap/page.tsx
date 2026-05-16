@@ -175,62 +175,83 @@ export default function RekapPage() {
   // DOWNLOAD PDF FIX MOBILE
   // =========================
 
-  async function downloadPDF() {
+async function downloadPDF() {
 
-    if (!printRef.current)
-      return
+  if (!printRef.current)
+    return
 
-    try {
+  try {
 
-      setPdfLoading(true)
+    setPdfLoading(true)
 
-      const canvas =
-        await html2canvas(
-          printRef.current,
-          {
-            scale: 2,
-            useCORS: true,
-            backgroundColor:
-              "#ffffff",
-            scrollY:
-              -window.scrollY,
-          }
-        )
+    const canvas =
+      await html2canvas(
+        printRef.current,
+        {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor:
+            "#ffffff",
+        }
+      )
 
-      const imgData =
-        canvas.toDataURL(
-          "image/png"
-        )
+    const imgData =
+      canvas.toDataURL(
+        "image/jpeg",
+        1.0
+      )
 
-      const pdf =
-        new jsPDF(
-          "p",
-          "mm",
-          "a4"
-        )
+    const pdf =
+      new jsPDF(
+        "p",
+        "mm",
+        "a4"
+      )
 
-      const pdfWidth =
-        210
+    const pdfWidth = 210
 
-      const pdfHeight =
-        297
+    const pageHeight = 297
 
-      const imgWidth =
-        pdfWidth
+    const imgWidth = pdfWidth
 
-      const imgHeight =
-        (canvas.height *
-          imgWidth) /
-        canvas.width
+    const imgHeight =
+      (canvas.height *
+        imgWidth) /
+      canvas.width
 
-      let heightLeft =
+    let heightLeft =
+      imgHeight
+
+    let position = 0
+
+    // HALAMAN PERTAMA
+    pdf.addImage(
+      imgData,
+      "JPEG",
+      0,
+      position,
+      imgWidth,
+      imgHeight
+    )
+
+    heightLeft -=
+      pageHeight
+
+    // MULTI PAGE
+    while (
+      heightLeft > 0
+    ) {
+
+      position =
+        heightLeft -
         imgHeight
 
-      let position = 0
+      pdf.addPage()
 
       pdf.addImage(
         imgData,
-        "PNG",
+        "JPEG",
         0,
         position,
         imgWidth,
@@ -238,50 +259,28 @@ export default function RekapPage() {
       )
 
       heightLeft -=
-        pdfHeight
-
-      while (
-        heightLeft > 0
-      ) {
-
-        position =
-          heightLeft -
-          imgHeight
-
-        pdf.addPage()
-
-        pdf.addImage(
-          imgData,
-          "PNG",
-          0,
-          position,
-          imgWidth,
-          imgHeight
-        )
-
-        heightLeft -=
-          pdfHeight
-      }
-
-      pdf.save(
-        `rapor_${nama}.pdf`
-      )
-
-    } catch (err) {
-
-      console.log(err)
-
-      alert(
-        "Gagal download PDF"
-      )
-
-    } finally {
-
-      setPdfLoading(false)
-
+        pageHeight
     }
 
+    pdf.save(
+      `rapor_${nama}.pdf`
+    )
+
+  } catch (error) {
+
+    console.log(error)
+
+    alert(
+      "Gagal membuat PDF"
+    )
+
+  } finally {
+
+    setPdfLoading(false)
+
   }
+
+}
 
   if (loading) {
 
