@@ -4,7 +4,10 @@ import { useEffect, useState } from "react"
 import { supabase } from "../../../lib/supabase"
 import { useRouter, useParams } from "next/navigation"
 
-import { MathJax, MathJaxContext } from "better-react-mathjax"
+import {
+  MathJax,
+  MathJaxContext,
+} from "better-react-mathjax"
 
 type Soal = {
   id: number
@@ -27,6 +30,7 @@ type Soal = {
 }
 
 export default function Ujian() {
+
   const router = useRouter()
   const params = useParams()
 
@@ -137,6 +141,7 @@ export default function Ujian() {
     if (!data.user) {
 
       router.push("/login")
+
       return
     }
 
@@ -235,6 +240,7 @@ export default function Ujian() {
     if (error) {
 
       console.log(error)
+
       return
     }
 
@@ -301,6 +307,7 @@ export default function Ujian() {
         if (benar) total++
 
         return {
+
           soal:
             item.pertanyaan,
 
@@ -355,10 +362,15 @@ export default function Ujian() {
   if (loading) {
 
     return (
+
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
+
         <div className="bg-white px-8 py-5 rounded-3xl shadow-xl font-bold text-blue-700">
+
           Loading...
+
         </div>
+
       </div>
     )
   }
@@ -369,13 +381,13 @@ export default function Ujian() {
 
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-100 p-6">
 
-        <div className="bg-white w-full max-w-md p-8 rounded-[35px] shadow-2xl">
+        <div className="bg-white w-full max-w-md p-8 rounded-[30px] shadow-2xl border border-gray-100">
 
-          <h1 className="text-4xl font-black text-center text-blue-700 mb-3">
+          <h1 className="text-3xl font-black text-center text-blue-700 mb-3">
             Token Ujian
           </h1>
 
-          <p className="text-center text-gray-500 mb-8">
+          <p className="text-center text-gray-600 mb-8 text-sm">
             Masukkan token ujian dari admin
           </p>
 
@@ -387,7 +399,19 @@ export default function Ujian() {
               )
             }
             placeholder="Masukkan token"
-            className="w-full border-2 border-gray-200 p-4 rounded-2xl mb-5 outline-none focus:border-blue-500"
+            className="
+              w-full
+              border-2
+              border-gray-300
+              text-gray-800
+              placeholder:text-gray-400
+              p-4
+              rounded-2xl
+              mb-5
+              outline-none
+              focus:border-blue-500
+              bg-white
+            "
           />
 
           <button
@@ -425,7 +449,17 @@ export default function Ujian() {
 
               setAllowed(true)
             }}
-            className="w-full bg-blue-700 hover:bg-blue-800 text-white py-4 rounded-2xl font-black text-lg transition-all"
+            className="
+              w-full
+              bg-blue-700
+              hover:bg-blue-800
+              text-white
+              py-4
+              rounded-2xl
+              font-black
+              text-base
+              transition-all
+            "
           >
             Mulai Ujian
           </button>
@@ -439,8 +473,11 @@ export default function Ujian() {
   if (!soal.length) {
 
     return (
-      <div className="p-10">
+
+      <div className="p-10 text-gray-700">
+
         Tidak ada soal
+
       </div>
     )
   }
@@ -456,32 +493,32 @@ export default function Ujian() {
 
     <MathJaxContext>
 
-      <div className="min-h-screen bg-[#f3f6fb] pb-32">
+      <div className="min-h-screen bg-[#f3f6fb] pb-28">
 
         {/* HEADER */}
-        <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 text-white px-5 py-6 shadow-xl">
+        <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 text-white px-5 py-5 shadow-xl">
 
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-5">
 
             <div>
 
-              <p className="uppercase tracking-[5px] text-xs text-blue-200 mb-2">
+              <p className="uppercase tracking-[4px] text-[11px] text-blue-200 mb-2">
                 Sedang Berlangsung
               </p>
 
-              <h1 className="text-3xl md:text-5xl font-black">
+              <h1 className="text-2xl md:text-4xl font-black">
                 Ujian {kategori}
               </h1>
 
             </div>
 
-            <div className="bg-white/15 backdrop-blur-xl border border-white/20 rounded-3xl px-6 py-4 text-center min-w-[150px]">
+            <div className="bg-white/15 backdrop-blur-xl border border-white/20 rounded-3xl px-5 py-3 text-center min-w-[130px]">
 
-              <p className="text-xs tracking-widest text-blue-100">
+              <p className="text-[11px] tracking-widest text-blue-100">
                 TIMER
               </p>
 
-              <h2 className="text-3xl font-black mt-1">
+              <h2 className="text-2xl font-black mt-1">
                 {formatWaktu()}
               </h2>
 
@@ -498,14 +535,14 @@ export default function Ujian() {
 
             <div className="flex items-center gap-4">
 
-              <div className="font-bold text-gray-700 whitespace-nowrap">
+              <div className="font-bold text-gray-700 whitespace-nowrap text-sm">
                 Soal {currentSoal + 1} / {soal.length}
               </div>
 
-              <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
+              <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
 
                 <div
-                  className="bg-gradient-to-r from-green-400 to-blue-500 h-4 rounded-full transition-all duration-300"
+                  className="bg-gradient-to-r from-green-400 to-blue-500 h-3 rounded-full transition-all duration-300"
                   style={{
                     width:
                       `${progress}%`
@@ -527,7 +564,7 @@ export default function Ujian() {
             onClick={() =>
               setNavOpen(!navOpen)
             }
-            className="bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold shadow-lg"
+            className="bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold shadow-lg text-sm"
           >
             ☰ Navigasi Soal
           </button>
@@ -535,20 +572,25 @@ export default function Ujian() {
         </div>
 
         {/* MAIN */}
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 p-5">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 p-5 items-start">
 
-          {/* SIDEBAR */}
-          <div className={`
-            ${navOpen
-              ? "block"
-              : "hidden"}
-            lg:block
-            w-full lg:w-80
-          `}>
+<div className={`
+  ${navOpen
+    ? "block"
+    : "hidden"}
+  lg:block
+  w-full
+  lg:w-80
+  lg:min-w-[320px]
+  lg:max-w-[320px]
+  lg:sticky
+  lg:top-5
+  self-start
+`}>
 
-            <div className="bg-white rounded-[30px] shadow-xl p-6 sticky top-28">
+            <div className="bg-white rounded-[30px] shadow-xl p-6 max-h-[85vh] overflow-y-auto">
 
-              <h2 className="font-black text-2xl text-gray-800 mb-6">
+              <h2 className="font-black text-xl text-gray-800 mb-5">
                 Navigasi
               </h2>
 
@@ -568,12 +610,16 @@ export default function Ujian() {
                       setNavOpen(false)
                     }}
                     className={`
-                      h-14 rounded-2xl font-black text-lg transition-all
+                      h-12
+                      rounded-2xl
+                      font-black
+                      text-sm
+                      transition-all
                       ${
                         currentSoal === index
                           ? "bg-blue-700 text-white shadow-lg scale-105"
                           : jawabanUser[item.id]
-                          ? "bg-green-400 text-white"
+                          ? "bg-green-500 text-white"
                           : "bg-gray-100 text-gray-700"
                       }
                     `}
@@ -592,11 +638,11 @@ export default function Ujian() {
           {/* SOAL */}
           <div className="flex-1">
 
-            <div className="bg-white rounded-[35px] shadow-xl p-5 md:p-8">
+            <div className="bg-white rounded-[30px] shadow-xl p-5 md:p-7">
 
-              <div className="mb-6">
+              <div className="mb-5">
 
-                <span className="bg-blue-100 text-blue-700 px-5 py-3 rounded-full font-black text-lg">
+                <span className="bg-blue-100 text-blue-700 px-4 py-2 rounded-full font-black text-sm">
                   Soal {currentSoal + 1}
                 </span>
 
@@ -605,7 +651,7 @@ export default function Ujian() {
               {/* PENGANTAR */}
               {soalAktif.pengantar && (
 
-                <div className="mb-6 bg-yellow-50 border border-yellow-200 p-5 rounded-3xl text-gray-700 leading-8">
+                <div className="mb-5 bg-yellow-50 border border-yellow-200 p-5 rounded-3xl text-gray-700 leading-7 text-[15px]">
 
                   <MathJax dynamic>
                     {soalAktif.pengantar}
@@ -618,7 +664,7 @@ export default function Ujian() {
               {/* BACAAN */}
               {soalAktif.bacaan && (
 
-                <div className="mb-7 bg-gray-50 border border-gray-200 p-6 rounded-3xl leading-8 overflow-auto text-gray-700">
+                <div className="mb-6 bg-gray-50 border border-gray-200 p-5 rounded-3xl leading-7 overflow-auto text-gray-700 text-[15px]">
 
                   <MathJax dynamic>
                     {soalAktif.bacaan}
@@ -631,13 +677,13 @@ export default function Ujian() {
               {/* GAMBAR */}
               {soalAktif.gambar && (
 
-                <div className="mb-8 flex justify-center">
+                <div className="mb-7 flex justify-center">
 
                   <img
                     src={
                       soalAktif.gambar
                     }
-                    className="rounded-3xl border max-h-[450px] object-contain shadow-md"
+                    className="rounded-3xl border max-h-[350px] object-contain shadow-md"
                   />
 
                 </div>
@@ -645,7 +691,7 @@ export default function Ujian() {
               )}
 
               {/* PERTANYAAN */}
-              <div className="text-lg md:text-2xl font-bold leading-[45px] text-gray-800 mb-8">
+              <div className="text-[18px] md:text-[22px] font-bold leading-9 text-gray-800 mb-7">
 
                 <MathJax dynamic>
                   {soalAktif.pertanyaan}
@@ -654,95 +700,120 @@ export default function Ujian() {
               </div>
 
               {/* OPSI */}
-              <div className="space-y-5">
+<div className="space-y-4">
 
-                {[
-                  "a",
-                  "b",
-                  "c",
-                  "d",
-                ].map((opsi) => {
+  {[
+    "a",
+    "b",
+    "c",
+    "d",
+  ].map((opsi) => {
 
-                  const value =
-                    soalAktif[
-                      `opsi_${opsi}` as keyof Soal
-                    ] as string
+    const value =
+      soalAktif[
+        `opsi_${opsi}` as keyof Soal
+      ] as string
 
-                  return (
+    const selected =
+      jawabanUser[
+        soalAktif.id
+      ] === opsi
 
-                    <div
-                      key={opsi}
-                      onClick={() =>
-                        pilihJawaban(
-                          soalAktif.id,
-                          opsi
-                        )
-                      }
-                      className={`
-                        p-5 md:p-6
-                        rounded-[30px]
-                        border-2
-                        cursor-pointer
-                        flex gap-5
-                        transition-all
-                        duration-200
-                        ${
-                          jawabanUser[
-                            soalAktif.id
-                          ] === opsi
+    return (
 
-                            ? `
-                              bg-blue-700
-                              border-blue-700
-                              text-white
-                              shadow-xl
-                              scale-[1.01]
-                            `
+      <div
+        key={opsi}
+        onClick={() =>
+          pilihJawaban(
+            soalAktif.id,
+            opsi
+          )
+        }
+        className={`
+          w-full
+          rounded-2xl
+          border
+          cursor-pointer
+          flex
+          items-center
+          gap-4
+          px-4
+          py-4
+          transition-all
+          duration-200
+          ${
+            selected
+              ? `
+                bg-blue-700
+                border-blue-700
+                text-white
+                shadow-lg
+              `
+              : `
+                bg-white
+                border-gray-300
+                hover:border-blue-400
+                hover:bg-blue-50
+                text-gray-800
+              `
+          }
+        `}
+      >
 
-                            : `
-                              bg-white
-                              border-gray-200
-                              hover:border-blue-400
-                              hover:bg-blue-50
-                            `
-                        }
-                      `}
-                    >
+        {/* HURUF */}
+        <div
+          className={`
+            w-12
+            h-12
+            min-w-[48px]
+            rounded-xl
+            flex
+            items-center
+            justify-center
+            text-lg
+            font-bold
+            self-center
+            ${
+              selected
+                ? "bg-white text-blue-700"
+                : "bg-gray-100 text-gray-700"
+            }
+          `}
+        >
+          {opsi.toUpperCase()}
+        </div>
 
-                      {/* HURUF */}
-                      <div className={`
-                        min-w-[60px]
-                        h-[60px]
-                        rounded-2xl
-                        flex items-center justify-center
-                        text-2xl
-                        font-black
-                        ${
-                          jawabanUser[
-                            soalAktif.id
-                          ] === opsi
-                            ? "bg-white text-blue-700"
-                            : "bg-gray-100 text-gray-700"
-                        }
-                      `}>
-                        {opsi.toUpperCase()}
-                      </div>
+        {/* ISI JAWABAN */}
+        <div
+          className={`
+            flex-1
+            flex
+            items-center
+            text-[15px]
+            md:text-[16px]
+            leading-7
+            font-medium
+            break-words
+            ${
+              selected
+                ? "text-white"
+                : "text-gray-800"
+            }
+          `}
+        >
 
-                      {/* TEXT */}
-                      <div className="flex-1 text-[16px] md:text-lg leading-8 font-semibold break-words">
+          <MathJax dynamic>
+            {value}
+          </MathJax>
 
-                        <MathJax dynamic>
-                          {value}
-                        </MathJax>
+        </div>
 
-                      </div>
+      </div>
 
-                    </div>
+    )
+  })}
 
-                  )
-                })}
-
-              </div>
+</div>
 
             </div>
 
@@ -762,14 +833,35 @@ export default function Ujian() {
                     Math.max(prev - 1, 0)
                 )
               }
-              className="flex-1 bg-gray-800 hover:bg-black text-white py-4 rounded-2xl font-black transition-all"
+              className="
+                flex-1
+                bg-gray-800
+                hover:bg-black
+                text-white
+                py-3
+                rounded-2xl
+                font-black
+                text-sm
+                transition-all
+              "
             >
               ← Sebelumnya
             </button>
 
             <button
               onClick={submitUjian}
-              className="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-4 rounded-2xl font-black transition-all shadow-lg"
+              className="
+                flex-1
+                bg-blue-700
+                hover:bg-blue-800
+                text-white
+                py-3
+                rounded-2xl
+                font-black
+                text-sm
+                transition-all
+                shadow-lg
+              "
             >
               Submit
             </button>
@@ -784,7 +876,17 @@ export default function Ujian() {
                     )
                 )
               }
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black transition-all"
+              className="
+                flex-1
+                bg-green-600
+                hover:bg-green-700
+                text-white
+                py-3
+                rounded-2xl
+                font-black
+                text-sm
+                transition-all
+              "
             >
               Berikutnya →
             </button>
