@@ -3,6 +3,11 @@
 import { useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
+import {
+  Eye,
+  EyeOff,
+  GraduationCap,
+} from "lucide-react"
 
 export default function Login() {
 
@@ -20,12 +25,20 @@ export default function Login() {
   const [loading, setLoading] =
     useState(false)
 
+  const [showPassword,
+    setShowPassword] =
+    useState(false)
+
   // =============================
   // LOGIN
   // =============================
+
   async function handleLogin() {
 
-    if (!email || !password) {
+    if (
+      !email ||
+      !password
+    ) {
 
       alert(
         "Email dan password wajib diisi"
@@ -54,7 +67,6 @@ export default function Login() {
       return
     }
 
-    // 🔥 AMBIL USER LOGIN
     const { data: userData } =
       await supabase.auth.getUser()
 
@@ -72,7 +84,6 @@ export default function Login() {
       return
     }
 
-    // 🔥 AMBIL ROLE
     const { data: profile } =
       await supabase
         .from("profiles")
@@ -82,7 +93,6 @@ export default function Login() {
 
     setLoading(false)
 
-    // 🔥 CEK ROLE
     if (
       profile?.role === "admin"
     ) {
@@ -92,12 +102,15 @@ export default function Login() {
     } else {
 
       router.push("/dashboard")
+
     }
+
   }
 
   // =============================
   // REGISTER
   // =============================
+
   async function handleRegister() {
 
     if (
@@ -136,7 +149,6 @@ export default function Login() {
     const user =
       data.user
 
-    // 🔥 INSERT PROFILE
     if (user) {
 
       const {
@@ -163,6 +175,7 @@ export default function Login() {
 
         return
       }
+
     }
 
     setLoading(false)
@@ -171,84 +184,346 @@ export default function Login() {
       "Akun berhasil dibuat, silakan login"
     )
 
-    // 🔥 RESET FORM
     setNama("")
     setEmail("")
     setPassword("")
+
   }
 
   return (
 
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 p-6">
+    <div className="
+    min-h-screen
+    flex
+    items-center
+    justify-center
+    bg-gradient-to-br
+    from-blue-200
+    via-indigo-200
+    to-purple-200
+    p-6
+    ">
 
-      <div className="bg-white shadow-2xl rounded-3xl p-8 w-full max-w-md">
+      <div className="
+      w-full
+      max-w-md
+      bg-white/90
+      backdrop-blur-lg
+      rounded-[35px]
+      shadow-2xl
+      border
+      border-white/40
+      p-8
+      ">
+
+        {/* ICON */}
+
+        <div className="
+        flex
+        justify-center
+        mb-5
+        ">
+
+          <div className="
+          bg-blue-600
+          w-20
+          h-20
+          rounded-full
+          flex
+          items-center
+          justify-center
+          shadow-lg
+          ">
+
+            <GraduationCap
+              size={38}
+              className="text-white"
+            />
+
+          </div>
+
+        </div>
 
         {/* TITLE */}
-        <h1 className="text-3xl font-black text-center mb-2 text-blue-700">
-          🎓 Lampung Cerdas
+
+        <h1 className="
+        text-4xl
+        font-black
+        text-center
+        text-blue-700
+        mb-2
+        ">
+
+          Lampung Cerdas
+
         </h1>
 
-        <p className="text-center text-gray-500 mb-6">
-          Login / Register Akun
+        <p className="
+        text-center
+        text-gray-600
+        mb-8
+        text-sm
+        ">
+
+          Platform Tryout & Pembelajaran Pintar
+
         </p>
 
         {/* NAMA */}
-        <input
-          type="text"
-          placeholder="Nama Lengkap (isi saat register)"
-          className="border border-gray-300 focus:border-blue-500 outline-none p-3 mb-3 w-full rounded-xl"
-          value={nama}
-          onChange={(e) =>
-            setNama(e.target.value)
-          }
-        />
+
+        <div className="mb-4">
+
+          <label className="
+          text-gray-700
+          font-semibold
+          text-sm
+          mb-2
+          block
+          ">
+
+            Nama Lengkap
+
+          </label>
+
+          <input
+            type="text"
+            placeholder="Masukkan nama lengkap"
+            className="
+            w-full
+            bg-gray-100
+            border
+            border-gray-200
+            rounded-2xl
+            p-4
+            text-gray-900
+            placeholder:text-gray-500
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-500
+            transition
+            "
+            value={nama}
+            onChange={(e) =>
+              setNama(
+                e.target.value
+              )
+            }
+          />
+
+        </div>
 
         {/* EMAIL */}
-        <input
-          type="email"
-          placeholder="Email"
-          className="border border-gray-300 focus:border-blue-500 outline-none p-3 mb-3 w-full rounded-xl"
-          value={email}
-          onChange={(e) =>
-            setEmail(e.target.value)
-          }
-        />
+
+        <div className="mb-4">
+
+          <label className="
+          text-gray-700
+          font-semibold
+          text-sm
+          mb-2
+          block
+          ">
+
+            Email
+
+          </label>
+
+          <input
+            type="email"
+            placeholder="Masukkan email"
+            className="
+            w-full
+            bg-gray-100
+            border
+            border-gray-200
+            rounded-2xl
+            p-4
+            text-gray-900
+            placeholder:text-gray-500
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-500
+            transition
+            "
+            value={email}
+            onChange={(e) =>
+              setEmail(
+                e.target.value
+              )
+            }
+          />
+
+        </div>
 
         {/* PASSWORD */}
-        <input
-          type="password"
-          placeholder="Password"
-          className="border border-gray-300 focus:border-blue-500 outline-none p-3 mb-5 w-full rounded-xl"
-          value={password}
-          onChange={(e) =>
-            setPassword(e.target.value)
-          }
-        />
 
-        {/* LOGIN */}
+        <div className="mb-6">
+
+          <label className="
+          text-gray-700
+          font-semibold
+          text-sm
+          mb-2
+          block
+          ">
+
+            Password
+
+          </label>
+
+          <div className="relative">
+
+            <input
+              type={
+                showPassword
+                  ? "text"
+                  : "password"
+              }
+              placeholder="Masukkan password"
+              className="
+              w-full
+              bg-gray-100
+              border
+              border-gray-200
+              rounded-2xl
+              p-4
+              pr-14
+              text-gray-900
+              placeholder:text-gray-500
+              focus:outline-none
+              focus:ring-2
+              focus:ring-blue-500
+              transition
+              "
+              value={password}
+              onChange={(e) =>
+                setPassword(
+                  e.target.value
+                )
+              }
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowPassword(
+                  !showPassword
+                )
+              }
+              className="
+              absolute
+              right-4
+              top-1/2
+              -translate-y-1/2
+              text-gray-500
+              hover:text-blue-600
+              transition
+              "
+            >
+
+              {
+                showPassword
+                  ?
+
+                  <EyeOff size={22} />
+
+                  :
+
+                  <Eye size={22} />
+              }
+
+            </button>
+
+          </div>
+
+        </div>
+
+        {/* LOGIN BUTTON */}
+
         <button
           onClick={handleLogin}
           disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white w-full p-3 rounded-xl mb-3 font-bold transition disabled:opacity-60"
+          className="
+          w-full
+          bg-blue-600
+          hover:bg-blue-700
+          text-white
+          p-4
+          rounded-2xl
+          font-bold
+          text-lg
+          shadow-lg
+          transition
+          hover:scale-[1.02]
+          disabled:opacity-60
+          mb-4
+          "
         >
-          {loading
-            ? "Loading..."
-            : "Login"}
+
+          {
+            loading
+              ?
+
+              "Loading..."
+
+              :
+
+              "Login"
+          }
+
         </button>
 
-        {/* REGISTER */}
+        {/* REGISTER BUTTON */}
+
         <button
           onClick={handleRegister}
           disabled={loading}
-          className="bg-green-500 hover:bg-green-600 text-white w-full p-3 rounded-xl font-bold transition disabled:opacity-60"
+          className="
+          w-full
+          bg-green-500
+          hover:bg-green-600
+          text-white
+          p-4
+          rounded-2xl
+          font-bold
+          text-lg
+          shadow-lg
+          transition
+          hover:scale-[1.02]
+          disabled:opacity-60
+          "
         >
-          {loading
-            ? "Loading..."
-            : "Register"}
+
+          {
+            loading
+              ?
+
+              "Loading..."
+
+              :
+
+              "Register"
+          }
+
         </button>
+
+        {/* FOOTER */}
+
+        <p className="
+        text-center
+        text-gray-500
+        text-sm
+        mt-6
+        ">
+
+          © 2026 Lampung Cerdas
+
+        </p>
 
       </div>
 
     </div>
+
   )
+
 }
