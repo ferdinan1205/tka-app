@@ -4,8 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "../../../lib/supabase"
 import { useRouter, useParams } from "next/navigation"
 
-import Latex from "react-latex-next"
-import "katex/dist/katex.min.css"
+import { MathJax, MathJaxContext } from "better-react-mathjax"
 
 type Soal = {
   id: number
@@ -28,14 +27,12 @@ type Soal = {
 }
 
 export default function Ujian() {
-
   const router = useRouter()
   const params = useParams()
 
-  const kategori =
-    decodeURIComponent(
-      params.kategori as string
-    )
+  const kategori = decodeURIComponent(
+    params.kategori as string
+  )
 
   const [soal, setSoal] =
     useState<Soal[]>([])
@@ -72,12 +69,10 @@ export default function Ujian() {
     setNavOpen] =
     useState(false)
 
-  /* INIT */
   useEffect(() => {
     init()
   }, [])
 
-  /* TIMER */
   useEffect(() => {
 
     if (
@@ -89,39 +84,39 @@ export default function Ujian() {
     const interval =
       setInterval(() => {
 
-      setTimeLeft((prev) => {
+        setTimeLeft((prev) => {
 
-        const newTime =
-          prev - 1
+          const newTime =
+            prev - 1
 
-        const updated = {
-          ...jawabanUser,
-          currentSoal,
-          timeLeft: newTime,
-        }
+          const updated = {
+            ...jawabanUser,
+            currentSoal,
+            timeLeft: newTime,
+          }
 
-        localStorage.setItem(
-          storageKey,
-          JSON.stringify(updated)
-        )
-
-        if (newTime <= 0) {
-
-          clearInterval(interval)
-
-          alert(
-            "Waktu habis!"
+          localStorage.setItem(
+            storageKey,
+            JSON.stringify(updated)
           )
 
-          submitUjian()
+          if (newTime <= 0) {
 
-          return 0
-        }
+            clearInterval(interval)
 
-        return newTime
-      })
+            alert(
+              "Waktu habis!"
+            )
 
-    }, 1000)
+            submitUjian()
+
+            return 0
+          }
+
+          return newTime
+        })
+
+      }, 1000)
 
     return () =>
       clearInterval(interval)
@@ -134,7 +129,6 @@ export default function Ujian() {
     currentSoal
   ])
 
-  /* INIT */
   async function init() {
 
     const { data } =
@@ -225,7 +219,6 @@ export default function Ujian() {
     setLoading(false)
   }
 
-  /* GET SOAL */
   async function getSoal() {
 
     const {
@@ -250,7 +243,6 @@ export default function Ujian() {
     )
   }
 
-  /* PILIH JAWABAN */
   function pilihJawaban(
     id: number,
     jawaban: string
@@ -275,7 +267,6 @@ export default function Ujian() {
     )
   }
 
-  /* FORMAT TIMER */
   function formatWaktu() {
 
     const menit =
@@ -293,7 +284,6 @@ export default function Ujian() {
     }${detik}`
   }
 
-  /* SUBMIT */
   async function submitUjian() {
 
     let total = 0
@@ -362,31 +352,31 @@ export default function Ujian() {
     router.push("/review")
   }
 
-  /* LOADING */
   if (loading) {
 
     return (
-      <div className="p-10">
-        Loading...
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="bg-white px-8 py-5 rounded-3xl shadow-xl font-bold text-blue-700">
+          Loading...
+        </div>
       </div>
     )
   }
 
-  /* TOKEN */
   if (!allowed) {
 
     return (
 
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-100 p-6">
 
-        <div className="bg-white w-full max-w-md p-8 rounded-3xl shadow-xl">
+        <div className="bg-white w-full max-w-md p-8 rounded-[35px] shadow-2xl">
 
-          <h1 className="text-3xl font-black text-center mb-2">
+          <h1 className="text-4xl font-black text-center text-blue-700 mb-3">
             Token Ujian
           </h1>
 
-          <p className="text-gray-500 text-center mb-6">
-            Masukkan token dari admin
+          <p className="text-center text-gray-500 mb-8">
+            Masukkan token ujian dari admin
           </p>
 
           <input
@@ -397,7 +387,7 @@ export default function Ujian() {
               )
             }
             placeholder="Masukkan token"
-            className="w-full border p-4 rounded-2xl mb-4"
+            className="w-full border-2 border-gray-200 p-4 rounded-2xl mb-5 outline-none focus:border-blue-500"
           />
 
           <button
@@ -435,7 +425,7 @@ export default function Ujian() {
 
               setAllowed(true)
             }}
-            className="w-full bg-blue-700 hover:bg-blue-800 text-white p-4 rounded-2xl font-bold"
+            className="w-full bg-blue-700 hover:bg-blue-800 text-white py-4 rounded-2xl font-black text-lg transition-all"
           >
             Mulai Ujian
           </button>
@@ -464,123 +454,65 @@ export default function Ujian() {
 
   return (
 
-    <div className="min-h-screen bg-gray-100 pb-28">
+    <MathJaxContext>
 
-      {/* HEADER */}
-      <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white px-4 py-4 md:px-6 md:py-5">
+      <div className="min-h-screen bg-[#f3f6fb] pb-32">
 
-        <div className="flex items-center justify-between gap-4">
+        {/* HEADER */}
+        <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 text-white px-5 py-6 shadow-xl">
 
-          <div>
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-5">
 
-            <p className="text-[10px] md:text-sm opacity-80 tracking-wider">
-              SEDANG BERLANGSUNG
-            </p>
+            <div>
 
-            <h1 className="text-2xl md:text-4xl font-black leading-tight">
-              Ujian: {kategori}
-            </h1>
+              <p className="uppercase tracking-[5px] text-xs text-blue-200 mb-2">
+                Sedang Berlangsung
+              </p>
 
-          </div>
+              <h1 className="text-3xl md:text-5xl font-black">
+                Ujian {kategori}
+              </h1>
 
-          {/* TIMER */}
-          <div className="border border-red-300 px-4 py-2 rounded-2xl bg-white/10 backdrop-blur-md">
-
-            <div className="text-center text-[10px] md:text-xs opacity-80">
-              ⏱ TIMER
             </div>
 
-            <div className="text-lg md:text-2xl font-black">
-              {formatWaktu()}
+            <div className="bg-white/15 backdrop-blur-xl border border-white/20 rounded-3xl px-6 py-4 text-center min-w-[150px]">
+
+              <p className="text-xs tracking-widest text-blue-100">
+                TIMER
+              </p>
+
+              <h2 className="text-3xl font-black mt-1">
+                {formatWaktu()}
+              </h2>
+
             </div>
 
           </div>
 
         </div>
 
-      </div>
+        {/* PROGRESS */}
+        <div className="bg-white shadow-sm sticky top-0 z-30">
 
-      {/* PROGRESS */}
-      <div className="bg-white px-4 py-3 flex items-center gap-3 shadow-sm">
+          <div className="max-w-7xl mx-auto px-5 py-4">
 
-        <p className="text-sm md:text-base font-semibold whitespace-nowrap text-gray-700">
-          Soal {currentSoal + 1}
-          dari {soal.length}
-        </p>
+            <div className="flex items-center gap-4">
 
-        <div className="flex-1 bg-gray-200 h-2 md:h-3 rounded-full overflow-hidden">
+              <div className="font-bold text-gray-700 whitespace-nowrap">
+                Soal {currentSoal + 1} / {soal.length}
+              </div>
 
-          <div
-            className="bg-green-500 h-2 md:h-3 transition-all"
-            style={{
-              width:
-                `${progress}%`
-            }}
-          />
+              <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
 
-        </div>
-
-      </div>
-
-      {/* MOBILE NAV BUTTON */}
-      <div className="lg:hidden px-4 pt-4">
-
-        <button
-          onClick={() =>
-            setNavOpen(!navOpen)
-          }
-          className="bg-blue-700 text-white px-4 py-2 rounded-2xl font-bold shadow-lg text-sm"
-        >
-          ☰ Navigasi Soal
-        </button>
-
-      </div>
-
-      {/* MAIN */}
-      <div className="flex flex-col lg:flex-row gap-5 p-4">
-
-        {/* NAV */}
-        <div className={`
-          ${navOpen
-            ? "block"
-            : "hidden"}
-          lg:block
-          w-full lg:w-64
-        `}>
-
-          <div className="bg-white p-5 rounded-3xl shadow sticky top-5">
-
-            <p className="font-black text-lg mb-5">
-              Navigasi Soal
-            </p>
-
-            <div className="grid grid-cols-5 lg:grid-cols-4 gap-3">
-
-              {soal.map((
-                item,
-                index
-              ) => (
-
-                <button
-                  key={index}
-                  onClick={() => {
-
-                    setCurrentSoal(index)
-
-                    setNavOpen(false)
+                <div
+                  className="bg-gradient-to-r from-green-400 to-blue-500 h-4 rounded-full transition-all duration-300"
+                  style={{
+                    width:
+                      `${progress}%`
                   }}
-                  className={`h-11 rounded-2xl font-bold transition ${
-                    currentSoal === index
-                      ? "bg-blue-600 text-white"
-                      : jawabanUser[item.id]
-                      ? "bg-green-300"
-                      : "bg-gray-100"
-                  }`}
-                >
-                  {index + 1}
-                </button>
+                />
 
-              ))}
+              </div>
 
             </div>
 
@@ -588,275 +520,281 @@ export default function Ujian() {
 
         </div>
 
-        {/* SOAL */}
-        <div className="flex-1 w-full bg-white p-4 md:p-6 rounded-3xl shadow overflow-hidden">
+        {/* MOBILE NAV */}
+        <div className="lg:hidden px-5 pt-5">
 
-          <div className="mb-5">
-
-            <span className="bg-blue-100 text-blue-700 px-4 py-2 rounded-full font-black text-base">
-              Soal {currentSoal + 1}
-            </span>
-
-          </div>
-
-          {/* PENGANTAR */}
-          {soalAktif.pengantar && (
-
-            <div className="mb-5 bg-yellow-50 border p-4 rounded-3xl leading-7 text-sm md:text-base">
-
-              <Latex>
-                {soalAktif.pengantar}
-              </Latex>
-
-            </div>
-
-          )}
-
-          {/* BACAAN */}
-          {soalAktif.bacaan && (
-
-            <div className="mb-6 bg-gray-50 border p-4 md:p-5 rounded-3xl whitespace-pre-line leading-7 md:leading-8 text-sm md:text-base overflow-auto">
-
-              <Latex>
-                {soalAktif.bacaan}
-              </Latex>
-
-            </div>
-
-          )}
-
-          {/* GAMBAR */}
-          {soalAktif.gambar && (
-
-            <div className="mb-6 flex justify-center">
-
-              <img
-                src={
-                  soalAktif.gambar
-                }
-                className="rounded-3xl border max-h-[300px] md:max-h-[450px] object-contain"
-              />
-
-            </div>
-
-          )}
-
-          {/* PERTANYAAN */}
-          <div className="font-bold mb-7 text-base md:text-2xl leading-8 md:leading-[50px] text-gray-800 break-words">
-
-            <Latex>
-              {soalAktif.pertanyaan}
-            </Latex>
-
-          </div>
-
-{/* OPSI */}
-<div className="space-y-4">
-
-  {[
-    "a",
-    "b",
-    "c",
-    "d",
-  ].map((opsi) => {
-
-    const value =
-      soalAktif[
-        `opsi_${opsi}` as keyof Soal
-      ] as string
-
-    return (
-
-      <div
-        key={opsi}
-        onClick={() =>
-          pilihJawaban(
-            soalAktif.id,
-            opsi
-          )
-        }
-        className={`
-
-          p-4 md:p-5
-          rounded-3xl
-          border-2
-          cursor-pointer
-          flex gap-4
-          transition-all
-          shadow-sm
-
-          ${
-            jawabanUser[
-              soalAktif.id
-            ] === opsi
-
-              ? `
-                bg-blue-700
-                text-white
-                border-blue-700
-                shadow-lg
-              `
-
-              : `
-                bg-white
-                border-gray-300
-                hover:border-blue-400
-                hover:bg-blue-50
-                text-gray-800
-              `
-          }
-
-        `}
-      >
-
-        {/* HURUF */}
-        <div className={`
-
-          min-w-[45px]
-          h-[45px]
-
-          md:min-w-[55px]
-          md:h-[55px]
-
-          flex items-center justify-center
-
-          rounded-2xl
-          font-black
-          text-base md:text-lg
-
-          ${
-            jawabanUser[
-              soalAktif.id
-            ] === opsi
-
-              ? `
-                bg-white
-                text-blue-700
-              `
-
-              : `
-                bg-gray-100
-                text-gray-700
-              `
-          }
-
-        `}>
-          {opsi.toUpperCase()}
-        </div>
-
-        {/* TEXT OPSI */}
-        <div className="
-
-          flex-1
-          leading-7 md:leading-8
-
-          text-[15px]
-          md:text-lg
-
-          font-semibold
-          break-words
-
-        ">
-
-          <Latex>
-            {value}
-          </Latex>
-
-        </div>
-
-      </div>
-
-    )
-  })}
-
-</div>
-
-        </div>
-
-      </div>
-
-      {/* FOOTER */}
-      <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 p-3 shadow-2xl z-50">
-
-        <div className="flex gap-3">
-
-          {/* SEBELUMNYA */}
           <button
             onClick={() =>
-              setCurrentSoal(
-                (prev) =>
-                  Math.max(prev - 1, 0)
-              )
+              setNavOpen(!navOpen)
             }
-            className="
-              flex-1
-              bg-gray-800
-              hover:bg-gray-900
-              text-white
-              px-3 py-3
-              rounded-2xl
-              text-sm md:text-base
-              font-bold
-              transition-all
-              duration-200
-              shadow-md
-            "
+            className="bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold shadow-lg"
           >
-            ← Sebelumnya
+            ☰ Navigasi Soal
           </button>
 
-          {/* SUBMIT */}
-          <button
-            onClick={submitUjian}
-            className="
-              flex-1
-              bg-blue-700
-              hover:bg-blue-800
-              text-white
-              px-3 py-3
-              rounded-2xl
-              text-sm md:text-base
-              font-black
-              transition-all
-              duration-200
-              shadow-lg
-            "
-          >
-            Submit
-          </button>
+        </div>
 
-          {/* BERIKUTNYA */}
-          <button
-            onClick={() =>
-              setCurrentSoal(
-                (prev) =>
-                  Math.min(
-                    prev + 1,
-                    soal.length - 1
+        {/* MAIN */}
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 p-5">
+
+          {/* SIDEBAR */}
+          <div className={`
+            ${navOpen
+              ? "block"
+              : "hidden"}
+            lg:block
+            w-full lg:w-80
+          `}>
+
+            <div className="bg-white rounded-[30px] shadow-xl p-6 sticky top-28">
+
+              <h2 className="font-black text-2xl text-gray-800 mb-6">
+                Navigasi
+              </h2>
+
+              <div className="grid grid-cols-5 lg:grid-cols-4 gap-3">
+
+                {soal.map((
+                  item,
+                  index
+                ) => (
+
+                  <button
+                    key={index}
+                    onClick={() => {
+
+                      setCurrentSoal(index)
+
+                      setNavOpen(false)
+                    }}
+                    className={`
+                      h-14 rounded-2xl font-black text-lg transition-all
+                      ${
+                        currentSoal === index
+                          ? "bg-blue-700 text-white shadow-lg scale-105"
+                          : jawabanUser[item.id]
+                          ? "bg-green-400 text-white"
+                          : "bg-gray-100 text-gray-700"
+                      }
+                    `}
+                  >
+                    {index + 1}
+                  </button>
+
+                ))}
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* SOAL */}
+          <div className="flex-1">
+
+            <div className="bg-white rounded-[35px] shadow-xl p-5 md:p-8">
+
+              <div className="mb-6">
+
+                <span className="bg-blue-100 text-blue-700 px-5 py-3 rounded-full font-black text-lg">
+                  Soal {currentSoal + 1}
+                </span>
+
+              </div>
+
+              {/* PENGANTAR */}
+              {soalAktif.pengantar && (
+
+                <div className="mb-6 bg-yellow-50 border border-yellow-200 p-5 rounded-3xl text-gray-700 leading-8">
+
+                  <MathJax dynamic>
+                    {soalAktif.pengantar}
+                  </MathJax>
+
+                </div>
+
+              )}
+
+              {/* BACAAN */}
+              {soalAktif.bacaan && (
+
+                <div className="mb-7 bg-gray-50 border border-gray-200 p-6 rounded-3xl leading-8 overflow-auto text-gray-700">
+
+                  <MathJax dynamic>
+                    {soalAktif.bacaan}
+                  </MathJax>
+
+                </div>
+
+              )}
+
+              {/* GAMBAR */}
+              {soalAktif.gambar && (
+
+                <div className="mb-8 flex justify-center">
+
+                  <img
+                    src={
+                      soalAktif.gambar
+                    }
+                    className="rounded-3xl border max-h-[450px] object-contain shadow-md"
+                  />
+
+                </div>
+
+              )}
+
+              {/* PERTANYAAN */}
+              <div className="text-lg md:text-2xl font-bold leading-[45px] text-gray-800 mb-8">
+
+                <MathJax dynamic>
+                  {soalAktif.pertanyaan}
+                </MathJax>
+
+              </div>
+
+              {/* OPSI */}
+              <div className="space-y-5">
+
+                {[
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                ].map((opsi) => {
+
+                  const value =
+                    soalAktif[
+                      `opsi_${opsi}` as keyof Soal
+                    ] as string
+
+                  return (
+
+                    <div
+                      key={opsi}
+                      onClick={() =>
+                        pilihJawaban(
+                          soalAktif.id,
+                          opsi
+                        )
+                      }
+                      className={`
+                        p-5 md:p-6
+                        rounded-[30px]
+                        border-2
+                        cursor-pointer
+                        flex gap-5
+                        transition-all
+                        duration-200
+                        ${
+                          jawabanUser[
+                            soalAktif.id
+                          ] === opsi
+
+                            ? `
+                              bg-blue-700
+                              border-blue-700
+                              text-white
+                              shadow-xl
+                              scale-[1.01]
+                            `
+
+                            : `
+                              bg-white
+                              border-gray-200
+                              hover:border-blue-400
+                              hover:bg-blue-50
+                            `
+                        }
+                      `}
+                    >
+
+                      {/* HURUF */}
+                      <div className={`
+                        min-w-[60px]
+                        h-[60px]
+                        rounded-2xl
+                        flex items-center justify-center
+                        text-2xl
+                        font-black
+                        ${
+                          jawabanUser[
+                            soalAktif.id
+                          ] === opsi
+                            ? "bg-white text-blue-700"
+                            : "bg-gray-100 text-gray-700"
+                        }
+                      `}>
+                        {opsi.toUpperCase()}
+                      </div>
+
+                      {/* TEXT */}
+                      <div className="flex-1 text-[16px] md:text-lg leading-8 font-semibold break-words">
+
+                        <MathJax dynamic>
+                          {value}
+                        </MathJax>
+
+                      </div>
+
+                    </div>
+
                   )
-              )
-            }
-            className="
-              flex-1
-              bg-green-600
-              hover:bg-green-700
-              text-white
-              px-3 py-3
-              rounded-2xl
-              text-sm md:text-base
-              font-bold
-              transition-all
-              duration-200
-              shadow-md
-            "
-          >
-            Berikutnya →
-          </button>
+                })}
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* FOOTER */}
+        <div className="fixed bottom-0 left-0 w-full bg-white border-t shadow-2xl p-4 z-50">
+
+          <div className="max-w-7xl mx-auto flex gap-3">
+
+            <button
+              onClick={() =>
+                setCurrentSoal(
+                  (prev) =>
+                    Math.max(prev - 1, 0)
+                )
+              }
+              className="flex-1 bg-gray-800 hover:bg-black text-white py-4 rounded-2xl font-black transition-all"
+            >
+              ← Sebelumnya
+            </button>
+
+            <button
+              onClick={submitUjian}
+              className="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-4 rounded-2xl font-black transition-all shadow-lg"
+            >
+              Submit
+            </button>
+
+            <button
+              onClick={() =>
+                setCurrentSoal(
+                  (prev) =>
+                    Math.min(
+                      prev + 1,
+                      soal.length - 1
+                    )
+                )
+              }
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black transition-all"
+            >
+              Berikutnya →
+            </button>
+
+          </div>
 
         </div>
 
       </div>
 
-    </div>
+    </MathJaxContext>
   )
 }

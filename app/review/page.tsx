@@ -4,16 +4,25 @@ import { useEffect, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
 
-import Latex from "react-latex-next"
-import "katex/dist/katex.min.css"
+import {
+  MathJax,
+  MathJaxContext,
+} from "better-react-mathjax"
 
 export default function Review() {
 
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [aiLoading, setAiLoading] = useState<number | null>(null)
+  const [data, setData] =
+    useState<any>(null)
 
-  const router = useRouter()
+  const [loading, setLoading] =
+    useState(true)
+
+  const [aiLoading,
+    setAiLoading] =
+    useState<number | null>(null)
+
+  const router =
+    useRouter()
 
   useEffect(() => {
     getLastResult()
@@ -21,7 +30,9 @@ export default function Review() {
 
   async function getLastResult() {
 
-    const { data: userData } =
+    const {
+      data: userData
+    } =
       await supabase.auth.getUser()
 
     if (!userData.user) {
@@ -34,7 +45,10 @@ export default function Review() {
       await supabase
         .from("hasil")
         .select("*")
-        .eq("user_id", userData.user.id)
+        .eq(
+          "user_id",
+          userData.user.id
+        )
         .order("id", {
           ascending: false
         })
@@ -74,7 +88,8 @@ export default function Review() {
       const updated =
         [...data.detail]
 
-      updated[index].pembahasan =
+      updated[index]
+        .pembahasan =
         result.text
 
       setData({
@@ -82,9 +97,11 @@ export default function Review() {
         detail: updated,
       })
 
-    } catch (err) {
+    } catch {
 
-      alert("Gagal generate AI")
+      alert(
+        "Gagal generate AI"
+      )
 
     } finally {
 
@@ -104,14 +121,18 @@ export default function Review() {
 
       const id =
         url
-          .split("youtu.be/")[1]
+          .split(
+            "youtu.be/"
+          )[1]
           .split("?")[0]
 
       return `https://www.youtube.com/embed/${id}`
     }
 
     if (
-      url.includes("watch?v=")
+      url.includes(
+        "watch?v="
+      )
     ) {
 
       const id =
@@ -138,14 +159,15 @@ export default function Review() {
 
     return (
       <div className="p-10">
-        <p>Tidak ada data</p>
+        Tidak ada data
       </div>
     )
   }
 
   const benar =
     data.detail.filter(
-      (d: any) => d.benar
+      (d: any) =>
+        d.benar
     ).length
 
   const salah =
@@ -156,229 +178,225 @@ export default function Review() {
     Math.round(
       (benar /
         data.detail.length) *
-        100
+      100
     )
 
   return (
 
-    <div className="min-h-screen bg-gray-100 overflow-x-hidden">
+    <MathJaxContext>
+      <div className="min-h-screen bg-gray-100">
 
-      {/* HEADER */}
-      <div className="bg-blue-800 text-white p-6 flex justify-between items-center">
+        {/* HEADER */}
+        <div className="bg-blue-800 text-white p-6 flex justify-between items-center">
 
-        <div>
+          <div>
+            <p className="text-sm opacity-80">
+              UJIAN{" "}
+              {data.kategori?.toUpperCase()}
+            </p>
 
-          <p className="text-sm opacity-80">
-            UJIAN {data.kategori?.toUpperCase()}
-          </p>
+            <h1 className="text-3xl font-bold">
+              Review Jawaban
+            </h1>
+          </div>
 
-          <h1 className="text-3xl font-bold">
-            Review Jawaban
-          </h1>
+          <button
+            onClick={() =>
+              router.push(
+                "/dashboard"
+              )
+            }
+            className="border px-4 py-2 rounded-xl hover:bg-white hover:text-blue-800 transition"
+          >
+            ← Dashboard
+          </button>
 
         </div>
 
-        <button
-          onClick={() =>
-            router.push(
-              "/dashboard"
-            )
-          }
-          className="border px-4 py-2 rounded-xl hover:bg-white hover:text-blue-800 transition"
-        >
-          ← Dashboard
-        </button>
+        <div className="max-w-7xl mx-auto p-6">
 
-      </div>
+          {/* SUMMARY */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
 
-      <div className="max-w-7xl mx-auto p-6">
+            <Card
+              title="Total Skor"
+              value={data.skor}
+              color="text-blue-700"
+            />
 
-        {/* SUMMARY */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <Card
+              title="Benar"
+              value={benar}
+              color="text-green-600"
+            />
 
-          <div className="bg-white p-5 rounded-2xl shadow text-center">
+            <Card
+              title="Salah"
+              value={salah}
+              color="text-red-600"
+            />
 
-            <p className="text-3xl font-bold text-blue-700">
-              {data.skor}
-            </p>
-
-            <p className="text-gray-500 mt-1">
-              Total Skor
-            </p>
-
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl shadow text-center">
-
-            <p className="text-3xl font-bold text-green-600">
-              {benar}
-            </p>
-
-            <p className="text-gray-500 mt-1">
-              Benar
-            </p>
+            <Card
+              title="Akurasi"
+              value={`${akurasi}%`}
+              color="text-yellow-600"
+            />
 
           </div>
 
-          <div className="bg-white p-5 rounded-2xl shadow text-center">
+          {/* SOAL */}
+          {data.detail.map(
+            (
+              item: any,
+              i: number
+            ) => {
 
-            <p className="text-3xl font-bold text-red-600">
-              {salah}
-            </p>
+              const isEmpty =
+                !item.pembahasan ||
+                item.pembahasan.trim() === "" ||
+                item.pembahasan === "-"
 
-            <p className="text-gray-500 mt-1">
-              Salah
-            </p>
+              return (
 
-          </div>
+                <div
+                  key={i}
+                  className="bg-white p-6 rounded-3xl mb-6 shadow-lg"
+                >
 
-          <div className="bg-white p-5 rounded-2xl shadow text-center">
+                  {/* HEADER */}
+                  <div className="flex justify-between items-start mb-4 gap-4">
 
-            <p className="text-3xl font-bold text-yellow-600">
-              {akurasi}%
-            </p>
+                    <div>
 
-            <p className="text-gray-500 mt-1">
-              Akurasi
-            </p>
+                      <span className="bg-blue-100 text-blue-700 px-4 py-1 rounded-full text-sm font-bold">
+                        Soal {i + 1}
+                      </span>
 
-          </div>
+                      <div className="mt-4 text-lg font-semibold text-gray-800 leading-8">
 
-        </div>
+                        <MathJax dynamic>
+                          {item.soal}
+                        </MathJax>
 
-        {/* LIST SOAL */}
-        {data.detail.map(
-          (
-            item: any,
-            i: number
-          ) => {
+                      </div>
 
-            const isEmpty =
-              !item.pembahasan ||
-              item.pembahasan.trim() ===
-                "" ||
-              item.pembahasan === "-"
+                    </div>
 
-            return (
-
-              <div
-                key={i}
-                className="bg-white p-6 rounded-3xl mb-6 shadow-lg"
-              >
-
-                {/* HEADER */}
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-5">
-
-                  <div className="flex items-center gap-3 flex-wrap">
-
-                    <span className="bg-blue-100 text-blue-700 px-4 py-1 rounded-full font-semibold">
-                      Soal {i + 1}
+                    <span
+                      className={`px-4 py-2 rounded-full text-sm font-bold ${
+                        item.benar
+                          ? "bg-green-200 text-green-700"
+                          : "bg-red-200 text-red-700"
+                      }`}
+                    >
+                      {item.benar
+                        ? "✔ Benar"
+                        : "✖ Salah"}
                     </span>
 
-                    <div className="font-medium text-gray-800 leading-8 break-words">
+                  </div>
 
-                      <Latex>
-                        {item.soal}
-                      </Latex>
+                  {/* JAWABAN */}
+                  <div className="flex flex-wrap gap-3 mb-5">
 
+                    <div className="bg-red-100 text-red-700 px-4 py-2 rounded-xl font-medium">
+                      Jawaban Kamu:
+                      {" "}
+                      {item.jawaban_user || "-"}
+                    </div>
+
+                    <div className="bg-green-100 text-green-700 px-4 py-2 rounded-xl font-medium">
+                      Jawaban Benar:
+                      {" "}
+                      {item.jawaban_benar}
                     </div>
 
                   </div>
 
-                  <span
-                    className={`px-4 py-2 rounded-full text-sm font-semibold ${
-                      item.benar
-                        ? "bg-green-200 text-green-700"
-                        : "bg-red-200 text-red-700"
-                    }`}
-                  >
-                    {item.benar
-                      ? "✔ Benar"
-                      : "✖ Salah"}
-                  </span>
+                  {/* PEMBAHASAN */}
+                  {isEmpty ? (
 
-                </div>
+                    <button
+                      onClick={() =>
+                        generateAI(
+                          i,
+                          item
+                        )
+                      }
+                      className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-3 rounded-2xl font-semibold transition"
+                    >
+                      {aiLoading === i
+                        ? "Loading AI..."
+                        : "✨ Generate AI Pembahasan"}
+                    </button>
 
-                {/* JAWABAN */}
-                <div className="flex flex-wrap gap-3 mb-5">
+                  ) : (
 
-                  <span className="bg-red-100 text-red-700 px-4 py-2 rounded-full text-sm font-medium">
-                    Jawaban kamu:
-                    {" "}
-                    {item.jawaban_user ||
-                      "-"}
-                  </span>
+                    <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl">
 
-                  <span className="bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-medium">
-                    Jawaban benar:
-                    {" "}
-                    {item.jawaban_benar}
-                  </span>
+                      <h3 className="font-bold text-blue-700 mb-3">
+                        📘 Pembahasan AI
+                      </h3>
 
-                </div>
+                      <div className="leading-8 text-gray-700 overflow-x-auto">
 
-                {/* PEMBAHASAN */}
-                {isEmpty ? (
+                        <MathJax dynamic>
+                          {item.pembahasan}
+                        </MathJax>
 
-                  <button
-                    onClick={() =>
-                      generateAI(
-                        i,
-                        item
-                      )
-                    }
-                    className="border border-blue-500 text-blue-700 px-5 py-3 rounded-2xl hover:bg-blue-50 transition font-semibold"
-                  >
-                    {aiLoading === i
-                      ? "Loading AI..."
-                      : "✨ Generate AI Pembahasan"}
-                  </button>
-
-                ) : (
-
-                  <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl">
-
-                    <p className="font-bold text-blue-800 mb-4 text-lg">
-                      📘 Pembahasan AI
-                    </p>
-
-                    <div className="text-gray-800 leading-9 whitespace-pre-line break-words overflow-x-auto">
-
-                      <Latex>
-                        {item.pembahasan}
-                      </Latex>
+                      </div>
 
                     </div>
 
-                  </div>
+                  )}
 
-                )}
+                  {/* VIDEO */}
+                  {item.video_url && (
 
-                {/* VIDEO */}
-                {item.video_url && (
+                    <div className="mt-5">
 
-                  <div className="mt-5">
+                      <iframe
+                        width="100%"
+                        height="350"
+                        src={getEmbedUrl(
+                          item.video_url
+                        )}
+                        className="rounded-2xl"
+                        allowFullScreen
+                      />
 
-                    <iframe
-                      width="100%"
-                      height="350"
-                      src={getEmbedUrl(
-                        item.video_url
-                      )}
-                      className="rounded-2xl"
-                      allowFullScreen
-                    />
+                    </div>
 
-                  </div>
+                  )}
 
-                )}
+                </div>
+              )
+            }
+          )}
 
-              </div>
-            )
-          }
-        )}
-
+        </div>
       </div>
+    </MathJaxContext>
+  )
+}
+
+function Card({
+  title,
+  value,
+  color,
+}: any) {
+
+  return (
+
+    <div className="bg-white p-5 rounded-2xl shadow text-center">
+
+      <p className={`text-3xl font-bold ${color}`}>
+        {value}
+      </p>
+
+      <p className="text-gray-500 mt-1">
+        {title}
+      </p>
 
     </div>
   )
