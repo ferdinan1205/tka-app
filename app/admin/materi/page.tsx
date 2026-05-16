@@ -56,7 +56,6 @@ export default function AdminMateri() {
       return
     }
 
-    // 🔥 CEK ADMIN
     const { data: profile } =
       await supabase
         .from("profiles")
@@ -289,97 +288,268 @@ export default function AdminMateri() {
   if (loading) {
 
     return (
-      <p className="p-10">
-        Loading...
-      </p>
+
+      <div className="
+      min-h-screen
+      flex
+      items-center
+      justify-center
+      bg-gray-100
+      ">
+
+        <div className="
+        bg-white
+        px-8 py-5
+        rounded-3xl
+        shadow-lg
+        text-lg
+        font-bold
+        text-gray-700
+        ">
+
+          Loading...
+
+        </div>
+
+      </div>
     )
   }
 
   return (
 
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8 lg:p-10">
+    <div className="
+    min-h-screen
+    bg-gradient-to-br
+    from-gray-100
+    to-gray-200
+    p-4 md:p-8 lg:p-10
+    ">
 
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+      <div className="
+      flex
+      flex-col
+      md:flex-row
+      md:items-center
+      md:justify-between
+      gap-5
+      mb-10
+      ">
 
         <div>
 
-          <h1 className="text-3xl md:text-4xl font-black text-gray-800">
+          <h1 className="
+          text-3xl
+          md:text-5xl
+          font-black
+          text-gray-800
+          ">
+
             📚 Admin Materi
+
           </h1>
 
-          <p className="text-gray-500 mt-1">
-            Kelola materi pembelajaran
+          <p className="
+          text-gray-600
+          mt-2
+          text-base
+          md:text-lg
+          ">
+
+            Kelola materi pembelajaran siswa
+
           </p>
 
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="
+        flex
+        flex-wrap
+        gap-3
+        ">
 
           <button
             onClick={() =>
               router.push("/admin")
             }
-            className="bg-gray-500 hover:bg-gray-600 text-white px-5 py-3 rounded-2xl font-semibold transition"
+            className="
+            bg-gray-700
+            hover:bg-gray-800
+            text-white
+            px-6 py-3
+            rounded-2xl
+            font-bold
+            shadow-lg
+            transition-all
+            "
           >
+
             Dashboard
+
           </button>
 
           <button
             onClick={openTambah}
-            className="bg-green-500 hover:bg-green-600 text-white px-5 py-3 rounded-2xl font-semibold transition"
+            className="
+            bg-green-600
+            hover:bg-green-700
+            text-white
+            px-6 py-3
+            rounded-2xl
+            font-bold
+            shadow-lg
+            transition-all
+            "
           >
+
             + Tambah Materi
+
           </button>
 
         </div>
 
       </div>
 
-      {/* LIST */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* CARD LIST */}
+      <div className="
+      grid
+      grid-cols-1
+      sm:grid-cols-2
+      xl:grid-cols-3
+      gap-7
+      ">
 
         {materi.map((item) => (
 
           <div
             key={item.id}
-            className="bg-white rounded-3xl shadow-lg overflow-hidden"
+            className="
+            bg-white
+            rounded-[30px]
+            overflow-hidden
+            shadow-xl
+            border
+            border-gray-200
+            hover:-translate-y-2
+            hover:shadow-2xl
+            transition-all
+            duration-300
+            "
           >
 
-            <img
-              src={
-                item.gambar
-                  ? item.gambar
-                  : "https://via.placeholder.com/400x200"
-              }
-              className="w-full h-52 object-cover"
-            />
+            {/* IMAGE */}
+            <div className="relative">
 
-            <div className="p-5">
+              <img
+                src={
+                  item.gambar
+                    ? item.gambar
+                    : "https://via.placeholder.com/400x200"
+                }
+                className="
+                w-full
+                h-56
+                object-cover
+                "
+              />
 
-              <h2 className="font-bold text-lg text-gray-800 line-clamp-2">
-                {item.judul}
-              </h2>
+              {/* OVERLAY */}
+              <div className="
+              absolute
+              inset-0
+              bg-gradient-to-t
+              from-black/70
+              via-black/20
+              to-transparent
+              " />
 
-              <p className="text-sm text-gray-500 mt-2">
-                {item.kategori}
-              </p>
+              {/* BADGE */}
+              <div className="
+              absolute
+              top-4
+              right-4
+              bg-white
+              text-blue-700
+              px-4 py-2
+              rounded-full
+              text-xs
+              font-black
+              shadow-lg
+              uppercase
+              ">
 
-              <div className="mt-3 inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">
-
-                {item.tipe.toUpperCase()}
+                {item.tipe}
 
               </div>
 
-              <div className="flex gap-3 mt-5">
+              {/* TITLE DI GAMBAR */}
+              <div className="
+              absolute
+              bottom-4
+              left-4
+              right-4
+              ">
+
+                <h2 className="
+                text-white
+                text-xl
+                font-black
+                leading-snug
+                drop-shadow-lg
+                ">
+
+                  {item.judul}
+
+                </h2>
+
+              </div>
+
+            </div>
+
+            {/* CONTENT */}
+            <div className="p-5">
+
+              <div className="
+              inline-flex
+              items-center
+              gap-2
+              bg-blue-100
+              text-blue-700
+              px-4 py-2
+              rounded-full
+              text-sm
+              font-bold
+              mb-5
+              ">
+
+                📘 {item.kategori}
+
+              </div>
+
+              <div className="
+              flex
+              gap-3
+              ">
 
                 <button
                   onClick={() =>
                     openEdit(item)
                   }
-                  className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-2xl font-semibold transition"
+                  className="
+                  flex-1
+                  bg-yellow-500
+                  hover:bg-yellow-600
+                  text-white
+                  py-3
+                  rounded-2xl
+                  font-bold
+                  transition-all
+                  shadow-md
+                  "
                 >
+
                   Edit
+
                 </button>
 
                 <button
@@ -388,9 +558,21 @@ export default function AdminMateri() {
                       item.id!
                     )
                   }
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-2xl font-semibold transition"
+                  className="
+                  flex-1
+                  bg-red-500
+                  hover:bg-red-600
+                  text-white
+                  py-3
+                  rounded-2xl
+                  font-bold
+                  transition-all
+                  shadow-md
+                  "
                 >
+
                   Hapus
+
                 </button>
 
               </div>
@@ -405,115 +587,222 @@ export default function AdminMateri() {
       {/* MODAL */}
       {showModal && (
 
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="
+        fixed
+        inset-0
+        bg-black/60
+        backdrop-blur-sm
+        flex
+        items-center
+        justify-center
+        z-50
+        p-4
+        ">
 
-          <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl">
+          <div className="
+          bg-white
+          rounded-[35px]
+          p-7
+          w-full
+          max-w-xl
+          shadow-2xl
+          animate-in
+          fade-in
+          zoom-in-95
+          ">
 
-            <h2 className="text-2xl font-bold mb-5">
+            <h2 className="
+            text-3xl
+            font-black
+            text-gray-800
+            mb-6
+            ">
 
               {editingId
-                ? "Edit Materi"
-                : "Tambah Materi"}
+                ? "✏️ Edit Materi"
+                : "📚 Tambah Materi"}
 
             </h2>
 
-            <input
-              name="judul"
-              placeholder="Judul Materi"
-              className="border p-3 rounded-2xl mb-3 w-full"
-              value={form.judul}
-              onChange={handleChange}
-            />
+            <div className="space-y-4">
 
-            <select
-              name="kategori"
-              className="border p-3 rounded-2xl mb-3 w-full"
-              value={form.kategori}
-              onChange={handleChange}
-            >
+              <input
+                name="judul"
+                placeholder="Judul Materi"
+                className="
+                w-full
+                border-2
+                border-gray-200
+                focus:border-blue-500
+                outline-none
+                p-4
+                rounded-2xl
+                font-medium
+                text-gray-700
+                "
+                value={form.judul}
+                onChange={handleChange}
+              />
 
-              <option>
-                Matematika
-              </option>
+              <select
+                name="kategori"
+                className="
+                w-full
+                border-2
+                border-gray-200
+                focus:border-blue-500
+                outline-none
+                p-4
+                rounded-2xl
+                font-medium
+                text-gray-700
+                "
+                value={form.kategori}
+                onChange={handleChange}
+              >
 
-              <option>
-                Bahasa Indonesia
-              </option>
+                <option>
+                  Matematika
+                </option>
 
-              <option>
-                Bahasa Inggris
-              </option>
+                <option>
+                  Bahasa Indonesia
+                </option>
 
-              <option>
-                TPS
-              </option>
+                <option>
+                  Bahasa Inggris
+                </option>
 
-              <option>
-                Literasi
-              </option>
+                <option>
+                  TPS
+                </option>
 
-            </select>
+                <option>
+                  Literasi
+                </option>
 
-            <select
-              name="tipe"
-              className="border p-3 rounded-2xl mb-3 w-full"
-              value={form.tipe}
-              onChange={handleChange}
-            >
+              </select>
 
-              <option value="video">
-                Video
-              </option>
+              <select
+                name="tipe"
+                className="
+                w-full
+                border-2
+                border-gray-200
+                focus:border-blue-500
+                outline-none
+                p-4
+                rounded-2xl
+                font-medium
+                text-gray-700
+                "
+                value={form.tipe}
+                onChange={handleChange}
+              >
 
-              <option value="pdf">
-                PDF
-              </option>
+                <option value="video">
+                  Video
+                </option>
 
-              <option value="artikel">
-                Artikel
-              </option>
+                <option value="pdf">
+                  PDF
+                </option>
 
-            </select>
+                <option value="artikel">
+                  Artikel
+                </option>
 
-            <input
-              name="link"
-              placeholder="Link Materi"
-              className="border p-3 rounded-2xl mb-3 w-full"
-              value={form.link}
-              onChange={handleChange}
-            />
+              </select>
 
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) =>
-                setFile(
-                  e.target
-                    .files?.[0] ||
-                  null
-                )
-              }
-              className="mb-5 w-full"
-            />
+              <input
+                name="link"
+                placeholder="Link Materi"
+                className="
+                w-full
+                border-2
+                border-gray-200
+                focus:border-blue-500
+                outline-none
+                p-4
+                rounded-2xl
+                font-medium
+                text-gray-700
+                "
+                value={form.link}
+                onChange={handleChange}
+              />
 
-            <div className="flex gap-3">
+              <div className="
+              border-2
+              border-dashed
+              border-gray-300
+              rounded-2xl
+              p-5
+              bg-gray-50
+              ">
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    setFile(
+                      e.target
+                        .files?.[0] ||
+                      null
+                    )
+                  }
+                  className="w-full"
+                />
+
+              </div>
+
+            </div>
+
+            <div className="
+            flex
+            gap-4
+            mt-7
+            ">
 
               <button
                 onClick={
                   handleSubmit
                 }
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-bold transition"
+                className="
+                flex-1
+                bg-blue-600
+                hover:bg-blue-700
+                text-white
+                py-4
+                rounded-2xl
+                font-black
+                shadow-lg
+                transition-all
+                "
               >
+
                 Simpan
+
               </button>
 
               <button
                 onClick={() =>
                   setShowModal(false)
                 }
-                className="flex-1 bg-gray-400 hover:bg-gray-500 text-white py-3 rounded-2xl font-bold transition"
+                className="
+                flex-1
+                bg-gray-300
+                hover:bg-gray-400
+                text-gray-800
+                py-4
+                rounded-2xl
+                font-black
+                transition-all
+                "
               >
+
                 Batal
+
               </button>
 
             </div>
