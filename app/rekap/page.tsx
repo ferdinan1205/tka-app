@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
 import jsPDF from "jspdf"
-import html2canvas from "html2canvas"
+import { toPng } from "html-to-image"
 
 type Hasil = {
   id: number
@@ -184,75 +184,65 @@ export default function RekapPage() {
 
     setPdfLoading(true)
 
-    const element =
-      printRef.current
-
-    // =========================
-    // FIX COLOR LAB / OKLAB
-    // =========================
-
-    const allElements =
-      element.querySelectorAll("*")
-
-    allElements.forEach((el: any) => {
-
-      const style =
-        window.getComputedStyle(el)
-
-      // FIX BACKGROUND
-      if (
-        style.backgroundColor.includes("lab") ||
-        style.backgroundColor.includes("oklab")
-      ) {
-        el.style.backgroundColor =
-          "#ffffff"
-      }
-
-      // FIX TEXT COLOR
-      if (
-        style.color.includes("lab") ||
-        style.color.includes("oklab")
-      ) {
-        el.style.color =
-          "#000000"
-      }
-
-      // FIX BORDER COLOR
-      if (
-        style.borderColor.includes("lab") ||
-        style.borderColor.includes("oklab")
-      ) {
-        el.style.borderColor =
-          "#d1d5db"
-      }
-    })
-
-    // =========================
-    // CREATE CANVAS
-    // =========================
-
-    const canvas =
-      await html2canvas(
-        element,
+    const dataUrl =
+      await toPng(
+        printRef.current,
         {
-          scale: 2,
-          useCORS: true,
+          cacheBust: true,
+          pixelRatio: 2,
           backgroundColor:
             "#ffffff",
-          logging: false,
-          allowTaint: true,
+
+          style: {
+
+            background:
+              "#ffffff",
+
+            color:
+              "#000000",
+          },
+
+          filter: (node) => {
+
+            if (
+              node instanceof HTMLElement
+            ) {
+
+              const style =
+                window.getComputedStyle(
+                  node
+                )
+
+              // FIX ERROR LAB / OKLAB
+              if (
+                style.color.includes(
+                  "lab"
+                ) ||
+
+                style.backgroundColor.includes(
+                  "lab"
+                ) ||
+
+                style.borderColor.includes(
+                  "lab"
+                )
+              ) {
+
+                node.style.color =
+                  "#000000"
+
+                node.style.backgroundColor =
+                  "#ffffff"
+
+                node.style.borderColor =
+                  "#d1d5db"
+              }
+            }
+
+            return true
+          },
         }
       )
-
-    const imgData =
-      canvas.toDataURL(
-        "image/jpeg",
-        1.0
-      )
-
-    // =========================
-    // PDF
-    // =========================
 
     const pdf =
       new jsPDF(
@@ -261,37 +251,43 @@ export default function RekapPage() {
         "a4"
       )
 
+    const imgProps =
+      pdf.getImageProperties(
+        dataUrl
+      )
+
     const pdfWidth =
-      210
+      pdf.internal
+        .pageSize
+        .getWidth()
 
     const pdfHeight =
-      297
+      (imgProps.height *
+        pdfWidth) /
+      imgProps.width
 
-    const imgWidth =
-      pdfWidth
-
-    const imgHeight =
-      (canvas.height *
-        imgWidth) /
-      canvas.width
+    const pageHeight =
+      pdf.internal
+        .pageSize
+        .getHeight()
 
     let heightLeft =
-      imgHeight
+      pdfHeight
 
     let position = 0
 
     // PAGE 1
     pdf.addImage(
-      imgData,
-      "JPEG",
+      dataUrl,
+      "PNG",
       0,
       position,
-      imgWidth,
-      imgHeight
+      pdfWidth,
+      pdfHeight
     )
 
     heightLeft -=
-      pdfHeight
+      pageHeight
 
     // MULTI PAGE
     while (
@@ -300,33 +296,33 @@ export default function RekapPage() {
 
       position =
         heightLeft -
-        imgHeight
+        pdfHeight
 
       pdf.addPage()
 
       pdf.addImage(
-        imgData,
-        "JPEG",
+        dataUrl,
+        "PNG",
         0,
         position,
-        imgWidth,
-        imgHeight
+        pdfWidth,
+        pdfHeight
       )
 
       heightLeft -=
-        pdfHeight
+        pageHeight
     }
 
     pdf.save(
       `rapor_${nama}.pdf`
     )
 
-  } catch (error) {
+  } catch (err) {
 
-    console.log(error)
+    console.log(err)
 
     alert(
-      "Gagal membuat PDF"
+      "Gagal download PDF"
     )
 
   } finally {
