@@ -187,26 +187,40 @@ export default function RekapPage() {
       const element =
         printRef.current
 
+      const originalBackground =
+        element.style.background
+
+      element.style.background =
+        "#ffffff"
+
       const canvas =
         await html2canvas(
           element,
           {
             scale: 2,
+
             useCORS: true,
+
+            allowTaint: true,
+
             logging: false,
+
             backgroundColor:
               "#ffffff",
-            windowWidth:
-              element.scrollWidth,
-            windowHeight:
-              element.scrollHeight,
+
+            removeContainer: true,
+
+            foreignObjectRendering:
+              false,
           }
         )
 
+      element.style.background =
+        originalBackground
+
       const imgData =
         canvas.toDataURL(
-          "image/jpeg",
-          1.0
+          "image/png"
         )
 
       const pdf =
@@ -216,14 +230,14 @@ export default function RekapPage() {
           "a4"
         )
 
-      const pageWidth =
+      const pdfWidth =
         210
 
-      const pageHeight =
+      const pdfHeight =
         297
 
       const imgWidth =
-        pageWidth
+        pdfWidth
 
       const imgHeight =
         (canvas.height *
@@ -235,10 +249,10 @@ export default function RekapPage() {
 
       let position = 0
 
-      // HALAMAN PERTAMA
+      // PAGE 1
       pdf.addImage(
         imgData,
-        "JPEG",
+        "PNG",
         0,
         position,
         imgWidth,
@@ -246,7 +260,7 @@ export default function RekapPage() {
       )
 
       heightLeft -=
-        pageHeight
+        pdfHeight
 
       // MULTI PAGE
       while (
@@ -261,7 +275,7 @@ export default function RekapPage() {
 
         pdf.addImage(
           imgData,
-          "JPEG",
+          "PNG",
           0,
           position,
           imgWidth,
@@ -269,7 +283,7 @@ export default function RekapPage() {
         )
 
         heightLeft -=
-          pageHeight
+          pdfHeight
       }
 
       pdf.save(
@@ -443,6 +457,7 @@ export default function RekapPage() {
 
               {
                 pdfLoading
+
                   ?
 
                   "Membuat PDF..."
@@ -636,21 +651,18 @@ export default function RekapPage() {
               title="Rata-rata"
               value={rataRata()}
               icon="📊"
-              color="from-blue-500 to-blue-600"
             />
 
             <StatCard
               title="Nilai Tertinggi"
               value={nilaiTertinggi()}
               icon="🏆"
-              color="from-yellow-400 to-yellow-500"
             />
 
             <StatCard
               title="Nilai Terendah"
               value={nilaiTerendah()}
               icon="📘"
-              color="from-red-400 to-red-500"
             />
 
           </div>
@@ -927,7 +939,6 @@ function StatCard({
   title,
   value,
   icon,
-  color,
 }: any) {
 
   return (
@@ -966,18 +977,17 @@ function StatCard({
 
         </div>
 
-        <div className={`
+        <div className="
         w-16 h-16
         rounded-3xl
-        bg-gradient-to-br
-        ${color}
+        bg-blue-500
         text-white
         flex
         items-center
         justify-center
         text-3xl
         shadow-lg
-        `}>
+        ">
 
           {icon}
 
