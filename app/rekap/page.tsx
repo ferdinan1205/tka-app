@@ -177,161 +177,172 @@ export default function RekapPage() {
 
   async function downloadPDF() {
 
-  if (!printRef.current)
-    return
+    if (!printRef.current)
+      return
 
-  try {
+    try {
 
-    setPdfLoading(true)
+      setPdfLoading(true)
 
-    const dataUrl =
-      await toPng(
-        printRef.current,
-        {
-          cacheBust: true,
-          pixelRatio: 2,
-          backgroundColor:
-            "#ffffff",
+      const element =
+        printRef.current
 
-          style: {
+      // FIX COLOR LAB
+      document.body.style.background =
+        "#f4f7fb"
 
-            background:
+      const dataUrl =
+        await toPng(
+          element,
+          {
+            cacheBust: true,
+
+            pixelRatio: 2,
+
+            backgroundColor:
               "#ffffff",
 
-            color:
-              "#000000",
-          },
+            skipFonts: true,
 
-          filter: (node) => {
+            style: {
 
-            if (
-              node instanceof HTMLElement
-            ) {
+              background:
+                "#ffffff",
 
-              const style =
-                window.getComputedStyle(
-                  node
-                )
+              color:
+                "#000000",
+            },
 
-              // FIX ERROR LAB / OKLAB
-              if (
-                style.color.includes(
-                  "lab"
-                ) ||
+            filter: (
+              node: HTMLElement
+            ) => {
 
-                style.backgroundColor.includes(
-                  "lab"
-                ) ||
+              try {
 
-                style.borderColor.includes(
-                  "lab"
-                )
-              ) {
+                const style =
+                  window.getComputedStyle(
+                    node
+                  )
 
-                node.style.color =
-                  "#000000"
+                const hasLab =
+                  style.color.includes(
+                    "lab"
+                  ) ||
 
-                node.style.backgroundColor =
-                  "#ffffff"
+                  style.backgroundColor.includes(
+                    "lab"
+                  ) ||
 
-                node.style.borderColor =
-                  "#d1d5db"
-              }
-            }
+                  style.borderColor.includes(
+                    "lab"
+                  )
 
-            return true
-          },
-        }
-      )
+                if (hasLab) {
 
-    const pdf =
-      new jsPDF(
-        "p",
-        "mm",
-        "a4"
-      )
+                  node.style.color =
+                    "#111827"
 
-    const imgProps =
-      pdf.getImageProperties(
-        dataUrl
-      )
+                  node.style.backgroundColor =
+                    "#ffffff"
 
-    const pdfWidth =
-      pdf.internal
-        .pageSize
-        .getWidth()
+                  node.style.borderColor =
+                    "#d1d5db"
+                }
 
-    const pdfHeight =
-      (imgProps.height *
-        pdfWidth) /
-      imgProps.width
+              } catch (e) {}
 
-    const pageHeight =
-      pdf.internal
-        .pageSize
-        .getHeight()
+              return true
+            },
+          }
+        )
 
-    let heightLeft =
-      pdfHeight
+      const pdf =
+        new jsPDF(
+          "p",
+          "mm",
+          "a4"
+        )
 
-    let position = 0
+      const pdfWidth =
+        210
 
-    // PAGE 1
-    pdf.addImage(
-      dataUrl,
-      "PNG",
-      0,
-      position,
-      pdfWidth,
-      pdfHeight
-    )
+      const pdfHeight =
+        297
 
-    heightLeft -=
-      pageHeight
+      const imgProps =
+        pdf.getImageProperties(
+          dataUrl
+        )
 
-    // MULTI PAGE
-    while (
-      heightLeft > 0
-    ) {
+      const imgWidth =
+        pdfWidth
 
-      position =
-        heightLeft -
-        pdfHeight
+      const imgHeight =
+        (imgProps.height *
+          imgWidth) /
+        imgProps.width
 
-      pdf.addPage()
+      let heightLeft =
+        imgHeight
 
+      let position = 0
+
+      // PAGE 1
       pdf.addImage(
         dataUrl,
         "PNG",
         0,
         position,
-        pdfWidth,
-        pdfHeight
+        imgWidth,
+        imgHeight
       )
 
       heightLeft -=
-        pageHeight
+        pdfHeight
+
+      // MULTI PAGE
+      while (
+        heightLeft > 0
+      ) {
+
+        position =
+          heightLeft -
+          imgHeight
+
+        pdf.addPage()
+
+        pdf.addImage(
+          dataUrl,
+          "PNG",
+          0,
+          position,
+          imgWidth,
+          imgHeight
+        )
+
+        heightLeft -=
+          pdfHeight
+      }
+
+      pdf.save(
+        `rapor_${nama}.pdf`
+      )
+
+    } catch (err) {
+
+      console.log(err)
+
+      alert(
+        "Gagal download PDF"
+      )
+
+    } finally {
+
+      setPdfLoading(false)
+
     }
 
-    pdf.save(
-      `rapor_${nama}.pdf`
-    )
-
-  } catch (err) {
-
-    console.log(err)
-
-    alert(
-      "Gagal download PDF"
-    )
-
-  } finally {
-
-    setPdfLoading(false)
-
   }
-
-}
 
   if (loading) {
 
@@ -694,9 +705,168 @@ export default function RekapPage() {
 
           </div>
 
-          {/* TABLE */}
+          {/* MOBILE CARD */}
 
           <div className="
+          block md:hidden
+          space-y-4
+          ">
+
+            {hasil.map(
+              (
+                item,
+                i
+              ) => (
+
+                <div
+                  key={item.id}
+                  className="
+                  border
+                  border-gray-200
+                  rounded-3xl
+                  p-5
+                  bg-white
+                  shadow-sm
+                  "
+                >
+
+                  <div className="
+                  flex
+                  items-center
+                  justify-between
+                  mb-4
+                  ">
+
+                    <div className="
+                    flex
+                    items-center
+                    gap-3
+                    ">
+
+                      <div className="
+                      w-12 h-12
+                      rounded-2xl
+                      bg-blue-100
+                      flex
+                      items-center
+                      justify-center
+                      text-xl
+                      ">
+                        📘
+                      </div>
+
+                      <div>
+
+                        <p className="
+                        text-sm
+                        text-gray-500
+                        ">
+                          Pelajaran
+                        </p>
+
+                        <h2 className="
+                        font-bold
+                        text-gray-800
+                        ">
+                          {item.kategori}
+                        </h2>
+
+                      </div>
+
+                    </div>
+
+                    <div className="
+                    text-right
+                    ">
+
+                      <p className="
+                      text-sm
+                      text-gray-500
+                      ">
+                        Nilai
+                      </p>
+
+                      <h2 className="
+                      text-3xl
+                      font-black
+                      text-blue-700
+                      ">
+                        {item.skor}
+                      </h2>
+
+                    </div>
+
+                  </div>
+
+                  <div className="
+                  flex
+                  items-center
+                  justify-between
+                  pt-4
+                  border-t
+                  border-gray-100
+                  ">
+
+                    <div>
+
+                      <p className="
+                      text-sm
+                      text-gray-500
+                      ">
+                        Grade
+                      </p>
+
+                      <span className="
+                      inline-block
+                      mt-1
+                      bg-green-100
+                      text-green-700
+                      px-4 py-2
+                      rounded-full
+                      font-semibold
+                      text-sm
+                      ">
+                        {grade(item.skor)}
+                      </span>
+
+                    </div>
+
+                    <div className="
+                    text-right
+                    ">
+
+                      <p className="
+                      text-sm
+                      text-gray-500
+                      ">
+                        Tanggal
+                      </p>
+
+                      <p className="
+                      font-semibold
+                      text-gray-700
+                      mt-1
+                      ">
+                        {new Date(
+                          item.tanggal
+                        ).toLocaleDateString()}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              )
+            )}
+
+          </div>
+
+          {/* DESKTOP TABLE */}
+
+          <div className="
+          hidden md:block
           rounded-3xl
           border
           border-gray-200
@@ -709,7 +879,6 @@ export default function RekapPage() {
 
               <table className="
               w-full
-              min-w-[700px]
               border-collapse
               ">
 
