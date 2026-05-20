@@ -49,9 +49,6 @@ export default function PackagePage() {
     setSelectedSubject] =
     useState("")
 
-  // ======================
-  // LOAD DATA
-  // ======================
   useEffect(() => {
 
     if (!packageId) return
@@ -66,9 +63,6 @@ export default function PackagePage() {
 
       setLoading(true)
 
-      // ======================
-      // GET PACKAGE
-      // ======================
       const {
         data: packageData,
         error: packageError
@@ -89,9 +83,6 @@ export default function PackagePage() {
 
       setPaket(packageData)
 
-      // ======================
-      // GET SUBJECTS
-      // ======================
       const {
         data: subjectData,
         error: subjectError
@@ -122,9 +113,6 @@ export default function PackagePage() {
     }
   }
 
-  // ======================
-  // TOKEN VALIDATION
-  // ======================
   function handleToken() {
 
     if (!paket) return
@@ -142,9 +130,6 @@ export default function PackagePage() {
     setAllowed(true)
   }
 
-  // ======================
-  // START EXAM
-  // ======================
   async function handleStartExam(
     kategori: string
   ) {
@@ -190,9 +175,7 @@ export default function PackagePage() {
     }
   }
 
-  // ======================
   // LOADING
-  // ======================
   if (loading) {
 
     return (
@@ -203,20 +186,19 @@ export default function PackagePage() {
         items-center
         justify-center
         bg-gradient-to-br
-        from-blue-100
+        from-violet-100
         via-white
         to-cyan-100
       ">
 
         <div className="
           bg-white
-          px-10
-          py-5
-          rounded-[30px]
+          px-6 py-4
+          rounded-3xl
           shadow-2xl
-          text-2xl
+          text-lg md:text-2xl
           font-black
-          text-blue-700
+          text-violet-700
           animate-pulse
         ">
 
@@ -228,9 +210,7 @@ export default function PackagePage() {
     )
   }
 
-  // ======================
-  // PACKAGE NOT FOUND
-  // ======================
+  // NOT FOUND
   if (!paket) {
 
     return (
@@ -240,19 +220,22 @@ export default function PackagePage() {
         flex
         items-center
         justify-center
-        bg-[#f3f6fb]
+        bg-slate-100
+        p-4
       ">
 
         <div className="
           bg-white
-          p-10
-          rounded-[35px]
-          shadow-2xl
+          p-8
+          rounded-3xl
+          shadow-xl
           text-center
+          max-w-sm
+          w-full
         ">
 
           <h1 className="
-            text-3xl
+            text-2xl
             font-black
             text-red-600
             mb-3
@@ -268,9 +251,7 @@ export default function PackagePage() {
     )
   }
 
-  // ======================
   // TOKEN PAGE
-  // ======================
   if (!allowed) {
 
     return (
@@ -278,107 +259,167 @@ export default function PackagePage() {
       <div className="
         min-h-screen
         bg-gradient-to-br
-        from-blue-100
+        from-violet-100
         via-white
         to-cyan-100
         flex
         items-center
         justify-center
-        p-6
+        p-4
       ">
 
         <div className="
-          bg-white/90
+          relative
+          overflow-hidden
+          bg-white/95
           backdrop-blur-xl
           max-w-md
           w-full
-          p-10
-          rounded-[40px]
-          shadow-2xl
-          border
-          border-white
+          p-6 md:p-10
+          rounded-[32px]
+          shadow-[0_20px_60px_rgba(0,0,0,0.12)]
+          border border-white
         ">
 
+          {/* GLOW */}
           <div className="
-            w-24
-            h-24
+            absolute
+            -top-16
+            -right-16
+            w-40
+            h-40
+            bg-violet-300/30
+            rounded-full
+            blur-3xl
+          " />
+
+          <div className="
+            absolute
+            -bottom-16
+            -left-16
+            w-40
+            h-40
+            bg-cyan-300/30
+            rounded-full
+            blur-3xl
+          " />
+
+          {/* ICON */}
+          <div className="
+            relative z-10
+            w-20 h-20
+            md:w-24 md:h-24
             rounded-full
             bg-gradient-to-r
-            from-blue-600
+            from-violet-600
             to-cyan-500
             flex
             items-center
             justify-center
-            text-5xl
+            text-4xl
+            md:text-5xl
             mx-auto
-            mb-6
+            mb-5
             shadow-xl
           ">
             🔐
           </div>
 
+          {/* TITLE */}
           <h1 className="
-            text-4xl
+            relative z-10
+            text-2xl md:text-4xl
             font-black
-            text-blue-700
             text-center
-            mb-3
+            mb-2
+            bg-gradient-to-r
+            from-violet-700
+            to-cyan-600
+            bg-clip-text
+            text-transparent
           ">
 
-            Token Paket
+            Masukkan Token
 
           </h1>
 
           <p className="
+            relative z-10
             text-center
-            text-gray-500
-            mb-8
+            text-gray-700
+            text-sm md:text-base
+            mb-6
+            leading-relaxed
           ">
 
-            Paket {paket.nama_paket}
+            Untuk membuka paket
+            {" "}
+
+            <span className="
+              font-bold
+              text-violet-700
+            ">
+              {paket.nama_paket}
+            </span>
 
           </p>
 
-          <input
-            value={token}
-            onChange={(e) =>
-              setToken(
-                e.target.value
-              )
-            }
-            placeholder="Masukkan token"
-            className="
-              w-full
-              border-2
-              border-gray-200
-              p-4
-              rounded-2xl
-              mb-5
-              outline-none
-              focus:border-blue-500
-            "
-          />
+          {/* INPUT */}
+          <div className="relative z-10">
 
-          <button
-            onClick={handleToken}
-            className="
-              w-full
-              bg-gradient-to-r
-              from-blue-600
-              to-cyan-500
-              hover:from-blue-700
-              hover:to-cyan-600
-              text-white
-              py-4
-              rounded-2xl
-              font-black
-              shadow-xl
-              hover:scale-105
-              transition-all
-            "
-          >
-            Masuk Paket
-          </button>
+            <input
+              value={token}
+              onChange={(e) =>
+                setToken(
+                  e.target.value
+                )
+              }
+              placeholder="Masukkan token paket..."
+              className="
+                w-full
+                bg-white
+                border-2
+                border-violet-200
+                text-gray-800
+                placeholder:text-gray-400
+                p-4
+                rounded-2xl
+                mb-4
+                outline-none
+                text-sm md:text-base
+                font-semibold
+                focus:border-violet-500
+                focus:ring-4
+                focus:ring-violet-200
+                transition-all
+                shadow-sm
+              "
+            />
+
+            <button
+              onClick={handleToken}
+              className="
+                w-full
+                bg-gradient-to-r
+                from-violet-600
+                to-cyan-500
+                hover:from-violet-700
+                hover:to-cyan-600
+                text-white
+                py-3.5
+                rounded-2xl
+                font-black
+                text-sm md:text-base
+                shadow-xl
+                hover:scale-[1.02]
+                active:scale-95
+                transition-all
+              "
+            >
+              Masuk Paket
+            </button>
+
+          </div>
 
         </div>
 
@@ -386,9 +427,7 @@ export default function PackagePage() {
     )
   }
 
-  // ======================
-  // SELECT SUBJECT
-  // ======================
+  // SUBJECT SELECT
   if (!selectedSubject) {
 
     return (
@@ -397,9 +436,9 @@ export default function PackagePage() {
         min-h-screen
         bg-gradient-to-br
         from-slate-100
-        via-blue-50
+        via-violet-50
         to-cyan-50
-        p-6
+        p-4 md:p-6
       ">
 
         <div className="max-w-7xl mx-auto">
@@ -408,13 +447,14 @@ export default function PackagePage() {
           <div className="
             relative
             overflow-hidden
-            rounded-[40px]
+            rounded-[28px]
+            md:rounded-[40px]
             bg-gradient-to-r
-            from-blue-700
+            from-violet-700
             via-blue-600
             to-cyan-500
-            p-10
-            mb-10
+            p-5 md:p-10
+            mb-6 md:mb-10
             shadow-2xl
           ">
 
@@ -422,8 +462,8 @@ export default function PackagePage() {
               absolute
               top-0
               right-0
-              w-72
-              h-72
+              w-52 md:w-72
+              h-52 md:h-72
               bg-white/10
               rounded-full
               blur-3xl
@@ -432,18 +472,22 @@ export default function PackagePage() {
             <div className="relative z-10">
 
               <p className="
-                text-blue-100
+                text-cyan-100
                 font-bold
-                mb-3
+                text-xs md:text-sm
+                mb-2
+                tracking-widest
               ">
                 PAKET PEMBELAJARAN
               </p>
 
               <h1 className="
-                text-5xl
+                text-2xl
+                md:text-5xl
                 font-black
                 text-white
-                mb-4
+                mb-3
+                leading-tight
               ">
 
                 {paket.nama_paket}
@@ -451,11 +495,11 @@ export default function PackagePage() {
               </h1>
 
               <p className="
-                text-blue-100
-                text-lg
+                text-cyan-100
+                text-sm md:text-lg
               ">
 
-                Pilih mata pelajaran pendamping 🚀
+                Pilih mata pelajaran 🚀
 
               </p>
 
@@ -463,13 +507,13 @@ export default function PackagePage() {
 
           </div>
 
-          {/* SUBJECT CARD */}
+          {/* SUBJECT */}
           <div className="
             grid
-            grid-cols-1
+            grid-cols-2
             md:grid-cols-2
             lg:grid-cols-3
-            gap-8
+            gap-4 md:gap-7
           ">
 
             {subjects.map((item, index) => (
@@ -485,12 +529,14 @@ export default function PackagePage() {
                   group
                   relative
                   overflow-hidden
-                  bg-white
-                  rounded-[35px]
-                  p-8
-                  shadow-xl
+                  bg-white/90
+                  backdrop-blur-xl
+                  rounded-[24px]
+                  md:rounded-[35px]
+                  p-4 md:p-7
+                  shadow-lg
                   hover:shadow-2xl
-                  hover:-translate-y-3
+                  hover:-translate-y-2
                   transition-all duration-500
                   text-left
                 "
@@ -498,9 +544,9 @@ export default function PackagePage() {
 
                 <div className="
                   absolute
-                  top-5
-                  right-5
-                  text-7xl
+                  top-3
+                  right-3
+                  text-4xl md:text-6xl
                   font-black
                   text-gray-100
                 ">
@@ -508,36 +554,38 @@ export default function PackagePage() {
                 </div>
 
                 <div className="
-                  w-20
-                  h-20
-                  rounded-3xl
+                  w-12 h-12
+                  md:w-20 md:h-20
+                  rounded-2xl
                   bg-gradient-to-r
-                  from-blue-600
+                  from-violet-600
                   to-cyan-500
-                  flex
-                  items-center
+                  flex items-center
                   justify-center
-                  text-4xl
-                  shadow-xl
-                  mb-6
+                  text-2xl md:text-4xl
+                  shadow-lg
+                  mb-4
                 ">
                   📘
                 </div>
 
                 <p className="
-                  text-sm
+                  text-[10px]
+                  md:text-sm
                   font-bold
-                  text-blue-500
-                  mb-2
+                  text-violet-600
+                  mb-1
                 ">
                   Pendamping
                 </p>
 
                 <h2 className="
-                  text-3xl
+                  text-sm
+                  md:text-3xl
                   font-black
                   text-gray-800
-                  mb-4
+                  mb-2
+                  leading-tight
                 ">
 
                   {item.subject}
@@ -546,21 +594,22 @@ export default function PackagePage() {
 
                 <p className="
                   text-gray-500
-                  mb-6
+                  text-[11px]
+                  md:text-sm
+                  mb-4
                 ">
-
-                  Kerjakan latihan soal terbaik 🚀
-
+                  Mulai latihan soal ✨
                 </p>
 
                 <div className="
                   inline-flex
                   items-center
                   gap-2
-                  text-blue-600
+                  text-violet-600
+                  text-xs md:text-base
                   font-bold
                 ">
-                  Pilih Mapel →
+                  Pilih →
                 </div>
 
               </button>
@@ -575,25 +624,31 @@ export default function PackagePage() {
     )
   }
 
-  // ======================
-  // SUBJECT LIST
-  // ======================
+  // MAPEL
   const mapel = [
     {
       nama: "Matematika",
-      kategori: "Matematika"
+      kategori: "Matematika",
+      icon: "📐",
+      color: "from-blue-600 to-cyan-500"
     },
     {
       nama: "Bahasa Indonesia",
-      kategori: "Bahasa Indonesia"
+      kategori: "Bahasa Indonesia",
+      icon: "📖",
+      color: "from-orange-500 to-pink-500"
     },
     {
       nama: "Bahasa Inggris",
-      kategori: "Bahasa Inggris"
+      kategori: "Bahasa Inggris",
+      icon: "🌍",
+      color: "from-emerald-500 to-green-600"
     },
     {
       nama: selectedSubject,
-      kategori: selectedSubject
+      kategori: selectedSubject,
+      icon: "🎯",
+      color: "from-violet-600 to-fuchsia-500"
     }
   ]
 
@@ -603,9 +658,9 @@ export default function PackagePage() {
       min-h-screen
       bg-gradient-to-br
       from-slate-100
-      via-blue-50
+      via-violet-50
       to-cyan-50
-      p-6
+      p-4 md:p-6
     ">
 
       <div className="max-w-7xl mx-auto">
@@ -614,13 +669,14 @@ export default function PackagePage() {
         <div className="
           relative
           overflow-hidden
-          rounded-[40px]
+          rounded-[28px]
+          md:rounded-[40px]
           bg-gradient-to-r
-          from-blue-700
+          from-violet-700
           via-blue-600
           to-cyan-500
-          p-10
-          mb-10
+          p-5 md:p-10
+          mb-6 md:mb-10
           shadow-2xl
         ">
 
@@ -628,8 +684,8 @@ export default function PackagePage() {
             absolute
             -top-10
             -right-10
-            w-72
-            h-72
+            w-56 md:w-72
+            h-56 md:h-72
             bg-white/10
             rounded-full
             blur-3xl
@@ -638,20 +694,22 @@ export default function PackagePage() {
           <div className="relative z-10">
 
             <p className="
-              text-blue-100
+              text-cyan-100
               font-semibold
-              mb-3
-              tracking-wide
+              text-xs md:text-sm
+              mb-2
+              tracking-widest
             ">
               PAKET PEMBELAJARAN
             </p>
 
             <h1 className="
-              text-4xl
+              text-2xl
               md:text-5xl
               font-black
               text-white
-              mb-4
+              mb-3
+              leading-tight
             ">
 
               {paket.nama_paket}
@@ -659,17 +717,19 @@ export default function PackagePage() {
             </h1>
 
             <p className="
-              text-lg
-              text-blue-100
+              text-sm
+              md:text-lg
+              text-cyan-100
             ">
 
               Pendamping:
               {" "}
 
-              <span className="font-black text-white">
-
+              <span className="
+                font-black
+                text-white
+              ">
                 {selectedSubject}
-
               </span>
 
             </p>
@@ -678,13 +738,13 @@ export default function PackagePage() {
 
         </div>
 
-        {/* CARD */}
+        {/* MAPEL */}
         <div className="
           grid
-          grid-cols-1
+          grid-cols-2
           md:grid-cols-2
           xl:grid-cols-4
-          gap-8
+          gap-4 md:gap-7
         ">
 
           {mapel.map((item, index) => (
@@ -695,36 +755,24 @@ export default function PackagePage() {
                 group
                 relative
                 overflow-hidden
-                bg-white/80
+                bg-white/90
                 backdrop-blur-xl
-                rounded-[35px]
-                p-7
-                shadow-xl
+                rounded-[24px]
+                md:rounded-[35px]
+                p-4 md:p-7
+                shadow-lg
                 border border-white
                 hover:shadow-2xl
-                hover:-translate-y-3
+                hover:-translate-y-2
                 transition-all duration-500
               "
             >
 
-              {/* GLOW */}
               <div className="
                 absolute
-                inset-0
-                bg-gradient-to-br
-                from-blue-500/0
-                to-cyan-500/0
-                group-hover:from-blue-500/10
-                group-hover:to-cyan-500/10
-                transition-all
-              " />
-
-              {/* NUMBER */}
-              <div className="
-                absolute
-                top-5
-                right-5
-                text-6xl
+                top-3
+                right-3
+                text-4xl md:text-6xl
                 font-black
                 text-gray-100
               ">
@@ -732,29 +780,23 @@ export default function PackagePage() {
               </div>
 
               {/* ICON */}
-              <div className="
+              <div className={`
                 relative
                 z-10
-                w-20
-                h-20
-                rounded-3xl
+                w-12 h-12
+                md:w-20 md:h-20
+                rounded-2xl
                 bg-gradient-to-r
-                from-blue-600
-                to-cyan-500
+                ${item.color}
                 flex
                 items-center
                 justify-center
-                text-4xl
+                text-2xl md:text-4xl
                 shadow-xl
-                mb-6
-              ">
+                mb-4
+              `}>
 
-                {item.nama === "Matematika" && "📐"}
-                {item.nama === "Bahasa Indonesia" && "📖"}
-                {item.nama === "Bahasa Inggris" && "🌍"}
-                {item.nama !== "Matematika" &&
-                 item.nama !== "Bahasa Indonesia" &&
-                 item.nama !== "Bahasa Inggris" && "🎯"}
+                {item.icon}
 
               </div>
 
@@ -762,10 +804,11 @@ export default function PackagePage() {
               <div className="relative z-10">
 
                 <p className="
-                  text-sm
+                  text-[10px]
+                  md:text-sm
                   font-bold
-                  text-blue-500
-                  mb-2
+                  text-violet-600
+                  mb-1
                   uppercase
                   tracking-wider
                 ">
@@ -775,11 +818,12 @@ export default function PackagePage() {
                 </p>
 
                 <h2 className="
-                  text-3xl
+                  text-sm
+                  md:text-3xl
                   font-black
                   text-gray-800
                   leading-tight
-                  mb-4
+                  mb-3
                 ">
 
                   {item.nama}
@@ -788,9 +832,11 @@ export default function PackagePage() {
 
                 <p className="
                   text-gray-500
-                  mb-8
+                  text-[11px]
+                  md:text-sm
+                  mb-5
                 ">
-                  Kerjakan soal dan tingkatkan kemampuanmu 🚀
+                  Kerjakan soal terbaik 🚀
                 </p>
 
                 <button
@@ -799,21 +845,20 @@ export default function PackagePage() {
                       item.kategori
                     )
                   }
-                  className="
+                  className={`
                     w-full
                     bg-gradient-to-r
-                    from-blue-600
-                    to-cyan-500
-                    hover:from-blue-700
-                    hover:to-cyan-600
+                    ${item.color}
                     text-white
-                    py-4
+                    py-3
                     rounded-2xl
                     font-black
+                    text-xs md:text-base
                     shadow-lg
                     hover:scale-105
+                    active:scale-95
                     transition-all
-                  "
+                  `}
                 >
                   Mulai Ujian
                 </button>

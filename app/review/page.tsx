@@ -1,7 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import {
+  useEffect,
+  useState,
+  memo,
+} from "react"
+
 import { supabase } from "../../lib/supabase"
+
 import { useRouter } from "next/navigation"
 
 import {
@@ -9,6 +15,9 @@ import {
   MathJaxContext,
 } from "better-react-mathjax"
 
+// =========================
+// MATH CONFIG
+// =========================
 const mathJaxConfig = {
   loader: {
     load: ["input/tex", "output/chtml"],
@@ -28,6 +37,14 @@ const mathJaxConfig = {
     processEscapes: true,
   },
 
+  options: {
+    enableMenu: false,
+
+    renderActions: {
+      addMenu: [],
+    },
+  },
+
   chtml: {
     scale: 1,
     minScale: 0.5,
@@ -35,6 +52,117 @@ const mathJaxConfig = {
   },
 }
 
+// =========================
+// FORMAT HTML
+// =========================
+function formatText(
+  text: string
+) {
+
+  if (!text) return ""
+
+  let result = text
+
+  result = result.replace(
+    /&nbsp;/g,
+    " "
+  )
+
+  result = result.replace(
+    /<p>/gi,
+    "<div>"
+  )
+
+  result = result.replace(
+    /<\/p>/gi,
+    "</div>"
+  )
+
+  result = result.replace(
+    /<br\s*\/?>/gi,
+    "<br/>"
+  )
+
+  result = result.replace(
+    /<img/gi,
+    `<img class="max-w-full h-auto rounded-xl my-3 border border-slate-200" `
+  )
+
+  return result
+}
+
+// =========================
+// EXTRACT IMAGE URL
+// =========================
+function extractImages(
+  html: string
+) {
+
+  if (!html) return []
+
+  const regex =
+    /<img[^>]+src="([^">]+)"/g
+
+  const images = []
+
+  let match
+
+  while (
+    (match = regex.exec(html)) !== null
+  ) {
+
+    images.push(match[1])
+  }
+
+  return images
+}
+
+// =========================
+// SAFE MATH COMPONENT
+// =========================
+const MathContent = memo(
+  ({
+    html,
+    className = "",
+  }: {
+    html: string
+    className?: string
+  }) => {
+
+    return (
+
+      <div
+        className={`
+          overflow-x-auto
+          break-words
+          whitespace-normal
+          ${className}
+        `}
+      >
+
+        <MathJax>
+
+          <div
+            dangerouslySetInnerHTML={{
+              __html:
+                formatText(html),
+            }}
+          />
+
+        </MathJax>
+
+      </div>
+
+    )
+  }
+)
+
+MathContent.displayName =
+  "MathContent"
+
+// =========================
+// MAIN PAGE
+// =========================
 export default function Review() {
 
   const [data, setData] =
@@ -46,9 +174,6 @@ export default function Review() {
   const [aiLoading, setAiLoading] =
     useState<number | null>(null)
 
-  const [chatLoading, setChatLoading] =
-    useState<number | null>(null)
-
   const router = useRouter()
 
   useEffect(() => {
@@ -58,76 +183,13 @@ export default function Review() {
   }, [])
 
   // =========================
-  // FORMAT HTML
-  // =========================
-  function formatText(
-    text: string
-  ) {
-
-    if (!text) return ""
-
-    let result = text
-
-    result = result.replace(
-      /&nbsp;/g,
-      " "
-    )
-
-    result = result.replace(
-      /<p>/gi,
-      "<div>"
-    )
-
-    result = result.replace(
-      /<\/p>/gi,
-      "</div>"
-    )
-
-    result = result.replace(
-      /<br\s*\/?>/gi,
-      "<br/>"
-    )
-
-    result = result.replace(
-      /<img/gi,
-      `<img class="max-w-full h-auto rounded-xl my-4 border" `
-    )
-
-    return result
-  }
-
-  // =========================
-  // EXTRACT IMAGE URL
-  // =========================
-  function extractImages(
-    html: string
-  ) {
-
-    if (!html) return []
-
-    const regex =
-      /<img[^>]+src="([^">]+)"/g
-
-    const images = []
-
-    let match
-
-    while (
-      (match = regex.exec(html)) !== null
-    ) {
-
-      images.push(match[1])
-    }
-
-    return images
-  }
-
-  // =========================
   // GET DATA
   // =========================
   async function getLastResult() {
 
-    const { data: userData } =
+    const {
+      data: userData,
+    } =
       await supabase.auth.getUser()
 
     if (!userData.user) {
@@ -211,10 +273,6 @@ export default function Review() {
 
         pembahasan:
           result.text,
-
-        chat: [],
-
-        input: "",
       }
 
       setData({
@@ -224,7 +282,9 @@ export default function Review() {
         detail: updated,
       })
 
-    } catch {
+    } catch (err) {
+
+      console.error(err)
 
       alert(
         "Gagal generate AI"
@@ -237,143 +297,55 @@ export default function Review() {
   }
 
   // =========================
-  // CHAT AI
-  // =========================
-  async function sendChat(
-    i: number,
-    item: any
-  ) {
-
-    if (
-      !item.input?.trim()
-    ) return
-
-    const updated = [
-      ...data.detail,
-    ]
-
-    const text =
-      item.input
-
-    const images =
-      extractImages(item.soal)
-
-    if (
-      !updated[i].chat
-    ) {
-
-      updated[i].chat = []
-    }
-
-    updated[i].chat.push({
-
-      role: "user",
-
-      text: text,
-    })
-
-    updated[i].input = ""
-
-    setData({
-
-      ...data,
-
-      detail: updated,
-    })
-
-    try {
-
-      setChatLoading(i)
-
-      const res =
-        await fetch(
-          "/api/ai",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-
-              soal: item.soal,
-
-              pertanyaan: text,
-
-              jawaban_benar:
-                item.jawaban_benar,
-
-              images,
-            }),
-          }
-        )
-
-      const result =
-        await res.json()
-
-      updated[i].chat.push({
-
-        role: "ai",
-
-        text:
-          result.text,
-      })
-
-      setData({
-
-        ...data,
-
-        detail: [...updated],
-      })
-
-    } catch {
-
-      updated[i].chat.push({
-
-        role: "ai",
-
-        text:
-          "AI gagal menjawab",
-      })
-
-      setData({
-
-        ...data,
-
-        detail: [...updated],
-      })
-
-    } finally {
-
-      setChatLoading(null)
-    }
-  }
-
-  // =========================
   // LOADING
   // =========================
   if (loading) {
 
     return (
 
-      <div className="p-10">
-        Loading...
+      <div className="
+        min-h-screen
+        flex
+        items-center
+        justify-center
+        bg-slate-100
+      ">
+
+        <div className="
+          w-10
+          h-10
+          border-4
+          border-blue-600
+          border-t-transparent
+          rounded-full
+          animate-spin
+        " />
+
       </div>
+
     )
   }
 
   // =========================
-  // TIDAK ADA DATA
+  // EMPTY
   // =========================
   if (!data) {
 
     return (
 
-      <div className="p-10">
+      <div className="
+        min-h-screen
+        flex
+        items-center
+        justify-center
+        bg-slate-100
+        text-slate-500
+      ">
+
         Tidak ada data
+
       </div>
+
     )
   }
 
@@ -400,61 +372,108 @@ export default function Review() {
       config={mathJaxConfig}
     >
 
-      <div className="min-h-screen bg-gray-100">
+      <div className="
+        min-h-screen
+        bg-slate-100
+        pb-10
+      ">
 
-        {/* HEADER */}
-        <div className="bg-blue-700 text-white p-6 shadow">
+        {/* =========================
+            HEADER
+        ========================= */}
+        <div className="
+          sticky
+          top-0
+          z-50
+          bg-blue-700
+          shadow-lg
+        ">
 
-          <div className="flex justify-between items-center">
+          <div className="
+            max-w-5xl
+            mx-auto
+            px-3
+            py-3
+          ">
 
-            <div>
+            <div className="
+              flex
+              items-center
+              justify-between
+              gap-3
+            ">
 
-              <p className="opacity-90 font-medium">
-                UJIAN {data.kategori}
-              </p>
+              <div className="min-w-0">
 
-              <h1 className="text-4xl font-black mt-1">
-                Review Jawaban
-              </h1>
+                <p className="
+                  text-[10px]
+                  uppercase
+                  tracking-widest
+                  text-blue-200
+                ">
+                  Hasil Ujian
+                </p>
+
+                <h1 className="
+                  text-sm
+                  md:text-2xl
+                  font-black
+                  text-white
+                  truncate
+                ">
+                  {data.kategori}
+                </h1>
+
+              </div>
+
+              <button
+                onClick={() =>
+                  router.push(
+                    "/dashboard"
+                  )
+                }
+                className="
+                  h-9
+                  px-3
+                  rounded-xl
+                  bg-white
+                  text-blue-700
+                  text-xs
+                  font-bold
+                  shrink-0
+                  active:scale-95
+                  transition-all
+                "
+              >
+                Dashboard
+              </button>
 
             </div>
-
-            <button
-              onClick={() =>
-                router.push(
-                  "/dashboard"
-                )
-              }
-              className="
-                bg-white
-                text-blue-700
-                font-bold
-                px-5 py-3
-                rounded-2xl
-                hover:scale-105
-                transition
-              "
-            >
-              Dashboard
-            </button>
 
           </div>
 
         </div>
 
-        {/* CONTENT */}
-        <div className="max-w-7xl mx-auto p-6">
+        {/* =========================
+            CONTENT
+        ========================= */}
+        <div className="
+          max-w-5xl
+          mx-auto
+          px-2
+          md:px-5
+          py-3
+        ">
 
-          {/* CARD */}
-          <div
-            className="
-              grid
-              grid-cols-2
-              md:grid-cols-4
-              gap-5
-              mb-8
-            "
-          >
+          {/* =========================
+              CARD STATS
+          ========================= */}
+          <div className="
+            grid
+            grid-cols-4
+            gap-2
+            mb-4
+          ">
 
             <Card
               title="Skor"
@@ -486,7 +505,9 @@ export default function Review() {
 
           </div>
 
-          {/* LIST REVIEW */}
+          {/* =========================
+              REVIEW LIST
+          ========================= */}
           {data.detail.map(
             (
               item: any,
@@ -502,149 +523,197 @@ export default function Review() {
                   key={i}
                   className="
                     bg-white
+                    rounded-2xl
                     border
-                    rounded-3xl
+                    border-slate-200
                     shadow-sm
-                    p-6
-                    mb-6
+                    mb-3
+                    overflow-hidden
                   "
                 >
 
-                  {/* SOAL */}
+                  {/* TOP */}
                   <div className="
+                    px-3
+                    py-2.5
+                    border-b
+                    border-slate-100
                     flex
+                    items-center
                     justify-between
-                    items-start
-                    mb-5
-                    gap-4
+                    gap-2
                   ">
 
-                    <div className="w-full">
-
-                      <span className="
-                        bg-blue-600
-                        text-white
-                        px-4 py-2
-                        rounded-full
-                        font-bold
-                      ">
-                        Soal {i + 1}
-                      </span>
+                    <div className="
+                      flex
+                      items-center
+                      gap-2
+                    ">
 
                       <div className="
-                        mt-5
-                        text-gray-800
-                        text-lg
-                        font-semibold
-                        leading-9
-                        overflow-x-auto
+                        w-8
+                        h-8
+                        rounded-xl
+                        bg-blue-700
+                        text-white
+                        text-xs
+                        font-black
+                        flex
+                        items-center
+                        justify-center
                       ">
+                        {i + 1}
+                      </div>
 
-                        <MathJax
-                          dynamic
-                          hideUntilTypeset="first"
-                        >
+                      <div>
 
-                          <div
-                            className="
-                              break-words
-                              space-y-3
-                            "
-                            dangerouslySetInnerHTML={{
-                              __html:
-                                formatText(
-                                  item.soal
-                                ),
-                            }}
-                          />
+                        <p className="
+                          text-[10px]
+                          text-slate-400
+                          uppercase
+                        ">
+                          Soal
+                        </p>
 
-                        </MathJax>
+                        <p className="
+                          text-xs
+                          font-bold
+                          text-slate-700
+                        ">
+                          Review
+                        </p>
 
                       </div>
 
                     </div>
 
+                    {item.benar ? (
+
+                      <div className="
+                        px-2.5
+                        py-1
+                        rounded-full
+                        bg-green-100
+                        text-green-700
+                        text-[10px]
+                        font-bold
+                      ">
+                        ✔ Benar
+                      </div>
+
+                    ) : (
+
+                      <div className="
+                        px-2.5
+                        py-1
+                        rounded-full
+                        bg-orange-100
+                        text-orange-700
+                        text-[10px]
+                        font-bold
+                      ">
+                        ✖ Salah
+                      </div>
+
+                    )}
+
                   </div>
 
-                  {/* JAWABAN */}
+                  {/* CONTENT */}
                   <div className="
-                    flex
-                    gap-3
-                    flex-wrap
-                    mb-5
+                    p-3
+                    md:p-5
                   ">
 
+                    {/* SOAL */}
                     <div className="
-                      bg-gray-100
-                      text-gray-800
-                      font-semibold
-                      px-4 py-3
+                      bg-slate-50
+                      border
+                      border-slate-200
                       rounded-2xl
+                      p-3
+                      md:p-5
+                      mb-3
                     ">
 
-                      Jawaban Kamu :
-                      {" "}
-                      {item.jawaban_user || "-"}
+                      <MathContent
+                        html={item.soal}
+                        className="
+                          text-[13px]
+                          md:text-[16px]
+                          leading-[1.8]
+                          text-slate-800
+                          font-medium
+                        "
+                      />
 
                     </div>
 
+                    {/* JAWABAN */}
                     <div className="
-                      bg-green-100
-                      text-green-700
-                      font-semibold
-                      px-4 py-3
-                      rounded-2xl
+                      flex
+                      flex-col
+                      sm:flex-row
+                      gap-2
+                      mb-3
                     ">
 
-                      Jawaban Benar :
-                      {" "}
-                      {item.jawaban_benar}
+                      <div className="
+                        flex-1
+                        bg-slate-100
+                        rounded-xl
+                        px-3
+                        py-2
+                      ">
 
-                    </div>
+                        <p className="
+                          text-[10px]
+                          text-slate-500
+                          mb-1
+                        ">
+                          Jawaban Kamu
+                        </p>
 
-                  </div>
+                        <p className="
+                          text-sm
+                          font-black
+                          text-slate-700
+                        ">
+                          {item.jawaban_user || "-"}
+                        </p>
 
-                  {/* STATUS */}
-                  <div className="mb-5">
+                      </div>
 
-                    {
-                      item.benar ?
+                      <div className="
+                        flex-1
+                        bg-green-100
+                        rounded-xl
+                        px-3
+                        py-2
+                      ">
 
-                        <div className="
-                          inline-flex
-                          items-center
-                          gap-2
-                          bg-green-100
+                        <p className="
+                          text-[10px]
                           text-green-700
-                          px-4 py-2
-                          rounded-2xl
-                          font-bold
+                          mb-1
                         ">
-                          ✔ Jawaban Benar
-                        </div>
+                          Jawaban Benar
+                        </p>
 
-                        :
-
-                        <div className="
-                          inline-flex
-                          items-center
-                          gap-2
-                          bg-orange-100
-                          text-orange-700
-                          px-4 py-2
-                          rounded-2xl
-                          font-bold
+                        <p className="
+                          text-sm
+                          font-black
+                          text-green-700
                         ">
-                          ✖ Jawaban Salah
-                        </div>
+                          {item.jawaban_benar}
+                        </p>
 
-                    }
+                      </div>
 
-                  </div>
+                    </div>
 
-                  {/* AI */}
-                  {
-                    isEmpty ?
+                    {/* AI */}
+                    {isEmpty ? (
 
                       <button
                         onClick={() =>
@@ -654,93 +723,106 @@ export default function Review() {
                           )
                         }
                         className="
-                          bg-blue-700
-                          hover:bg-blue-800
-                          text-white
-                          font-bold
-                          px-5 py-3
+                          w-full
+                          h-11
                           rounded-2xl
-                          transition
+                          bg-blue-700
+                          text-white
+                          text-sm
+                          font-bold
+                          active:scale-[0.98]
+                          transition-all
                         "
                       >
 
-                        {
-                          aiLoading === i
+                        {aiLoading === i
 
-                            ?
+                          ?
 
-                            "⏳ AI sedang berpikir..."
+                          "⏳ AI sedang berpikir..."
 
-                            :
+                          :
 
-                            "✨ Generate AI Pembahasan"
+                          "✨ Generate Pembahasan AI"
                         }
 
                       </button>
 
-                      :
+                    ) : (
 
-                      <div className="space-y-5">
+                      <div className="
+                        bg-blue-50
+                        border
+                        border-blue-200
+                        rounded-2xl
+                        p-3
+                        md:p-5
+                      ">
 
-                        {/* PEMBAHASAN */}
                         <div className="
-                          bg-blue-50
-                          border
-                          border-blue-200
-                          rounded-3xl
-                          p-5
+                          flex
+                          items-center
+                          gap-2
+                          mb-3
                         ">
 
-                          <h2 className="
-                            font-bold
-                            text-blue-900
-                            text-xl
-                            mb-3
-                          ">
-
-                            📘 Pembahasan AI
-
-                          </h2>
-
                           <div className="
-                            text-gray-800
-                            font-medium
-                            leading-9
-                            overflow-x-auto
+                            w-8
+                            h-8
+                            rounded-xl
+                            bg-blue-700
+                            text-white
+                            flex
+                            items-center
+                            justify-center
+                            text-sm
                           ">
+                            📘
+                          </div>
 
-                            <MathJax
-                              dynamic
-                              hideUntilTypeset="first"
-                            >
+                          <div>
 
-                              <div
-                                className="
-                                  break-words
-                                  space-y-3
-                                "
-                                dangerouslySetInnerHTML={{
-                                  __html:
-                                    formatText(
-                                      item.pembahasan
-                                    ),
-                                }}
-                              />
+                            <p className="
+                              text-[10px]
+                              uppercase
+                              text-blue-500
+                            ">
+                              AI
+                            </p>
 
-                            </MathJax>
+                            <h2 className="
+                              text-sm
+                              font-black
+                              text-blue-900
+                            ">
+                              Pembahasan
+                            </h2>
 
                           </div>
 
                         </div>
 
+                        <MathContent
+                          html={
+                            item.pembahasan
+                          }
+                          className="
+                            text-[13px]
+                            md:text-[15px]
+                            leading-[1.9]
+                            text-slate-700
+                          "
+                        />
+
                       </div>
 
-                  }
+                    )}
+
+                  </div>
 
                 </div>
 
               )
-
             })
           }
 
@@ -749,9 +831,13 @@ export default function Review() {
       </div>
 
     </MathJaxContext>
+
   )
 }
 
+// =========================
+// CARD
+// =========================
 function Card({
   title,
   value,
@@ -764,18 +850,22 @@ function Card({
     <div
       className={`
         ${bg}
-        rounded-3xl
-        p-6
+        rounded-2xl
+        px-2
+        py-3
         text-center
-        shadow
+        border
+        border-white/40
       `}
     >
 
       <h1
         className={`
           ${color}
+          text-lg
+          md:text-3xl
           font-black
-          text-4xl
+          leading-none
         `}
       >
 
@@ -784,9 +874,12 @@ function Card({
       </h1>
 
       <p className="
-        text-gray-700
-        mt-2
-        font-medium
+        mt-1
+        text-[10px]
+        md:text-sm
+        font-semibold
+        text-slate-600
+        truncate
       ">
 
         {title}
