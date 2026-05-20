@@ -31,6 +31,14 @@ import type {
 
 import "react-quill-new/dist/quill.snow.css"
 
+import "katex/dist/katex.min.css"
+
+import katex from "katex"
+
+if (typeof window !== "undefined") {
+  ;(window as any).katex = katex
+}
+
 const ReactQuill = dynamic(
   () => import("react-quill-new"),
   {
@@ -88,27 +96,22 @@ const kategoriList = [
   "Matematika",
   "Bahasa Indonesia",
   "Bahasa Inggris",
-
   "Fisika",
   "Kimia",
   "Biologi",
-
   "Ekonomi",
   "Geografi",
   "Sosiologi",
   "Sejarah",
   "Antropologi",
-
   "Bahasa Arab",
   "Bahasa Mandarin",
   "Bahasa Jepang",
   "Bahasa Korea",
   "Bahasa Jerman",
   "Bahasa Prancis",
-
   "PPKN",
   "PKK",
-
   "TPS",
   "Literasi",
 ]
@@ -126,48 +129,76 @@ export default function AdminSoal() {
   const router = useRouter()
 
   const quillModules =
-    useMemo(
-      () => ({
-        toolbar: [
-          [
-            {
-              header: [
-                1,
-                2,
-                3,
-                false,
-              ],
-            },
-          ],
+  useMemo(
+    () => ({
+      toolbar: [
 
-          [
-            "bold",
-            "italic",
-            "underline",
-            "strike",
-          ],
-
-          [
-            {
-              list: "ordered",
-            },
-            {
-              list: "bullet",
-            },
-          ],
-
-          ["blockquote"],
-
-          [
-            "link",
-            "image",
-          ],
-
-          ["clean"],
+        // HEADER
+        [
+          {
+            header: [
+              1,
+              2,
+              3,
+              false,
+            ],
+          },
         ],
-      }),
-      []
-    )
+
+        // TEXT STYLE
+        [
+          "bold",
+          "italic",
+          "underline",
+          "strike",
+        ],
+
+        // SUBSCRIPT & SUPERSCRIPT
+        [
+          {
+            script: "sub",
+          },
+          {
+            script: "super",
+          },
+        ],
+
+        // LIST
+        [
+          {
+            list: "ordered",
+          },
+          {
+            list: "bullet",
+          },
+        ],
+
+        // ALIGN
+        [
+          {
+            align: [],
+          },
+        ],
+
+        // BLOCKQUOTE
+        ["blockquote"],
+
+        // LINK IMAGE FORMULA
+        [
+          "link",
+          "image",
+          "formula",
+        ],
+
+        // TABLE BUTTON
+        ["table"],
+
+        // CLEAN
+        ["clean"],
+      ],
+    }),
+    []
+  )
 
   const [soal, setSoal] =
     useState<Soal[]>([])
