@@ -3,70 +3,197 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
+
 import {
   MathJax,
   MathJaxContext,
 } from "better-react-mathjax"
 
+const mathJaxConfig = {
+  loader: {
+    load: ["input/tex", "output/chtml"],
+  },
+
+  tex: {
+    inlineMath: [
+      ["$", "$"],
+      ["\\(", "\\)"],
+    ],
+
+    displayMath: [
+      ["$$", "$$"],
+      ["\\[", "\\]"],
+    ],
+
+    processEscapes: true,
+  },
+
+  chtml: {
+    scale: 1,
+    minScale: 0.5,
+    matchFontHeight: false,
+  },
+}
+
 export default function Review() {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [aiLoading, setAiLoading] = useState<number | null>(null)
-  const [chatLoading, setChatLoading] = useState<number | null>(null)
+
+  const [data, setData] =
+    useState<any>(null)
+
+  const [loading, setLoading] =
+    useState(true)
+
+  const [aiLoading, setAiLoading] =
+    useState<number | null>(null)
+
+  const [chatLoading, setChatLoading] =
+    useState<number | null>(null)
 
   const router = useRouter()
 
   useEffect(() => {
+
     getLastResult()
+
   }, [])
 
+  // =========================
+  // FORMAT HTML
+  // =========================
+  function formatText(
+    text: string
+  ) {
+
+    if (!text) return ""
+
+    let result = text
+
+    result = result.replace(
+      /&nbsp;/g,
+      " "
+    )
+
+    result = result.replace(
+      /<p>/gi,
+      "<div>"
+    )
+
+    result = result.replace(
+      /<\/p>/gi,
+      "</div>"
+    )
+
+    result = result.replace(
+      /<br\s*\/?>/gi,
+      "<br/>"
+    )
+
+    result = result.replace(
+      /<img/gi,
+      `<img class="max-w-full h-auto rounded-xl my-4 border" `
+    )
+
+    return result
+  }
+
+  // =========================
+  // EXTRACT IMAGE URL
+  // =========================
+  function extractImages(
+    html: string
+  ) {
+
+    if (!html) return []
+
+    const regex =
+      /<img[^>]+src="([^">]+)"/g
+
+    const images = []
+
+    let match
+
+    while (
+      (match = regex.exec(html)) !== null
+    ) {
+
+      images.push(match[1])
+    }
+
+    return images
+  }
+
+  // =========================
+  // GET DATA
+  // =========================
   async function getLastResult() {
+
     const { data: userData } =
       await supabase.auth.getUser()
 
     if (!userData.user) {
+
       router.push("/login")
+
       return
     }
 
-    const { data } = await supabase
-      .from("hasil")
-      .select("*")
-      .eq(
-        "user_id",
-        userData.user.id
-      )
-      .order(
-        "id",
-        { ascending: false }
-      )
-      .limit(1)
+    const { data } =
+      await supabase
+        .from("hasil")
+        .select("*")
+        .eq(
+          "user_id",
+          userData.user.id
+        )
+        .order(
+          "id",
+          {
+            ascending: false,
+          }
+        )
+        .limit(1)
 
-    setData(data?.[0] || null)
+    setData(
+      data?.[0] || null
+    )
 
     setLoading(false)
   }
 
+  // =========================
+  // GENERATE AI
+  // =========================
   async function generateAI(
     index: number,
     item: any
   ) {
+
     try {
+
       setAiLoading(index)
+
+      const images =
+        extractImages(item.soal)
 
       const res =
         await fetch(
           "/api/ai",
           {
             method: "POST",
+
             headers: {
               "Content-Type":
                 "application/json",
             },
+
             body: JSON.stringify({
+
               soal: item.soal,
+
               jawaban_benar:
                 item.jawaban_benar,
+
+              images,
             }),
           }
         )
@@ -79,34 +206,47 @@ export default function Review() {
       ]
 
       updated[index] = {
+
         ...updated[index],
+
         pembahasan:
           result.text,
+
         chat: [],
+
         input: "",
       }
 
       setData({
+
         ...data,
+
         detail: updated,
       })
+
     } catch {
+
       alert(
         "Gagal generate AI"
       )
+
     } finally {
+
       setAiLoading(null)
     }
   }
 
+  // =========================
+  // CHAT AI
+  // =========================
   async function sendChat(
     i: number,
     item: any
   ) {
+
     if (
       !item.input?.trim()
-    )
-      return
+    ) return
 
     const updated = [
       ...data.detail,
@@ -115,25 +255,34 @@ export default function Review() {
     const text =
       item.input
 
+    const images =
+      extractImages(item.soal)
+
     if (
       !updated[i].chat
     ) {
+
       updated[i].chat = []
     }
 
     updated[i].chat.push({
+
       role: "user",
+
       text: text,
     })
 
     updated[i].input = ""
 
     setData({
+
       ...data,
+
       detail: updated,
     })
 
     try {
+
       setChatLoading(i)
 
       const res =
@@ -141,15 +290,22 @@ export default function Review() {
           "/api/ai",
           {
             method: "POST",
+
             headers: {
               "Content-Type":
                 "application/json",
             },
+
             body: JSON.stringify({
+
               soal: item.soal,
+
               pertanyaan: text,
+
               jawaban_benar:
                 item.jawaban_benar,
+
+              images,
             }),
           }
         )
@@ -158,41 +314,63 @@ export default function Review() {
         await res.json()
 
       updated[i].chat.push({
+
         role: "ai",
+
         text:
           result.text,
       })
 
       setData({
+
         ...data,
+
         detail: [...updated],
       })
+
     } catch {
+
       updated[i].chat.push({
+
         role: "ai",
+
         text:
           "AI gagal menjawab",
       })
 
       setData({
+
         ...data,
+
         detail: [...updated],
       })
+
     } finally {
+
       setChatLoading(null)
     }
   }
 
+  // =========================
+  // LOADING
+  // =========================
   if (loading) {
+
     return (
+
       <div className="p-10">
         Loading...
       </div>
     )
   }
 
+  // =========================
+  // TIDAK ADA DATA
+  // =========================
   if (!data) {
+
     return (
+
       <div className="p-10">
         Tidak ada data
       </div>
@@ -217,16 +395,20 @@ export default function Review() {
     )
 
   return (
-    <MathJaxContext>
+
+    <MathJaxContext
+      config={mathJaxConfig}
+    >
+
       <div className="min-h-screen bg-gray-100">
 
         {/* HEADER */}
-
         <div className="bg-blue-700 text-white p-6 shadow">
 
           <div className="flex justify-between items-center">
 
             <div>
+
               <p className="opacity-90 font-medium">
                 UJIAN {data.kategori}
               </p>
@@ -234,6 +416,7 @@ export default function Review() {
               <h1 className="text-4xl font-black mt-1">
                 Review Jawaban
               </h1>
+
             </div>
 
             <button
@@ -243,13 +426,13 @@ export default function Review() {
                 )
               }
               className="
-              bg-white
-              text-blue-700
-              font-bold
-              px-5 py-3
-              rounded-2xl
-              hover:scale-105
-              transition
+                bg-white
+                text-blue-700
+                font-bold
+                px-5 py-3
+                rounded-2xl
+                hover:scale-105
+                transition
               "
             >
               Dashboard
@@ -259,17 +442,17 @@ export default function Review() {
 
         </div>
 
+        {/* CONTENT */}
         <div className="max-w-7xl mx-auto p-6">
 
           {/* CARD */}
-
           <div
             className="
-            grid
-            grid-cols-2
-            md:grid-cols-4
-            gap-5
-            mb-8
+              grid
+              grid-cols-2
+              md:grid-cols-4
+              gap-5
+              mb-8
             "
           >
 
@@ -303,6 +486,7 @@ export default function Review() {
 
           </div>
 
+          {/* LIST REVIEW */}
           {data.detail.map(
             (
               item: any,
@@ -317,47 +501,63 @@ export default function Review() {
                 <div
                   key={i}
                   className="
-                  bg-white
-                  border
-                  rounded-3xl
-                  shadow-sm
-                  p-6
-                  mb-6
+                    bg-white
+                    border
+                    rounded-3xl
+                    shadow-sm
+                    p-6
+                    mb-6
                   "
                 >
 
                   {/* SOAL */}
-
                   <div className="
-                  flex
-                  justify-between
-                  items-start
-                  mb-5
-                  gap-4
+                    flex
+                    justify-between
+                    items-start
+                    mb-5
+                    gap-4
                   ">
 
-                    <div>
+                    <div className="w-full">
 
                       <span className="
-                      bg-blue-600
-                      text-white
-                      px-4 py-2
-                      rounded-full
-                      font-bold
+                        bg-blue-600
+                        text-white
+                        px-4 py-2
+                        rounded-full
+                        font-bold
                       ">
                         Soal {i + 1}
                       </span>
 
                       <div className="
-                      mt-5
-                      text-gray-800
-                      text-lg
-                      font-semibold
-                      leading-9
+                        mt-5
+                        text-gray-800
+                        text-lg
+                        font-semibold
+                        leading-9
+                        overflow-x-auto
                       ">
 
-                        <MathJax dynamic>
-                          {item.soal}
+                        <MathJax
+                          dynamic
+                          hideUntilTypeset="first"
+                        >
+
+                          <div
+                            className="
+                              break-words
+                              space-y-3
+                            "
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                formatText(
+                                  item.soal
+                                ),
+                            }}
+                          />
+
                         </MathJax>
 
                       </div>
@@ -367,20 +567,19 @@ export default function Review() {
                   </div>
 
                   {/* JAWABAN */}
-
                   <div className="
-                  flex
-                  gap-3
-                  flex-wrap
-                  mb-5
+                    flex
+                    gap-3
+                    flex-wrap
+                    mb-5
                   ">
 
                     <div className="
-                    bg-gray-100
-                    text-gray-800
-                    font-semibold
-                    px-4 py-3
-                    rounded-2xl
+                      bg-gray-100
+                      text-gray-800
+                      font-semibold
+                      px-4 py-3
+                      rounded-2xl
                     ">
 
                       Jawaban Kamu :
@@ -390,11 +589,11 @@ export default function Review() {
                     </div>
 
                     <div className="
-                    bg-green-100
-                    text-green-700
-                    font-semibold
-                    px-4 py-3
-                    rounded-2xl
+                      bg-green-100
+                      text-green-700
+                      font-semibold
+                      px-4 py-3
+                      rounded-2xl
                     ">
 
                       Jawaban Benar :
@@ -406,21 +605,20 @@ export default function Review() {
                   </div>
 
                   {/* STATUS */}
-
                   <div className="mb-5">
 
                     {
                       item.benar ?
 
                         <div className="
-                        inline-flex
-                        items-center
-                        gap-2
-                        bg-green-100
-                        text-green-700
-                        px-4 py-2
-                        rounded-2xl
-                        font-bold
+                          inline-flex
+                          items-center
+                          gap-2
+                          bg-green-100
+                          text-green-700
+                          px-4 py-2
+                          rounded-2xl
+                          font-bold
                         ">
                           ✔ Jawaban Benar
                         </div>
@@ -428,14 +626,14 @@ export default function Review() {
                         :
 
                         <div className="
-                        inline-flex
-                        items-center
-                        gap-2
-                        bg-orange-100
-                        text-orange-700
-                        px-4 py-2
-                        rounded-2xl
-                        font-bold
+                          inline-flex
+                          items-center
+                          gap-2
+                          bg-orange-100
+                          text-orange-700
+                          px-4 py-2
+                          rounded-2xl
+                          font-bold
                         ">
                           ✖ Jawaban Salah
                         </div>
@@ -445,7 +643,6 @@ export default function Review() {
                   </div>
 
                   {/* AI */}
-
                   {
                     isEmpty ?
 
@@ -457,18 +654,19 @@ export default function Review() {
                           )
                         }
                         className="
-                        bg-blue-700
-                        hover:bg-blue-800
-                        text-white
-                        font-bold
-                        px-5 py-3
-                        rounded-2xl
-                        transition
+                          bg-blue-700
+                          hover:bg-blue-800
+                          text-white
+                          font-bold
+                          px-5 py-3
+                          rounded-2xl
+                          transition
                         "
                       >
 
                         {
                           aiLoading === i
+
                             ?
 
                             "⏳ AI sedang berpikir..."
@@ -485,20 +683,19 @@ export default function Review() {
                       <div className="space-y-5">
 
                         {/* PEMBAHASAN */}
-
                         <div className="
-                        bg-blue-50
-                        border
-                        border-blue-200
-                        rounded-3xl
-                        p-5
+                          bg-blue-50
+                          border
+                          border-blue-200
+                          rounded-3xl
+                          p-5
                         ">
 
                           <h2 className="
-                          font-bold
-                          text-blue-900
-                          text-xl
-                          mb-3
+                            font-bold
+                            text-blue-900
+                            text-xl
+                            mb-3
                           ">
 
                             📘 Pembahasan AI
@@ -506,172 +703,31 @@ export default function Review() {
                           </h2>
 
                           <div className="
-                          text-gray-800
-                          font-medium
-                          leading-9
+                            text-gray-800
+                            font-medium
+                            leading-9
+                            overflow-x-auto
                           ">
 
-                            <MathJax dynamic>
-                              {item.pembahasan}
-                            </MathJax>
-
-                          </div>
-
-                        </div>
-
-                        {/* CHAT */}
-
-                        <div className="
-                        bg-white
-                        border
-                        rounded-3xl
-                        p-5
-                        ">
-
-                          <h2 className="
-                          font-bold
-                          text-blue-800
-                          text-xl
-                          mb-4
-                          ">
-
-                            💬 Tanya AI
-
-                          </h2>
-
-                          <div className="
-                          h-[250px]
-                          overflow-y-auto
-                          bg-gray-50
-                          rounded-2xl
-                          p-4
-                          space-y-4
-                          mb-4
-                          ">
-
-                            {
-                              item.chat?.map(
-                                (
-                                  msg: any,
-                                  index: number
-                                ) => (
-
-                                  <div
-                                    key={index}
-                                    className={`
-                                    flex
-                                    ${
-                                      msg.role === "user"
-                                        ?
-                                        "justify-end"
-                                        :
-                                        "justify-start"
-                                    }
-                                    `}
-                                  >
-
-                                    <div
-                                      className={`
-                                      max-w-[80%]
-                                      px-4 py-3
-                                      rounded-2xl
-                                      leading-8
-
-                                      ${
-                                        msg.role === "user"
-
-                                          ?
-
-                                          "bg-blue-600 text-white"
-
-                                          :
-
-                                          "bg-white border text-gray-900"
-                                      }
-                                      `}
-                                    >
-
-                                      <MathJax dynamic>
-                                        {msg.text}
-                                      </MathJax>
-
-                                    </div>
-
-                                  </div>
-
-                                ))
-                            }
-
-                            {
-                              chatLoading === i &&
-                              (
-                                <div className="
-                                text-sm
-                                text-gray-500
-                                ">
-                                  AI sedang mengetik...
-                                </div>
-                              )
-                            }
-
-                          </div>
-
-                          <div className="flex gap-3">
-
-                            <input
-                              value={
-                                item.input || ""
-                              }
-                              onChange={(e) => {
-
-                                const updated = [
-                                  ...data.detail,
-                                ]
-
-                                updated[i].input =
-                                  e.target.value
-
-                                setData({
-                                  ...data,
-                                  detail: updated,
-                                })
-
-                              }}
-                              placeholder="Tanyakan sesuatu..."
-                              className="
-                              flex-1
-                              border
-                              rounded-2xl
-                              p-4
-                              text-gray-900
-                              font-medium
-                              outline-none
-                              focus:ring-2
-                              focus:ring-blue-500
-                              "
-                            />
-
-                            <button
-                              onClick={() =>
-                                sendChat(
-                                  i,
-                                  item
-                                )
-                              }
-                              className="
-                              bg-blue-700
-                              hover:bg-blue-800
-                              text-white
-                              px-6
-                              rounded-2xl
-                              font-bold
-                              transition
-                              "
+                            <MathJax
+                              dynamic
+                              hideUntilTypeset="first"
                             >
 
-                              Kirim
+                              <div
+                                className="
+                                  break-words
+                                  space-y-3
+                                "
+                                dangerouslySetInnerHTML={{
+                                  __html:
+                                    formatText(
+                                      item.pembahasan
+                                    ),
+                                }}
+                              />
 
-                            </button>
+                            </MathJax>
 
                           </div>
 
@@ -686,7 +742,6 @@ export default function Review() {
               )
 
             })
-
           }
 
         </div>
@@ -708,19 +763,19 @@ function Card({
 
     <div
       className={`
-      ${bg}
-      rounded-3xl
-      p-6
-      text-center
-      shadow
+        ${bg}
+        rounded-3xl
+        p-6
+        text-center
+        shadow
       `}
     >
 
       <h1
         className={`
-        ${color}
-        font-black
-        text-4xl
+          ${color}
+          font-black
+          text-4xl
         `}
       >
 
@@ -729,9 +784,9 @@ function Card({
       </h1>
 
       <p className="
-      text-gray-700
-      mt-2
-      font-medium
+        text-gray-700
+        mt-2
+        font-medium
       ">
 
         {title}
@@ -741,5 +796,4 @@ function Card({
     </div>
 
   )
-
 }

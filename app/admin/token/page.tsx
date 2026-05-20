@@ -16,6 +16,35 @@ export default function AdminToken() {
 
   const router = useRouter()
 
+  const kategoriList = [
+    "Matematika",
+    "Bahasa Indonesia",
+    "Bahasa Inggris",
+
+    "Fisika",
+    "Kimia",
+    "Biologi",
+
+    "Ekonomi",
+    "Geografi",
+    "Sosiologi",
+    "Sejarah",
+    "Antropologi",
+
+    "Bahasa Arab",
+    "Bahasa Mandarin",
+    "Bahasa Jepang",
+    "Bahasa Korea",
+    "Bahasa Jerman",
+    "Bahasa Prancis",
+
+    "PPKN",
+    "PKK",
+
+    "TPS",
+    "Literasi",
+  ]
+
   const [kategori,
     setKategori] =
     useState("Matematika")
@@ -36,6 +65,10 @@ export default function AdminToken() {
     setLoading] =
     useState(true)
 
+  const [search,
+    setSearch] =
+    useState("")
+
   useEffect(() => {
     init()
   }, [])
@@ -52,7 +85,9 @@ export default function AdminToken() {
       return
     }
 
-    // 🔥 CEK ROLE ADMIN
+    // =====================
+    // CEK ADMIN
+    // =====================
     const { data: profile } =
       await supabase
         .from("profiles")
@@ -77,10 +112,12 @@ export default function AdminToken() {
     setLoading(false)
   }
 
-  // 🔥 AMBIL DATA
+  // =====================
+  // AMBIL DATA
+  // =====================
   async function getData() {
 
-    const { data } =
+    const { data, error } =
       await supabase
         .from("jadwal_ujian")
         .select("*")
@@ -88,12 +125,21 @@ export default function AdminToken() {
           ascending: false,
         })
 
+    if (error) {
+
+      console.log(error)
+
+      return
+    }
+
     setData(
       (data || []) as Jadwal[]
     )
   }
 
-  // 🔥 GENERATE TOKEN
+  // =====================
+  // GENERATE TOKEN
+  // =====================
   function generateToken() {
 
     const chars =
@@ -110,7 +156,7 @@ export default function AdminToken() {
       result += chars.charAt(
         Math.floor(
           Math.random() *
-            chars.length
+          chars.length
         )
       )
     }
@@ -118,59 +164,134 @@ export default function AdminToken() {
     setToken(result)
   }
 
-  // 🔥 SIMPAN TOKEN
-async function simpanToken() {
+  // =====================
+  // SIMPAN TOKEN
+  // =====================
+  async function simpanToken() {
 
-  if (!token) {
-    alert("Token wajib diisi")
-    return
+    if (!kategori) {
+
+      alert(
+        "Kategori wajib dipilih"
+      )
+
+      return
+    }
+
+    if (!token) {
+
+      alert(
+        "Token wajib diisi"
+      )
+
+      return
+    }
+
+    if (!durasi) {
+
+      alert(
+        "Durasi wajib diisi"
+      )
+
+      return
+    }
+
+    try {
+
+      // =====================
+      // NONAKTIFKAN TOKEN LAMA
+      // =====================
+      const {
+        error: updateError
+      } = await supabase
+        .from("jadwal_ujian")
+        .update({
+          status: false,
+        })
+        .eq(
+          "kategori",
+          kategori
+        )
+
+      if (updateError) {
+
+        console.log(updateError)
+
+        alert(
+          "Gagal nonaktifkan token lama"
+        )
+
+        return
+      }
+
+      // =====================
+      // INSERT TOKEN BARU
+      // =====================
+      const {
+        error
+      } = await supabase
+        .from("jadwal_ujian")
+        .insert([
+          {
+            kategori,
+            token:
+              token.trim(),
+            durasi:
+              Number(durasi),
+            status: true,
+          },
+        ])
+
+      if (error) {
+
+        console.log(error)
+
+        alert(error.message)
+
+        return
+      }
+
+      // =====================
+      // RESET TOKEN USER LAMA
+      // =====================
+      const {
+        error: resetError
+      } = await supabase
+        .from("token_used")
+        .delete()
+        .eq(
+          "kategori",
+          kategori
+        )
+
+      if (resetError) {
+
+        console.log(resetError)
+      }
+
+      alert(
+        "Token berhasil dibuat"
+      )
+
+      setToken("")
+
+      setDurasi(90)
+
+      await getData()
+
+    } catch (err) {
+
+      console.log(err)
+
+      alert(
+        "Terjadi kesalahan"
+      )
+    }
   }
 
-  // nonaktifkan token lama
-  const { error: updateError } =
-    await supabase
-      .from("jadwal_ujian")
-      .update({
-        status: false,
-      })
-      .eq("kategori", kategori)
-
-  if (updateError) {
-    console.log(updateError)
-  }
-
-  // insert token baru
-  const { data, error } =
-    await supabase
-      .from("jadwal_ujian")
-      .insert([
-        {
-          kategori,
-          token,
-          durasi,
-          status: true,
-        },
-      ])
-      .select()
-
-  console.log(data)
-  console.log(error)
-
-  if (error) {
-
-    alert(error.message)
-
-    return
-  }
-
-  alert("Token berhasil dibuat")
-
-  setToken("")
-
-  getData()
-}
-
-  // 🔥 HAPUS TOKEN
+  // =====================
+  // HAPUS TOKEN
+  // =====================
   async function hapusToken(
     id: number
   ) {
@@ -191,11 +312,29 @@ async function simpanToken() {
     getData()
   }
 
-  // 🔥 TOGGLE STATUS
+  // =====================
+  // TOGGLE STATUS
+  // =====================
   async function toggleStatus(
     item: Jadwal
   ) {
 
+    // AKTIFKAN
+    if (!item.status) {
+
+      // NONAKTIFKAN SEMUA
+      await supabase
+        .from("jadwal_ujian")
+        .update({
+          status: false,
+        })
+        .eq(
+          "kategori",
+          item.kategori
+        )
+    }
+
+    // UPDATE TOKEN
     await supabase
       .from("jadwal_ujian")
       .update({
@@ -207,9 +346,34 @@ async function simpanToken() {
     getData()
   }
 
+  // =====================
+  // FILTER DATA
+  // =====================
+  const filteredData =
+    data.filter((item) => {
+
+      return (
+        item.kategori
+          .toLowerCase()
+          .includes(
+            search.toLowerCase()
+          ) ||
+
+        item.token
+          .toLowerCase()
+          .includes(
+            search.toLowerCase()
+          )
+      )
+    })
+
+  // =====================
+  // LOADING
+  // =====================
   if (loading) {
 
     return (
+
       <div className="p-10">
         Loading...
       </div>
@@ -230,7 +394,7 @@ async function simpanToken() {
           </h1>
 
           <p className="text-sm opacity-80">
-            Kelola token ujian
+            Kelola token ujian semua mata pelajaran
           </p>
 
         </div>
@@ -267,25 +431,20 @@ async function simpanToken() {
               }
               className="border p-4 rounded-2xl"
             >
-              <option>
-                Matematika
-              </option>
 
-              <option>
-                Bahasa Indonesia
-              </option>
+              {kategoriList.map(
+                (item) => (
 
-              <option>
-                Bahasa Inggris
-              </option>
+                  <option
+                    key={item}
+                    value={item}
+                  >
+                    {item}
+                  </option>
 
-              <option>
-                TPS
-              </option>
+                )
+              )}
 
-              <option>
-                Literasi
-              </option>
             </select>
 
             {/* TOKEN */}
@@ -306,7 +465,7 @@ async function simpanToken() {
                 onClick={
                   generateToken
                 }
-                className="bg-gray-200 px-4 rounded-2xl"
+                className="bg-gray-200 px-4 rounded-2xl hover:bg-gray-300"
               >
                 Random
               </button>
@@ -341,15 +500,31 @@ async function simpanToken() {
 
         </div>
 
+        {/* SEARCH */}
+        <div className="mb-6">
+
+          <input
+            value={search}
+            onChange={(e) =>
+              setSearch(
+                e.target.value
+              )
+            }
+            placeholder="Cari kategori / token..."
+            className="w-full bg-white border p-4 rounded-2xl shadow"
+          />
+
+        </div>
+
         {/* LIST TOKEN */}
         <div className="space-y-4">
 
-          {data.map(
+          {filteredData.map(
             (item) => (
 
               <div
                 key={item.id}
-                className="bg-white p-5 rounded-2xl shadow flex justify-between items-center"
+                className="bg-white p-5 rounded-2xl shadow flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5"
               >
 
                 <div>
@@ -360,24 +535,26 @@ async function simpanToken() {
                     }
                   </p>
 
-                  <div className="flex gap-3 mt-2 flex-wrap">
+                  <div className="flex gap-3 mt-3 flex-wrap">
 
-                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">
-                      Token:{" "}
+                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold">
+                      Token:
+                      {" "}
                       {
                         item.token
                       }
                     </span>
 
-                    <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm">
+                    <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-semibold">
                       {
                         item.durasi
-                      }{" "}
+                      }
+                      {" "}
                       menit
                     </span>
 
                     <span
-                      className={`px-3 py-1 rounded-full text-sm ${
+                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
                         item.status
                           ? "bg-green-100 text-green-700"
                           : "bg-red-100 text-red-700"
@@ -392,7 +569,7 @@ async function simpanToken() {
 
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
 
                   {/* TOGGLE */}
                   <button
@@ -401,10 +578,10 @@ async function simpanToken() {
                         item
                       )
                     }
-                    className={`px-4 py-2 rounded-xl text-white ${
+                    className={`px-4 py-2 rounded-xl text-white font-semibold ${
                       item.status
-                        ? "bg-red-500"
-                        : "bg-green-600"
+                        ? "bg-red-500 hover:bg-red-600"
+                        : "bg-green-600 hover:bg-green-700"
                     }`}
                   >
                     {item.status
@@ -419,7 +596,7 @@ async function simpanToken() {
                         item.id
                       )
                     }
-                    className="border px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white"
+                    className="border px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white font-semibold"
                   >
                     Hapus
                   </button>
@@ -431,11 +608,13 @@ async function simpanToken() {
             )
           )}
 
-          {data.length ===
+          {filteredData.length ===
             0 && (
 
-            <div className="bg-white p-10 rounded-2xl text-center text-gray-500">
+            <div className="bg-white p-10 rounded-2xl text-center text-gray-500 shadow">
+
               Belum ada token
+
             </div>
 
           )}

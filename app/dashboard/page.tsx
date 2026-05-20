@@ -116,13 +116,43 @@ export default function Dashboard() {
       </div>
     )
 
-  const mapelList = [
-    "Matematika",
-    "Bahasa Indonesia",
-    "Bahasa Inggris",
-    "TPS",
-    "Literasi",
-  ]
+const paketList = [
+  {
+    id: 1,
+    nama: "Paket IPA",
+    desc: "Kimia, Fisika, Biologi",
+    image:
+      "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=1200",
+    icon: "🧪",
+  },
+
+  {
+    id: 2,
+    nama: "Paket IPS",
+    desc: "Ekonomi, Geografi, Sosiologi",
+    image:
+      "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=1200",
+    icon: "📊",
+  },
+
+  {
+    id: 3,
+    nama: "Paket SMK",
+    desc: "Produktif & Kejuruan",
+    image:
+      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1200",
+    icon: "🛠️",
+  },
+
+  {
+    id: 4,
+    nama: "Paket Bahasa",
+    desc: "Jerman, Jepang, Arab",
+    image:
+      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200",
+    icon: "🌍",
+  },
+]
 
   return (
 
@@ -458,11 +488,12 @@ export default function Dashboard() {
               text-gray-800
               mb-2
             ">
-              Mata Pelajaran
+              PAKET
+
             </h3>
 
             <p className="text-gray-500">
-              Pilih mata pelajaran untuk mulai belajar
+              Pilih Paket pembelajaran
             </p>
 
           </div>
@@ -476,146 +507,120 @@ export default function Dashboard() {
             gap-8
           ">
 
-            {mapelList.map((item) => (
+       {paketList.map((item) => (
 
-              <div
-                key={item}
-                className="
-                  group
-                  relative
-                  overflow-hidden
-                  rounded-[32px]
-                  shadow-xl
-                  hover:shadow-2xl
-                  transition-all duration-500
-                  hover:-translate-y-3
-                "
-              >
+  <div
+    key={item.id}
+    className="
+      group
+      relative
+      overflow-hidden
+      rounded-[32px]
+      shadow-xl
+      hover:shadow-2xl
+      transition-all duration-500
+      hover:-translate-y-3
+    "
+  >
 
-                {/* IMAGE */}
-                <div className="h-[320px]">
+    {/* IMAGE */}
+    <div className="h-[320px]">
 
-                  <img
-                    src={getImage(item)}
-                    alt={item}
-                    className="
-                      w-full h-full
-                      object-cover
-                      group-hover:scale-110
-                      transition duration-700
-                    "
-                  />
+      <img
+        src={item.image}
+        alt={item.nama}
+        className="
+          w-full h-full
+          object-cover
+          group-hover:scale-110
+          transition duration-700
+        "
+      />
 
-                </div>
+    </div>
 
-                {/* OVERLAY */}
-                <div className="
-                  absolute inset-0
-                  bg-gradient-to-t
-                  from-black/90
-                  via-black/30
-                  to-transparent
-                " />
+    {/* OVERLAY */}
+    <div className="
+      absolute inset-0
+      bg-gradient-to-t
+      from-black/90
+      via-black/30
+      to-transparent
+    " />
 
-                {/* CONTENT */}
-                <div className="
-                  absolute bottom-0
-                  p-6
-                  w-full
-                ">
+    {/* CONTENT */}
+    <div className="
+      absolute bottom-0
+      p-6
+      w-full
+    ">
 
-                  <div className="
-                    flex items-center
-                    gap-4 mb-4
-                  ">
+      <div className="
+        flex items-center
+        gap-4 mb-4
+      ">
 
-                    <div className="
-                      w-16 h-16
-                      rounded-2xl
-                      bg-white/20
-                      backdrop-blur-lg
-                      flex items-center
-                      justify-center
-                      text-4xl
-                      border border-white/20
-                    ">
-                      {getIcon(item)}
-                    </div>
+        <div className="
+          w-16 h-16
+          rounded-2xl
+          bg-white/20
+          backdrop-blur-lg
+          flex items-center
+          justify-center
+          text-4xl
+          border border-white/20
+        ">
+          {item.icon}
+        </div>
 
-                    <div>
+        <div>
 
-                      <h4 className="
-                        text-2xl
-                        font-extrabold
-                        text-white
-                      ">
-                        {item}
-                      </h4>
+          <h4 className="
+            text-2xl
+            font-extrabold
+            text-white
+          ">
+            {item.nama}
+          </h4>
 
-                      <p className="
-                        text-gray-200
-                        text-sm
-                      ">
-                        Belajar interaktif modern
-                      </p>
+          <p className="
+            text-gray-200
+            text-sm
+          ">
+            {item.desc}
+          </p>
 
-                    </div>
+        </div>
 
-                  </div>
+      </div>
 
-                  <div className="flex gap-3">
+      {/* BUTTON */}
+      <button
+        onClick={() =>
+          router.push(
+            `/ujian/package/${item.id}`
+          )
+        }
+        className="
+          bg-blue-500
+          hover:bg-blue-600
+          text-white
+          px-4 py-4
+          rounded-2xl
+          w-full
+          transition-all
+          font-bold
+          shadow-lg
+        "
+      >
+        Masuk Paket
+      </button>
 
-                    {/* LATIHAN */}
-                    <button
-                      onClick={() =>
-                        router.push(
-                          `/latihan/${encodeURIComponent(item)}`
-                        )
-                      }
-                      className="
-                        bg-green-500
-                        hover:bg-green-600
-                        text-white
-                        px-4 py-3
-                        rounded-2xl
-                        w-full
-                        transition-all
-                        font-bold
-                        shadow-lg
-                      "
-                    >
-                      Latihan
-                    </button>
+    </div>
 
-                    {/* UJIAN */}
-                    <button
-                      onClick={() =>
-                        router.push(
-                          `/ujian/${encodeURIComponent(item)}`
-                        )
-                      }
-                      className="
-                        bg-blue-500
-                        hover:bg-blue-600
-                        text-white
-                        px-4 py-3
-                        rounded-2xl
-                        w-full
-                        transition-all
-                        font-bold
-                        shadow-lg
-                      "
-                    >
-                      Ujian
-                    </button>
+  </div>
 
-                  </div>
-
-                </div>
-
-              </div>
-
-            ))}
+))}
 
           </div>
 

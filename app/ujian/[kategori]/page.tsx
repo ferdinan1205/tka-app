@@ -29,6 +29,32 @@ type Soal = {
   gambar?: string
 }
 
+const mathJaxConfig = {
+  loader: {
+    load: ["input/tex", "output/chtml"],
+  },
+
+  tex: {
+    inlineMath: [
+      ["$", "$"],
+      ["\\(", "\\)"],
+    ],
+
+    displayMath: [
+      ["$$", "$$"],
+      ["\\[", "\\]"],
+    ],
+
+    processEscapes: true,
+  },
+
+  chtml: {
+    scale: 1,
+    minScale: 0.5,
+    matchFontHeight: false,
+  },
+}
+
 export default function Ujian() {
 
   const router = useRouter()
@@ -69,14 +95,50 @@ export default function Ujian() {
     setStorageKey] =
     useState("")
 
+  const [tokenKey,
+    setTokenKey] =
+    useState("")
+
   const [navOpen,
     setNavOpen] =
     useState(false)
 
+  const [submitting,
+    setSubmitting] =
+    useState(false)
+
+  // ======================
+  // FORMAT SOAL BIAR RAPIH
+  // ======================
+  function formatSoal(text: string) {
+
+    if (!text) return ""
+
+    return text
+
+      // enter setelah titik nomor
+      .replace(/\(1\)/g, "<br/><br/>(1)")
+      .replace(/\(2\)/g, "<br/>(2)")
+      .replace(/\(3\)/g, "<br/>(3)")
+      .replace(/\(4\)/g, "<br/>(4)")
+      .replace(/\(5\)/g, "<br/>(5)")
+
+      // rapihin line
+      .replace(/\n/g, "<br/>")
+  }
+
+  // ======================
+  // INIT
+  // ======================
   useEffect(() => {
+
     init()
+
   }, [])
 
+  // ======================
+  // TIMER
+  // ======================
   useEffect(() => {
 
     if (
@@ -104,15 +166,12 @@ export default function Ujian() {
             JSON.stringify(updated)
           )
 
+          // AUTO SUBMIT
           if (newTime <= 0) {
 
             clearInterval(interval)
 
-            alert(
-              "Waktu habis!"
-            )
-
-            submitUjian()
+            handleAutoSubmit()
 
             return 0
           }
@@ -133,6 +192,9 @@ export default function Ujian() {
     currentSoal
   ])
 
+  // ======================
+  // INIT DATA
+  // ======================
   async function init() {
 
     const { data } =
@@ -151,8 +213,15 @@ export default function Ujian() {
     const key =
       `ujian_${kategori}_${userId}`
 
-    setStorageKey(key)
+    const tokenStorage =
+      `token_valid_${kategori}_${userId}`
 
+    setStorageKey(key)
+    setTokenKey(tokenStorage)
+
+    // ======================
+    // CEK JADWAL
+    // ======================
     const {
       data: jadwal
     } = await supabase
@@ -173,6 +242,9 @@ export default function Ujian() {
       return
     }
 
+    // ======================
+    // CEK TOKEN USED
+    // ======================
     const {
       data: used
     } = await supabase
@@ -193,8 +265,14 @@ export default function Ujian() {
       return
     }
 
+    // ======================
+    // LOAD SOAL
+    // ======================
     await getSoal()
 
+    // ======================
+    // LOAD SESSION
+    // ======================
     const saved =
       localStorage.getItem(key)
 
@@ -221,10 +299,47 @@ export default function Ujian() {
       )
     }
 
+    // ======================
+    // TOKEN SUDAH VALID
+    // ======================
+    const savedToken =
+      localStorage.getItem(
+        tokenStorage
+      )
+
+    if (savedToken === "true") {
+
+      setAllowed(true)
+    }
+
     setLoading(false)
   }
 
+  // ======================
+  // GET SOAL
+  // ======================
   async function getSoal() {
+
+    const { data: userData } =
+      await supabase.auth.getUser()
+
+    const userId =
+      userData.user?.id
+
+    const soalKey =
+      `soal_${kategori}_${userId}`
+
+    const savedSoal =
+      localStorage.getItem(soalKey)
+
+    if (savedSoal) {
+
+      setSoal(
+        JSON.parse(savedSoal)
+      )
+
+      return
+    }
 
     const {
       data,
@@ -233,9 +348,6 @@ export default function Ujian() {
       .from("soal")
       .select("*")
       .eq("kategori", kategori)
-      .order("id", {
-        ascending: true,
-      })
 
     if (error) {
 
@@ -244,11 +356,27 @@ export default function Ujian() {
       return
     }
 
+    const shuffled =
+      (data || []).sort(
+        () => Math.random() - 0.5
+      )
+
+    const selected =
+      shuffled.slice(0, 25)
+
+    localStorage.setItem(
+      soalKey,
+      JSON.stringify(selected)
+    )
+
     setSoal(
-      (data || []) as Soal[]
+      selected as Soal[]
     )
   }
 
+  // ======================
+  // PILIH JAWABAN
+  // ======================
   function pilihJawaban(
     id: number,
     jawaban: string
@@ -273,6 +401,9 @@ export default function Ujian() {
     )
   }
 
+  // ======================
+  // FORMAT TIMER
+  // ======================
   function formatWaktu() {
 
     const menit =
@@ -290,7 +421,28 @@ export default function Ujian() {
     }${detik}`
   }
 
+  // ======================
+  // AUTO SUBMIT
+  // ======================
+  async function handleAutoSubmit() {
+
+    if (submitting) return
+
+    alert(
+      "Waktu habis! Jawaban otomatis dikirim."
+    )
+
+    await submitUjian()
+  }
+
+  // ======================
+  // SUBMIT
+  // ======================
   async function submitUjian() {
+
+    if (submitting) return
+
+    setSubmitting(true)
 
     let total = 0
 
@@ -327,6 +479,7 @@ export default function Ujian() {
     const userId =
       data.user?.id
 
+    // SAVE HASIL
     await supabase
       .from("hasil")
       .insert([
@@ -339,6 +492,7 @@ export default function Ujian() {
         },
       ])
 
+    // SAVE TOKEN USED
     await supabase
       .from("token_used")
       .insert([
@@ -348,8 +502,20 @@ export default function Ujian() {
         },
       ])
 
+    // REMOVE STORAGE
     localStorage.removeItem(
       storageKey
+    )
+
+    localStorage.removeItem(
+      tokenKey
+    )
+
+    const soalKey =
+      `soal_${kategori}_${userId}`
+
+    localStorage.removeItem(
+      soalKey
     )
 
     alert(
@@ -359,6 +525,9 @@ export default function Ujian() {
     router.push("/review")
   }
 
+  // ======================
+  // LOADING
+  // ======================
   if (loading) {
 
     return (
@@ -375,20 +544,28 @@ export default function Ujian() {
     )
   }
 
+  // ======================
+  // TOKEN PAGE
+  // ======================
   if (!allowed) {
 
     return (
 
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-100 p-6">
 
-        <div className="bg-white w-full max-w-md p-8 rounded-[30px] shadow-2xl border border-gray-100">
+        <div className="bg-white w-full max-w-md p-8 rounded-[35px] shadow-2xl border border-gray-100">
+
+          <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-5 text-4xl">
+            🔐
+          </div>
 
           <h1 className="text-3xl font-black text-center text-blue-700 mb-3">
             Token Ujian
           </h1>
 
-          <p className="text-center text-gray-600 mb-8 text-sm">
-            Masukkan token ujian dari admin
+          <p className="text-center text-gray-600 mb-8 text-sm leading-6">
+            Masukkan token ujian untuk memulai
+            ujian {kategori}
           </p>
 
           <input
@@ -447,6 +624,11 @@ export default function Ujian() {
                 return
               }
 
+              localStorage.setItem(
+                tokenKey,
+                "true"
+              )
+
               setAllowed(true)
             }}
             className="
@@ -470,6 +652,9 @@ export default function Ujian() {
     )
   }
 
+  // ======================
+  // NO SOAL
+  // ======================
   if (!soal.length) {
 
     return (
@@ -489,9 +674,36 @@ export default function Ujian() {
     ((currentSoal + 1)
       / soal.length) * 100
 
+  const opsiList = [
+    {
+      key: "a",
+      value: soalAktif.opsi_a,
+    },
+    {
+      key: "b",
+      value: soalAktif.opsi_b,
+    },
+    {
+      key: "c",
+      value: soalAktif.opsi_c,
+    },
+    {
+      key: "d",
+      value: soalAktif.opsi_d,
+    },
+  ]
+
+  if (soalAktif.opsi_e) {
+
+    opsiList.push({
+      key: "e",
+      value: soalAktif.opsi_e,
+    })
+  }
+
   return (
 
-    <MathJaxContext>
+    <MathJaxContext config={mathJaxConfig}>
 
       <div className="min-h-screen bg-[#f3f6fb] pb-28">
 
@@ -574,21 +786,18 @@ export default function Ujian() {
         {/* MAIN */}
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 p-5 items-start">
 
-<div className={`
-  ${navOpen
-    ? "block"
-    : "hidden"}
-  lg:block
-  w-full
-  lg:w-80
-  lg:min-w-[320px]
-  lg:max-w-[320px]
-  lg:sticky
-  lg:top-5
-  self-start
-`}>
+          {/* NAVIGASI */}
+          <div className={`
+            ${navOpen
+              ? "block"
+              : "hidden"}
+            lg:block
+            w-full
+            lg:w-80
+            lg:min-w-[320px]
+          `}>
 
-            <div className="bg-white rounded-[30px] shadow-xl p-6 max-h-[85vh] overflow-y-auto">
+            <div className="bg-white rounded-[30px] shadow-xl p-6 sticky top-28">
 
               <h2 className="font-black text-xl text-gray-800 mb-5">
                 Navigasi
@@ -636,43 +845,98 @@ export default function Ujian() {
           </div>
 
           {/* SOAL */}
-          <div className="flex-1">
+          <div className="flex-1 w-full">
 
-            <div className="bg-white rounded-[30px] shadow-xl p-5 md:p-7">
+            <div className="bg-white rounded-[30px] shadow-xl p-5 md:p-8">
 
-              <div className="mb-5">
+        <div className="mb-4" />
 
-                <span className="bg-blue-100 text-blue-700 px-4 py-2 rounded-full font-black text-sm">
-                  Soal {currentSoal + 1}
-                </span>
+       {/* PENGANTAR */}
+{soalAktif.pengantar
+  ?.replace(/<[^>]*>/g, "")
+  ?.trim() && (
 
-              </div>
+  <div
+    className="
+      mb-6
+      bg-gradient-to-br
+      from-yellow-50
+      to-amber-50
+      border
+      border-yellow-200
+      p-5
+      rounded-[24px]
+      text-gray-700
+      leading-8
+      text-[15px]
+      shadow-sm
+    "
+  >
 
-              {/* PENGANTAR */}
-              {soalAktif.pengantar && (
+    <div className="flex items-center gap-2 mb-3">
 
-                <div className="mb-5 bg-yellow-50 border border-yellow-200 p-5 rounded-3xl text-gray-700 leading-7 text-[15px]">
+      <div className="w-2 h-2 rounded-full bg-yellow-500" />
 
-                  <MathJax dynamic>
-                    {soalAktif.pengantar}
-                  </MathJax>
+      <h3 className="font-bold text-yellow-800 text-sm uppercase tracking-wide">
+        Pengantar
+      </h3>
 
-                </div>
+    </div>
 
-              )}
+    <div
+      dangerouslySetInnerHTML={{
+        __html: formatSoal(
+          soalAktif.pengantar
+        ),
+      }}
+    />
 
-              {/* BACAAN */}
-              {soalAktif.bacaan && (
+  </div>
 
-                <div className="mb-6 bg-gray-50 border border-gray-200 p-5 rounded-3xl leading-7 overflow-auto text-gray-700 text-[15px]">
+)}
 
-                  <MathJax dynamic>
-                    {soalAktif.bacaan}
-                  </MathJax>
+ {/* BACAAN */}
+{soalAktif.bacaan
+  ?.replace(/<[^>]*>/g, "")
+  ?.trim() && (
 
-                </div>
+  <div
+    className="
+      mb-7
+      bg-slate-50
+      border
+      border-slate-200
+      p-5
+      rounded-[24px]
+      leading-8
+      overflow-auto
+      text-gray-700
+      text-[15px]
+      shadow-sm
+    "
+  >
 
-              )}
+    <div className="flex items-center gap-2 mb-3">
+
+      <div className="w-2 h-2 rounded-full bg-slate-500" />
+
+      <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">
+        Bacaan
+      </h3>
+
+    </div>
+
+    <div
+      dangerouslySetInnerHTML={{
+        __html: formatSoal(
+          soalAktif.bacaan
+        ),
+      }}
+    />
+
+  </div>
+
+)}
 
               {/* GAMBAR */}
               {soalAktif.gambar && (
@@ -683,6 +947,7 @@ export default function Ujian() {
                     src={
                       soalAktif.gambar
                     }
+                    alt="gambar soal"
                     className="rounded-3xl border max-h-[350px] object-contain shadow-md"
                   />
 
@@ -691,129 +956,148 @@ export default function Ujian() {
               )}
 
               {/* PERTANYAAN */}
-              <div className="text-[18px] md:text-[22px] font-bold leading-9 text-gray-800 mb-7">
+              <div className="
+                text-[18px]
+                md:text-[22px]
+                font-bold
+                leading-[2.3rem]
+                text-gray-800
+                mb-8
+                overflow-x-auto
+              ">
 
-                <MathJax dynamic>
-                  {soalAktif.pertanyaan}
+                <MathJax dynamic hideUntilTypeset="first">
+
+                  <div
+                    className="
+                      soal-math
+                      break-words
+                    "
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        formatSoal(
+                          soalAktif.pertanyaan
+                        ),
+                    }}
+                  />
+
                 </MathJax>
 
               </div>
 
               {/* OPSI */}
-<div className="space-y-4">
+              <div className="space-y-4">
 
-  {[
-    "a",
-    "b",
-    "c",
-    "d",
-  ].map((opsi) => {
+                {opsiList.map((opsi) => {
 
-    const value =
-      soalAktif[
-        `opsi_${opsi}` as keyof Soal
-      ] as string
+                  const selected =
+                    jawabanUser[
+                      soalAktif.id
+                    ] === opsi.key
 
-    const selected =
-      jawabanUser[
-        soalAktif.id
-      ] === opsi
+                  return (
 
-    return (
+                    <div
+                      key={opsi.key}
+                      onClick={() =>
+                        pilihJawaban(
+                          soalAktif.id,
+                          opsi.key
+                        )
+                      }
+                      className={`
+                        w-full
+                        rounded-2xl
+                        border
+                        cursor-pointer
+                        flex
+                        items-start
+                        gap-4
+                        px-4
+                        py-5
+                        transition-all
+                        duration-200
+                        ${
+                          selected
+                            ? `
+                              bg-blue-700
+                              border-blue-700
+                              text-white
+                              shadow-lg
+                            `
+                            : `
+                              bg-white
+                              border-gray-300
+                              hover:border-blue-400
+                              hover:bg-blue-50
+                              text-gray-800
+                            `
+                        }
+                      `}
+                    >
 
-      <div
-        key={opsi}
-        onClick={() =>
-          pilihJawaban(
-            soalAktif.id,
-            opsi
-          )
-        }
-        className={`
-          w-full
-          rounded-2xl
-          border
-          cursor-pointer
-          flex
-          items-center
-          gap-4
-          px-4
-          py-4
-          transition-all
-          duration-200
-          ${
-            selected
-              ? `
-                bg-blue-700
-                border-blue-700
-                text-white
-                shadow-lg
-              `
-              : `
-                bg-white
-                border-gray-300
-                hover:border-blue-400
-                hover:bg-blue-50
-                text-gray-800
-              `
-          }
-        `}
-      >
+                      {/* HURUF */}
+                      <div
+                        className={`
+                          w-12
+                          h-12
+                          min-w-[48px]
+                          rounded-xl
+                          flex
+                          items-center
+                          justify-center
+                          text-lg
+                          font-bold
+                          mt-1
+                          ${
+                            selected
+                              ? "bg-white text-blue-700"
+                              : "bg-gray-100 text-gray-700"
+                          }
+                        `}
+                      >
+                        {opsi.key.toUpperCase()}
+                      </div>
 
-        {/* HURUF */}
-        <div
-          className={`
-            w-12
-            h-12
-            min-w-[48px]
-            rounded-xl
-            flex
-            items-center
-            justify-center
-            text-lg
-            font-bold
-            self-center
-            ${
-              selected
-                ? "bg-white text-blue-700"
-                : "bg-gray-100 text-gray-700"
-            }
-          `}
-        >
-          {opsi.toUpperCase()}
-        </div>
+                      {/* ISI */}
+                      <div
+                        className={`
+                          flex-1
+                          text-[15px]
+                          md:text-[16px]
+                          leading-8
+                          font-medium
+                          overflow-x-auto
+                          ${
+                            selected
+                              ? "text-white"
+                              : "text-gray-800"
+                          }
+                        `}
+                      >
 
-        {/* ISI JAWABAN */}
-        <div
-          className={`
-            flex-1
-            flex
-            items-center
-            text-[15px]
-            md:text-[16px]
-            leading-7
-            font-medium
-            break-words
-            ${
-              selected
-                ? "text-white"
-                : "text-gray-800"
-            }
-          `}
-        >
+                        <MathJax dynamic hideUntilTypeset="first">
 
-          <MathJax dynamic>
-            {value}
-          </MathJax>
+                          <div
+                            className="break-words"
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                formatSoal(
+                                  opsi.value
+                                ),
+                            }}
+                          />
 
-        </div>
+                        </MathJax>
 
-      </div>
+                      </div>
 
-    )
-  })}
+                    </div>
 
-</div>
+                  )
+                })}
+
+              </div>
 
             </div>
 
@@ -842,7 +1126,6 @@ export default function Ujian() {
                 rounded-2xl
                 font-black
                 text-sm
-                transition-all
               "
             >
               ← Sebelumnya
@@ -850,6 +1133,7 @@ export default function Ujian() {
 
             <button
               onClick={submitUjian}
+              disabled={submitting}
               className="
                 flex-1
                 bg-blue-700
@@ -859,11 +1143,12 @@ export default function Ujian() {
                 rounded-2xl
                 font-black
                 text-sm
-                transition-all
                 shadow-lg
               "
             >
-              Submit
+              {submitting
+                ? "Loading..."
+                : "Submit"}
             </button>
 
             <button
@@ -885,7 +1170,6 @@ export default function Ujian() {
                 rounded-2xl
                 font-black
                 text-sm
-                transition-all
               "
             >
               Berikutnya →

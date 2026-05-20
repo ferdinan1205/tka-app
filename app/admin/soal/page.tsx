@@ -1,8 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
+
+import dynamic from "next/dynamic"
+
 import { useRouter } from "next/navigation"
+
 import { supabase } from "../../../lib/supabase"
+
 import * as XLSX from "xlsx"
 
 import {
@@ -16,33 +25,58 @@ import {
   Draggable,
 } from "@hello-pangea/dnd"
 
-import type { DropResult } from "@hello-pangea/dnd"
+import type {
+  DropResult,
+} from "@hello-pangea/dnd"
+
+import "react-quill-new/dist/quill.snow.css"
+
+const ReactQuill = dynamic(
+  () => import("react-quill-new"),
+  {
+    ssr: false,
+  }
+)
 
 type Soal = {
   id?: number
+
   pertanyaan: string
+
   opsi_a: string
   opsi_b: string
   opsi_c: string
   opsi_d: string
+  opsi_e: string
+
   jawaban_benar: string
+
   kategori: string
+  paket?: string
+
   pembahasan?: string
   video_url?: string
+
   gambar?: string
+
   pengantar?: string
   bacaan?: string
 }
 
 const mathJaxConfig = {
   loader: {
-    load: ["input/tex", "output/chtml"],
+    load: [
+      "input/tex",
+      "output/chtml",
+    ],
   },
+
   tex: {
     inlineMath: [
       ["$", "$"],
       ["\\(", "\\)"],
     ],
+
     displayMath: [
       ["$$", "$$"],
       ["\\[", "\\]"],
@@ -50,48 +84,161 @@ const mathJaxConfig = {
   },
 }
 
+const kategoriList = [
+  "Matematika",
+  "Bahasa Indonesia",
+  "Bahasa Inggris",
+
+  "Fisika",
+  "Kimia",
+  "Biologi",
+
+  "Ekonomi",
+  "Geografi",
+  "Sosiologi",
+  "Sejarah",
+  "Antropologi",
+
+  "Bahasa Arab",
+  "Bahasa Mandarin",
+  "Bahasa Jepang",
+  "Bahasa Korea",
+  "Bahasa Jerman",
+  "Bahasa Prancis",
+
+  "PPKN",
+  "PKK",
+
+  "TPS",
+  "Literasi",
+]
+
+const paketList = [
+  "sma",
+  "smk",
+  "ipa",
+  "ips",
+  "bahasa",
+]
+
 export default function AdminSoal() {
 
   const router = useRouter()
 
+  const quillModules =
+    useMemo(
+      () => ({
+        toolbar: [
+          [
+            {
+              header: [
+                1,
+                2,
+                3,
+                false,
+              ],
+            },
+          ],
+
+          [
+            "bold",
+            "italic",
+            "underline",
+            "strike",
+          ],
+
+          [
+            {
+              list: "ordered",
+            },
+            {
+              list: "bullet",
+            },
+          ],
+
+          ["blockquote"],
+
+          [
+            "link",
+            "image",
+          ],
+
+          ["clean"],
+        ],
+      }),
+      []
+    )
+
   const [soal, setSoal] =
     useState<Soal[]>([])
 
-  const [selectedKategori,
-    setSelectedKategori] =
-    useState("Matematika")
+  const [
+    filteredPaketSoal,
+    setFilteredPaketSoal,
+  ] =
+    useState<Soal[]>([])
 
-  const [showModal,
-    setShowModal] =
-    useState(false)
+  const [
+    selectedKategori,
+    setSelectedKategori,
+  ] =
+    useState("Semua")
 
-  const [search,
-    setSearch] =
+  const [
+    selectedPaket,
+    setSelectedPaket,
+  ] =
     useState("")
 
-  const [loading,
-    setLoading] =
+  const [
+    showModal,
+    setShowModal,
+  ] =
+    useState(false)
+
+  const [search, setSearch] =
+    useState("")
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(false)
+
+  const [
+    uploading,
+    setUploading,
+  ] =
     useState(false)
 
   const [form, setForm] =
     useState<Soal>({
       pertanyaan: "",
+
       opsi_a: "",
       opsi_b: "",
       opsi_c: "",
       opsi_d: "",
+      opsi_e: "",
+
       jawaban_benar: "a",
+
       kategori: "Matematika",
+
+      paket: "",
+
       pembahasan: "",
       video_url: "",
+
       gambar: "",
+
       pengantar: "",
       bacaan: "",
     })
 
   useEffect(() => {
     init()
-  }, [selectedKategori])
+  }, [])
 
   async function init() {
 
@@ -105,21 +252,31 @@ export default function AdminSoal() {
       return
     }
 
-    const { data: profile } =
+    const {
+      data: profile,
+    } =
       await supabase
         .from("profiles")
         .select("*")
-        .eq("id", data.user.id)
+        .eq(
+          "id",
+          data.user.id
+        )
         .single()
 
     if (
       !profile ||
-      profile.role !== "admin"
+      profile.role !==
+        "admin"
     ) {
 
-      alert("Akses ditolak!")
+      alert(
+        "Akses ditolak!"
+      )
 
-      router.push("/dashboard")
+      router.push(
+        "/dashboard"
+      )
 
       return
     }
@@ -131,11 +288,13 @@ export default function AdminSoal() {
 
     setLoading(true)
 
-    const { data, error } =
+    const {
+      data,
+      error,
+    } =
       await supabase
         .from("soal")
         .select("*")
-        .eq("kategori", selectedKategori)
         .order("id", {
           ascending: true,
         })
@@ -150,25 +309,92 @@ export default function AdminSoal() {
     }
 
     setSoal(
-      (data || []) as Soal[]
+      (data ||
+        []) as Soal[]
     )
 
     setLoading(false)
   }
 
-  function handleChange(
-    e: React.ChangeEvent<
-      HTMLInputElement |
-      HTMLTextAreaElement |
-      HTMLSelectElement
-    >
-  ) {
+  useEffect(() => {
 
-    setForm({
-      ...form,
-      [e.target.name]:
-        e.target.value,
-    })
+    if (!selectedPaket) {
+
+      setFilteredPaketSoal(
+        []
+      )
+
+      return
+    }
+
+    const hasil =
+      soal
+        .filter((s) => {
+
+          const paketMatch =
+            s.paket?.toLowerCase() ===
+            selectedPaket.toLowerCase()
+
+          const kategoriMatch =
+            selectedKategori ===
+            "Semua"
+              ? true
+              : s.kategori ===
+                selectedKategori
+
+          return (
+            paketMatch &&
+            kategoriMatch
+          )
+        })
+        .slice(0, 25)
+
+    setFilteredPaketSoal(
+      hasil
+    )
+
+  }, [
+    selectedPaket,
+    selectedKategori,
+    soal,
+  ])
+
+  function acakSoal() {
+
+    if (!selectedPaket)
+      return
+
+    const hasil =
+      soal
+        .filter((s) => {
+
+          const paketMatch =
+            s.paket?.toLowerCase() ===
+            selectedPaket.toLowerCase()
+
+          const kategoriMatch =
+            selectedKategori ===
+            "Semua"
+              ? true
+              : s.kategori ===
+                selectedKategori
+
+          return (
+            paketMatch &&
+            kategoriMatch
+          )
+        })
+
+        .sort(
+          () =>
+            Math.random() - 0.5
+        )
+
+        .slice(0, 25)
+
+    setFilteredPaketSoal(
+      hasil
+    )
   }
 
   function generatePembahasan() {
@@ -180,39 +406,70 @@ export default function AdminSoal() {
     file: File
   ) {
 
-    const fileName =
-      Date.now() + "_" + file.name
+    try {
 
-    const { error } =
-      await supabase
-        .storage
-        .from("soal")
-        .upload(fileName, file)
+      setUploading(true)
 
-    if (error) {
+      const fileName =
+        `${Date.now()}-${file.name}`
 
-      alert("Upload gagal")
+      const { error } =
+        await supabase
+          .storage
+          .from("soal")
+          .upload(
+            fileName,
+            file
+          )
 
-      return ""
+      if (error) {
+
+        alert(
+          "Upload gagal"
+        )
+
+        return
+      }
+
+      const { data } =
+        supabase
+          .storage
+          .from("soal")
+          .getPublicUrl(
+            fileName
+          )
+
+      setForm((prev) => ({
+        ...prev,
+        gambar:
+          data.publicUrl,
+      }))
+
+      alert(
+        "Upload berhasil"
+      )
+
+    } catch (err) {
+
+      console.log(err)
+
+    } finally {
+
+      setUploading(false)
     }
-
-    const { data } =
-      supabase
-        .storage
-        .from("soal")
-        .getPublicUrl(fileName)
-
-    return data.publicUrl
   }
 
   async function handleSubmit() {
 
     const payload = {
-
       ...form,
 
       kategori:
         form.kategori.trim(),
+
+      paket:
+        form.paket?.trim() ||
+        "",
 
       jawaban_benar:
         form.jawaban_benar
@@ -230,16 +487,23 @@ export default function AdminSoal() {
         await supabase
           .from("soal")
           .update(payload)
-          .eq("id", form.id)
+          .eq(
+            "id",
+            form.id
+          )
 
       } else {
 
         await supabase
           .from("soal")
-          .insert([payload])
+          .insert([
+            payload,
+          ])
       }
 
-      alert("Berhasil disimpan")
+      alert(
+        "Berhasil disimpan"
+      )
 
       setShowModal(false)
 
@@ -251,7 +515,9 @@ export default function AdminSoal() {
 
       console.log(err)
 
-      alert("Gagal menyimpan")
+      alert(
+        "Gagal menyimpan"
+      )
     }
   }
 
@@ -260,7 +526,13 @@ export default function AdminSoal() {
   ) {
 
     setForm({
-      ...item
+      ...item,
+
+      opsi_e:
+        item.opsi_e || "",
+
+      paket:
+        item.paket || "",
     })
 
     setShowModal(true)
@@ -271,7 +543,9 @@ export default function AdminSoal() {
   ) {
 
     const confirmDelete =
-      confirm("Hapus soal ini?")
+      confirm(
+        "Hapus soal?"
+      )
 
     if (!confirmDelete)
       return
@@ -288,15 +562,24 @@ export default function AdminSoal() {
 
     setForm({
       pertanyaan: "",
+
       opsi_a: "",
       opsi_b: "",
       opsi_c: "",
       opsi_d: "",
+      opsi_e: "",
+
       jawaban_benar: "a",
-      kategori: selectedKategori,
+
+      kategori: "Matematika",
+
+      paket: "",
+
       pembahasan: "",
       video_url: "",
+
       gambar: "",
+
       pengantar: "",
       bacaan: "",
     })
@@ -306,7 +589,9 @@ export default function AdminSoal() {
     result: DropResult
   ) {
 
-    if (!result.destination)
+    if (
+      !result.destination
+    )
       return
 
     const items =
@@ -319,7 +604,8 @@ export default function AdminSoal() {
       )
 
     items.splice(
-      result.destination.index,
+      result.destination
+        .index,
       0,
       moved
     )
@@ -347,7 +633,8 @@ export default function AdminSoal() {
 
       const data =
         new Uint8Array(
-          evt.target?.result as ArrayBuffer
+          evt.target
+            ?.result as ArrayBuffer
         )
 
       const workbook =
@@ -357,13 +644,17 @@ export default function AdminSoal() {
 
       const sheet =
         workbook.Sheets[
-          workbook.SheetNames[0]
+          workbook
+            .SheetNames[0]
         ]
 
       const json =
-        XLSX.utils.sheet_to_json(sheet, {
-          defval: "",
-        })
+        XLSX.utils.sheet_to_json(
+          sheet,
+          {
+            defval: "",
+          }
+        )
 
       for (
         const row of json as any[]
@@ -373,113 +664,161 @@ export default function AdminSoal() {
 
           pengantar:
             String(
-              row.pengantar || ""
+              row.pengantar ||
+                ""
             ),
 
           bacaan:
             String(
-              row.bacaan || ""
+              row.bacaan ||
+                ""
             ),
 
           pertanyaan:
             String(
-              row.pertanyaan || ""
+              row.pertanyaan ||
+                ""
             ),
 
           opsi_a:
             String(
-              row.opsi_a || ""
+              row.opsi_a ||
+                ""
             ),
 
           opsi_b:
             String(
-              row.opsi_b || ""
+              row.opsi_b ||
+                ""
             ),
 
           opsi_c:
             String(
-              row.opsi_c || ""
+              row.opsi_c ||
+                ""
             ),
 
           opsi_d:
             String(
-              row.opsi_d || ""
+              row.opsi_d ||
+                ""
+            ),
+
+          opsi_e:
+            String(
+              row.opsi_e ||
+                ""
             ),
 
           jawaban_benar:
             String(
-              row.jawaban_benar || ""
+              row.jawaban_benar ||
+                ""
             )
-            .toLowerCase()
-            .trim(),
+              .toLowerCase()
+              .trim(),
 
           kategori:
             String(
               row.kategori ||
-              selectedKategori
+                ""
+            ).trim(),
+
+          paket:
+            String(
+              row.paket ||
+                ""
             ).trim(),
 
           pembahasan:
             String(
-              row.pembahasan || ""
+              row.pembahasan ||
+                ""
             ),
 
           video_url:
             String(
-              row.video_url || ""
+              row.video_url ||
+                ""
+            ),
+
+          gambar:
+            String(
+              row.gambar ||
+                ""
             ),
         }
 
         await supabase
           .from("soal")
-          .insert([payload])
+          .insert([
+            payload,
+          ])
       }
 
-      alert("Upload berhasil 🚀")
+      alert(
+        "Upload berhasil 🚀"
+      )
 
       getSoal()
     }
 
-    reader.readAsArrayBuffer(file)
+    reader.readAsArrayBuffer(
+      file
+    )
   }
 
+  const displayedSoal =
+    selectedPaket
+      ? filteredPaketSoal
+      : soal
+
   const filteredSoal =
-    soal.filter((s) =>
-      s.pertanyaan
-        ?.toLowerCase()
-        .includes(
-          search.toLowerCase()
-        )
-    )
+    displayedSoal
+
+      .filter((s) => {
+
+        const kategoriMatch =
+          selectedKategori ===
+          "Semua"
+            ? true
+            : s.kategori ===
+              selectedKategori
+
+        return kategoriMatch
+      })
+
+      .filter((s) =>
+        s.pertanyaan
+          ?.toLowerCase()
+          .includes(
+            search.toLowerCase()
+          )
+      )
 
   return (
 
-    <MathJaxContext config={mathJaxConfig}>
+    <MathJaxContext
+      config={mathJaxConfig}
+    >
 
       <div className="bg-gray-100 min-h-screen text-black">
 
-        {/* HEADER */}
         <div className="bg-blue-800 text-white p-6 flex justify-between items-center">
 
-          <div>
-
-            <h1 className="text-3xl font-bold text-white">
-              Admin Soal
-            </h1>
-
-            <p className="text-sm text-white opacity-90">
-              Kelola bank soal ujian
-            </p>
-
-          </div>
+          <h1 className="text-3xl font-bold">
+            Admin Soal
+          </h1>
 
           <div className="flex gap-3">
 
             <button
               onClick={() =>
-                router.push("/admin")
+                router.push(
+                  "/admin"
+                )
               }
-              className="border border-white px-4 py-2 rounded-lg hover:bg-white hover:text-blue-800 text-white"
+              className="border border-white px-4 py-2 rounded-lg"
             >
               ← Admin
             </button>
@@ -489,9 +828,11 @@ export default function AdminSoal() {
 
                 resetForm()
 
-                setShowModal(true)
+                setShowModal(
+                  true
+                )
               }}
-              className="border border-white px-4 py-2 rounded-lg hover:bg-white hover:text-blue-800 text-white"
+              className="bg-white text-blue-700 px-4 py-2 rounded-lg font-semibold"
             >
               + Tambah Soal
             </button>
@@ -502,45 +843,119 @@ export default function AdminSoal() {
 
         <div className="p-6">
 
-          {/* FILTER */}
           <div className="flex gap-3 mb-6 flex-wrap">
 
-            {[
-              "Matematika",
-              "Bahasa Indonesia",
-              "Bahasa Inggris",
-              "TPS",
-              "Literasi",
-            ].map((k) => (
+            <button
+              onClick={() =>
+                setSelectedKategori(
+                  "Semua"
+                )
+              }
+              className={`px-4 py-2 rounded-xl border ${
+                selectedKategori ===
+                "Semua"
+                  ? "bg-blue-700 text-white"
+                  : "bg-white"
+              }`}
+            >
+              Semua
+            </button>
 
-              <button
-                key={k}
-                onClick={() =>
-                  setSelectedKategori(k)
-                }
-                className={`px-4 py-2 rounded-xl border transition font-medium ${
-                  selectedKategori === k
-                    ? "bg-white text-black shadow"
-                    : "bg-gray-200 text-black hover:bg-gray-300"
-                }`}
-              >
-                {k}
-              </button>
+            {kategoriList.map(
+              (k) => (
 
-            ))}
+                <button
+                  key={k}
+                  onClick={() =>
+                    setSelectedKategori(
+                      k
+                    )
+                  }
+                  className={`px-4 py-2 rounded-xl border ${
+                    selectedKategori ===
+                    k
+                      ? "bg-blue-700 text-white"
+                      : "bg-white"
+                  }`}
+                >
+                  {k}
+                </button>
+
+              )
+            )}
 
           </div>
 
-          {/* SEARCH */}
+          <div className="flex gap-3 mb-6 flex-wrap">
+
+            <button
+              onClick={() =>
+                setSelectedPaket(
+                  ""
+                )
+              }
+              className={`px-4 py-2 rounded-xl border ${
+                selectedPaket ===
+                ""
+                  ? "bg-blue-700 text-white"
+                  : "bg-white"
+              }`}
+            >
+              Semua Soal
+            </button>
+
+            {paketList.map(
+              (p) => (
+
+                <button
+                  key={p}
+                  onClick={() =>
+                    setSelectedPaket(
+                      p
+                    )
+                  }
+                  className={`px-4 py-2 rounded-xl border ${
+                    selectedPaket ===
+                    p
+                      ? "bg-green-600 text-white"
+                      : "bg-white"
+                  }`}
+                >
+                  {p.toUpperCase()}
+                </button>
+
+              )
+            )}
+
+            {selectedPaket && (
+
+              <button
+                onClick={
+                  acakSoal
+                }
+                className="px-4 py-2 rounded-xl bg-orange-500 text-white"
+              >
+                🎲 Acak 25
+                Soal
+              </button>
+
+            )}
+
+          </div>
+
           <div className="flex gap-4 mb-6 flex-wrap">
 
             <input
               placeholder="Cari soal..."
               value={search}
-              onChange={(e) =>
-                setSearch(e.target.value)
+              onChange={(
+                e
+              ) =>
+                setSearch(
+                  e.target.value
+                )
               }
-              className="flex-1 border border-gray-300 p-3 rounded-xl bg-white text-black placeholder-gray-500"
+              className="flex-1 border p-3 rounded-xl"
             />
 
             <input
@@ -549,27 +964,30 @@ export default function AdminSoal() {
               onChange={
                 handleExcelUpload
               }
-              className="border border-gray-300 px-4 py-2 rounded-xl bg-white text-black"
+              className="border p-3 rounded-xl"
             />
 
           </div>
 
-          {/* LIST */}
           {loading ? (
 
-            <div className="bg-white p-10 rounded-2xl text-center text-black">
+            <div className="bg-white p-10 rounded-2xl text-center">
               Loading...
             </div>
 
           ) : (
 
             <DragDropContext
-              onDragEnd={onDragEnd}
+              onDragEnd={
+                onDragEnd
+              }
             >
 
               <Droppable droppableId="soal-list">
 
-                {(provided) => (
+                {(
+                  provided
+                ) => (
 
                   <div
                     ref={
@@ -585,89 +1003,214 @@ export default function AdminSoal() {
                       ) => (
 
                         <Draggable
-                          key={String(item.id)}
-                          draggableId={String(item.id)}
-                          index={index}
+                          key={String(
+                            item.id
+                          )}
+                          draggableId={String(
+                            item.id
+                          )}
+                          index={
+                            index
+                          }
                         >
 
-                          {(provided) => (
+                          {(
+                            provided
+                          ) => (
 
                             <div
                               ref={
                                 provided.innerRef
                               }
-
                               {...provided.draggableProps}
-
-                              className="bg-white p-5 mb-4 rounded-2xl flex justify-between items-center shadow-sm border"
+                              style={{
+                                ...provided
+                                  .draggableProps
+                                  .style,
+                              }}
+                              className="bg-white p-5 mb-4 rounded-2xl shadow border"
                             >
 
-                              {/* LEFT */}
-                              <div className="flex items-center gap-4 flex-1">
+                              <div className="flex justify-between gap-4">
 
-                                <div
-                                  {...provided.dragHandleProps}
-                                  className="cursor-grab active:cursor-grabbing text-2xl px-2 text-black"
-                                >
-                                  ☰
-                                </div>
+                                <div className="flex gap-4 flex-1">
 
-                                <div className="bg-blue-100 text-blue-700 w-10 h-10 flex items-center justify-center rounded-lg font-bold">
-                                  {index + 1}
-                                </div>
+                                  <div
+                                    {...provided.dragHandleProps}
+                                    className="cursor-grab text-2xl"
+                                  >
+                                    ☰
+                                  </div>
 
-                                <div className="flex-1">
-
-                                  <div className="font-semibold leading-7 text-lg text-black">
+                                  <div className="flex-1 [&_img]:max-w-full [&_img]:h-auto">
 
                                     <MathJax dynamic>
-                                      {item.pertanyaan || ""}
+
+                                      <div
+                                        className="prose max-w-none"
+                                        dangerouslySetInnerHTML={{
+                                          __html:
+                                            item.pertanyaan,
+                                        }}
+                                      />
+
                                     </MathJax>
 
-                                  </div>
+                                   <div className="mt-4 space-y-4">
 
-                                  <div className="flex gap-2 mt-2 flex-wrap">
+  {/* OPSI A */}
+  <MathJax dynamic>
+    <div className="flex gap-2 items-start">
+      <div className="font-bold">
+        A.
+      </div>
 
-                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs">
-                                      {item.kategori}
-                                    </span>
+      <div
+        className="flex-1 [&_img]:max-w-[250px] [&_img]:rounded-xl [&_img]:border [&_img]:mt-2"
+        dangerouslySetInnerHTML={{
+          __html: item.opsi_a || "",
+        }}
+      />
+    </div>
+  </MathJax>
 
-                                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs">
-                                      Pilihan Ganda
-                                    </span>
+  {/* OPSI B */}
+  <MathJax dynamic>
+    <div className="flex gap-2 items-start">
+      <div className="font-bold">
+        B.
+      </div>
+
+      <div
+        className="flex-1 [&_img]:max-w-[250px] [&_img]:rounded-xl [&_img]:border [&_img]:mt-2"
+        dangerouslySetInnerHTML={{
+          __html: item.opsi_b || "",
+        }}
+      />
+    </div>
+  </MathJax>
+
+  {/* OPSI C */}
+  <MathJax dynamic>
+    <div className="flex gap-2 items-start">
+      <div className="font-bold">
+        C.
+      </div>
+
+      <div
+        className="flex-1 [&_img]:max-w-[250px] [&_img]:rounded-xl [&_img]:border [&_img]:mt-2"
+        dangerouslySetInnerHTML={{
+          __html: item.opsi_c || "",
+        }}
+      />
+    </div>
+  </MathJax>
+
+  {/* OPSI D */}
+  <MathJax dynamic>
+    <div className="flex gap-2 items-start">
+      <div className="font-bold">
+        D.
+      </div>
+
+      <div
+        className="flex-1 [&_img]:max-w-[250px] [&_img]:rounded-xl [&_img]:border [&_img]:mt-2"
+        dangerouslySetInnerHTML={{
+          __html: item.opsi_d || "",
+        }}
+      />
+    </div>
+  </MathJax>
+
+  {/* OPSI E */}
+  {item.opsi_e && (
+    <MathJax dynamic>
+      <div className="flex gap-2 items-start">
+        <div className="font-bold">
+          E.
+        </div>
+
+        <div
+          className="flex-1 [&_img]:max-w-[250px] [&_img]:rounded-xl [&_img]:border [&_img]:mt-2"
+          dangerouslySetInnerHTML={{
+            __html: item.opsi_e || "",
+          }}
+        />
+      </div>
+    </MathJax>
+  )}
+
+</div>
+
+                                    {item.gambar && (
+
+                                      <img
+                                        src={
+                                          item.gambar
+                                        }
+                                        alt="gambar"
+                                        className="mt-4 rounded-xl w-48 border"
+                                      />
+
+                                    )}
+
+                                    <div className="flex gap-2 mt-3 flex-wrap">
+
+                                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs">
+                                        {
+                                          item.kategori
+                                        }
+                                      </span>
+
+                                      {item.paket && (
+
+                                        <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs">
+                                          {
+                                            item.paket
+                                          }
+                                        </span>
+
+                                      )}
+
+                                      <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs">
+                                        Jawaban:
+                                        {" "}
+                                        {
+                                          item.jawaban_benar.toUpperCase()
+                                        }
+                                      </span>
+
+                                    </div>
 
                                   </div>
 
                                 </div>
 
-                              </div>
+                                <div className="flex gap-2">
 
-                              {/* BUTTON */}
-                              <div className="flex gap-2 ml-4">
+                                  <button
+                                    onClick={() =>
+                                      handleEdit(
+                                        item
+                                      )
+                                    }
+                                    className="bg-yellow-400 text-white px-4 py-2 rounded-xl"
+                                  >
+                                    Edit
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleEdit(item)
-                                  }}
-                                  className="bg-yellow-400 hover:bg-yellow-500 text-white px-4 py-2 rounded-xl font-semibold"
-                                >
-                                  Edit
-                                </button>
+                                  <button
+                                    onClick={() =>
+                                      handleDelete(
+                                        item.id!
+                                      )
+                                    }
+                                    className="bg-red-500 text-white px-4 py-2 rounded-xl"
+                                  >
+                                    Hapus
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleDelete(
-                                      item.id!
-                                    )
-                                  }}
-                                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-semibold"
-                                >
-                                  Hapus
-                                </button>
+                                </div>
 
                               </div>
 
@@ -680,7 +1223,9 @@ export default function AdminSoal() {
                       )
                     )}
 
-                    {provided.placeholder}
+                    {
+                      provided.placeholder
+                    }
 
                   </div>
 
@@ -694,159 +1239,515 @@ export default function AdminSoal() {
 
         </div>
 
-        {/* MODAL */}
         {showModal && (
 
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6 overflow-y-auto">
+          <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-6 overflow-y-auto">
 
-            <div className="bg-white w-full max-w-4xl rounded-3xl p-8 text-black">
+            <div className="bg-white w-full max-w-5xl rounded-3xl p-8">
 
-              <h2 className="text-2xl font-bold mb-6 text-black">
+              <h2 className="text-2xl font-bold mb-6">
+
                 {form.id
                   ? "Edit Soal"
                   : "Tambah Soal"}
+
               </h2>
 
-              <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
+              <div className="space-y-6 max-h-[75vh] overflow-y-auto pr-2">
 
-                <textarea
-                  name="pengantar"
-                  value={form.pengantar}
-                  onChange={handleChange}
-                  placeholder="Pengantar"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                  rows={3}
-                />
+                <div>
 
-                <textarea
-                  name="bacaan"
-                  value={form.bacaan}
-                  onChange={handleChange}
-                  placeholder="Bacaan"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                  rows={5}
-                />
+                  <label className="font-semibold block mb-2">
+                    Upload
+                    Gambar
+                  </label>
 
-                <textarea
-                  name="pertanyaan"
-                  value={form.pertanyaan}
-                  onChange={handleChange}
-                  placeholder="Pertanyaan"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                  rows={4}
-                />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (
+                      e
+                    ) => {
 
-                <input
-                  name="opsi_a"
-                  value={form.opsi_a}
-                  onChange={handleChange}
-                  placeholder="Opsi A"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                />
+                      const file =
+                        e.target
+                          .files?.[0]
 
-                <input
-                  name="opsi_b"
-                  value={form.opsi_b}
-                  onChange={handleChange}
-                  placeholder="Opsi B"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                />
-
-                <input
-                  name="opsi_c"
-                  value={form.opsi_c}
-                  onChange={handleChange}
-                  placeholder="Opsi C"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                />
-
-                <input
-                  name="opsi_d"
-                  value={form.opsi_d}
-                  onChange={handleChange}
-                  placeholder="Opsi D"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                />
-
-                <select
-                  name="jawaban_benar"
-                  value={form.jawaban_benar}
-                  onChange={handleChange}
-                  className="w-full border p-4 rounded-xl bg-white text-black"
-                >
-                  <option value="a">A</option>
-                  <option value="b">B</option>
-                  <option value="c">C</option>
-                  <option value="d">D</option>
-                </select>
-
-                <textarea
-                  name="pembahasan"
-                  value={form.pembahasan}
-                  onChange={handleChange}
-                  placeholder="Pembahasan"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                  rows={5}
-                />
-
-                <input
-                  name="video_url"
-                  value={form.video_url}
-                  onChange={handleChange}
-                  placeholder="Video URL"
-                  className="w-full border p-4 rounded-xl bg-white text-black placeholder-gray-500"
-                />
-
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="w-full border p-4 rounded-xl bg-white text-black"
-                  onChange={async (e) => {
-
-                    const file =
-                      e.target.files?.[0]
-
-                    if (!file)
-                      return
-
-                    const url =
-                      await uploadGambar(file)
-
-                    if (url) {
-
-                      setForm({
-                        ...form,
-                        gambar: url,
-                      })
-                    }
-                  }}
-                />
-
-                {form.gambar && (
-
-                  <img
-                    src={form.gambar}
-                    alt="preview"
-                    className="max-h-64 rounded-xl border"
+                      if (
+                        file
+                      ) {
+                        await uploadGambar(
+                          file
+                        )
+                      }
+                    }}
+                    className="w-full border p-3 rounded-xl"
                   />
 
-                )}
+                  {uploading && (
+
+                    <p className="mt-2 text-blue-600">
+                      Uploading...
+                    </p>
+
+                  )}
+
+                  {form.gambar && (
+
+                    <img
+                      src={
+                        form.gambar
+                      }
+                      alt="preview"
+                      className="w-48 mt-4 rounded-xl border"
+                    />
+
+                  )}
+
+                </div>
+
+                <select
+                  value={
+                    form.kategori
+                  }
+                  onChange={(
+                    e
+                  ) =>
+                    setForm(
+                      (
+                        prev
+                      ) => ({
+                        ...prev,
+                        kategori:
+                          e
+                            .target
+                            .value,
+                      })
+                    )
+                  }
+                  className="w-full border p-4 rounded-xl"
+                >
+
+                  {kategoriList.map(
+                    (
+                      k
+                    ) => (
+
+                      <option
+                        key={
+                          k
+                        }
+                        value={
+                          k
+                        }
+                      >
+                        {k}
+                      </option>
+
+                    )
+                  )}
+
+                </select>
+
+                <select
+                  value={
+                    form.paket
+                  }
+                  onChange={(
+                    e
+                  ) =>
+                    setForm(
+                      (
+                        prev
+                      ) => ({
+                        ...prev,
+                        paket:
+                          e
+                            .target
+                            .value,
+                      })
+                    )
+                  }
+                  className="w-full border p-4 rounded-xl"
+                >
+
+                  <option value="">
+                    Pilih
+                    Paket
+                  </option>
+
+                  {paketList.map(
+                    (
+                      p
+                    ) => (
+
+                      <option
+                        key={
+                          p
+                        }
+                        value={
+                          p
+                        }
+                      >
+                        {p.toUpperCase()}
+                      </option>
+
+                    )
+                  )}
+
+                </select>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Pengantar
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.pengantar ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          pengantar:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Bacaan
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.bacaan ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          bacaan:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Pertanyaan
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.pertanyaan ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          pertanyaan:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Opsi A
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.opsi_a ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          opsi_a:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Opsi B
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.opsi_b ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          opsi_b:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Opsi C
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.opsi_c ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          opsi_c:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Opsi D
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.opsi_d ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          opsi_d:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Opsi E
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.opsi_e ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          opsi_e:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
+
+                <select
+                  value={
+                    form.jawaban_benar
+                  }
+                  onChange={(
+                    e
+                  ) =>
+                    setForm(
+                      (
+                        prev
+                      ) => ({
+                        ...prev,
+                        jawaban_benar:
+                          e
+                            .target
+                            .value,
+                      })
+                    )
+                  }
+                  className="w-full border p-4 rounded-xl"
+                >
+
+                  <option value="a">
+                    A
+                  </option>
+
+                  <option value="b">
+                    B
+                  </option>
+
+                  <option value="c">
+                    C
+                  </option>
+
+                  <option value="d">
+                    D
+                  </option>
+
+                  <option value="e">
+                    E
+                  </option>
+
+                </select>
+
+                <div>
+
+                  <label className="font-semibold block mb-2">
+                    Pembahasan
+                  </label>
+
+                  <ReactQuill
+                    theme="snow"
+                    modules={
+                      quillModules
+                    }
+                    value={
+                      form.pembahasan ||
+                      ""
+                    }
+                    onChange={(
+                      value
+                    ) =>
+                      setForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          pembahasan:
+                            value,
+                        })
+                      )
+                    }
+                  />
+
+                </div>
 
               </div>
 
-              <div className="flex justify-end gap-3 mt-6">
+              <div className="flex justify-end gap-3 mt-8">
 
                 <button
                   onClick={() =>
-                    setShowModal(false)
+                    setShowModal(
+                      false
+                    )
                   }
-                  className="border px-6 py-3 rounded-xl text-black"
+                  className="border px-6 py-3 rounded-xl"
                 >
                   Batal
                 </button>
 
                 <button
-                  onClick={handleSubmit}
+                  onClick={
+                    handleSubmit
+                  }
                   className="bg-blue-700 text-white px-6 py-3 rounded-xl"
                 >
                   Simpan
