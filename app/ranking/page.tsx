@@ -5,13 +5,15 @@ import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
 
 type Ranking = {
+  id: number
   user_id: string
+  total_skor: number
+  jumlah_ujian: number
+  selesai: boolean
   nama: string
   email: string
-  skor: number
-  kategori: string
-  tanggal: string
   foto?: string
+  paket?: string
 }
 
 type Profile = {
@@ -19,49 +21,29 @@ type Profile = {
   nama: string
   email: string
   foto?: string
-}
-
-type Hasil = {
-  id: number
-  skor: number
-  tanggal: string
-  user_id: string
-  kategori: string
+  paket?: string
 }
 
 export default function RankingPage() {
 
   const router = useRouter()
 
-  const [ranking,
-    setRanking] =
+  const [ranking, setRanking] =
     useState<Ranking[]>([])
 
-  const [kategori,
-    setKategori] =
-    useState("Matematika")
-
-  const [loading,
-    setLoading] =
+  const [loading, setLoading] =
     useState(true)
 
-  const [userId,
-    setUserId] =
+  const [userId, setUserId] =
     useState("")
-
-  const listKategori = [
-    "Matematika",
-    "Bahasa Indonesia",
-    "Bahasa Inggris",
-    "TPS",
-    "Literasi",
-  ]
 
   useEffect(() => {
     init()
-  }, [kategori])
+  }, [])
 
   async function init() {
+
+    setLoading(true)
 
     const { data } =
       await supabase.auth.getUser()
@@ -81,96 +63,85 @@ export default function RankingPage() {
 
   async function getRanking() {
 
-    /* AMBIL HASIL */
+    // =========================
+    // AMBIL RANKING TKA
+    // =========================
     const {
-      data: hasilData
+      data: rankingData,
+      error: rankingError
     } = await supabase
-      .from("hasil")
+      .from("ranking_tka")
       .select("*")
-      .eq("kategori", kategori)
-      .order("skor", {
+      .eq("selesai", true)
+      .order("total_skor", {
         ascending: false
       })
 
-    /* AMBIL PROFILE */
+    if (rankingError) {
+
+      console.log(rankingError)
+      return
+    }
+
+    // =========================
+    // AMBIL PROFILE
+    // =========================
     const {
-      data: profileData
+      data: profileData,
+      error: profileError
     } = await supabase
       .from("profiles")
       .select("*")
 
-    const hasil =
-      (hasilData as Hasil[]) || []
+    if (profileError) {
+
+      console.log(profileError)
+      return
+    }
 
     const profiles =
       (profileData as Profile[]) || []
 
-    /* DEBUG */
-    console.log("PROFILE:", profiles)
+    const finalRanking =
+      (rankingData || []).map((item: any) => {
 
-    /* AMBIL SKOR TERBAIK */
-    const bestScoreMap:
-      { [key: string]: Hasil } = {}
+        const profile =
+          profiles.find(
+            (p) =>
+              p.id === item.user_id
+          )
 
-    hasil.forEach((item) => {
+        return {
 
-      if (
-        !bestScoreMap[item.user_id] ||
-        item.skor >
-        bestScoreMap[item.user_id].skor
-      ) {
+          id: item.id,
 
-        bestScoreMap[item.user_id] = item
-      }
-    })
+          user_id: item.user_id,
 
-    /* GABUNGKAN PROFILE + HASIL */
-    const finalRanking:
-      Ranking[] =
-      Object.values(bestScoreMap)
+          total_skor:
+            item.total_skor || 0,
 
-        .map((item) => {
+          jumlah_ujian:
+            item.jumlah_ujian || 0,
 
-          const profile =
-            profiles.find(
-              (p) =>
-                p.id === item.user_id
-            )
+          selesai:
+            item.selesai,
 
-          return {
+          nama:
+            profile?.nama ||
+            "Tanpa Nama",
 
-            user_id:
-              item.user_id,
+          email:
+            profile?.email || "-",
 
-            skor:
-              item.skor,
+          foto:
+            profile?.foto || "",
 
-            kategori:
-              item.kategori,
+          paket:
+            profile?.paket || "-"
+        }
+      })
 
-            tanggal:
-              item.tanggal,
-
-            nama:
-              profile?.nama ||
-              "Tanpa Nama",
-
-            email:
-              profile?.email || "-",
-
-            foto:
-              profile?.foto || ""
-          }
-        })
-
-        .sort(
-          (a, b) =>
-            b.skor - a.skor
-        )
-
-    setRanking(
-      finalRanking.slice(0, 10)
-    )
+    setRanking(finalRanking)
   }
 
   if (loading) {
@@ -182,45 +153,68 @@ export default function RankingPage() {
         flex
         items-center
         justify-center
-        bg-[#f4f7fb]
+        bg-[#f3f7ff]
       ">
 
         <div className="
-          text-2xl
-          font-bold
-          text-blue-700
+          flex
+          flex-col
+          items-center
+          gap-4
         ">
-          Loading...
+
+          <div className="
+            w-14
+            h-14
+            rounded-full
+            border-[5px]
+            border-blue-600
+            border-t-transparent
+            animate-spin
+          " />
+
+          <p className="
+            text-blue-700
+            font-bold
+          ">
+            Loading Ranking...
+          </p>
+
         </div>
 
       </div>
     )
   }
 
-  const juara1 = ranking[0]
-  const juara2 = ranking[1]
-  const juara3 = ranking[2]
+  const top1 = ranking[0]
+  const top2 = ranking[1]
+  const top3 = ranking[2]
 
   return (
 
     <div className="
       min-h-screen
-      bg-[#f4f7fb]
+      bg-gradient-to-b
+      from-[#eef4ff]
+      to-[#f8fbff]
+      pb-28
     ">
 
       {/* HEADER */}
       <div className="
-        bg-white
+        sticky
+        top-0
+        z-50
+        backdrop-blur-xl
+        bg-white/80
         border-b
-        border-gray-200
-        sticky top-0
-        z-30
       ">
 
         <div className="
-          max-w-7xl
+          max-w-6xl
           mx-auto
-          px-5 py-5
+          px-4
+          py-4
           flex
           items-center
           justify-between
@@ -229,21 +223,21 @@ export default function RankingPage() {
           <div>
 
             <p className="
+              text-xs
+              font-black
+              tracking-[4px]
               text-blue-600
-              text-sm
-              font-semibold
-              tracking-wide
             ">
               LAMPUNG CERDAS
             </p>
 
             <h1 className="
               text-3xl
+              md:text-4xl
               font-black
-              text-gray-800
-              mt-1
+              text-slate-800
             ">
-              Ranking Akademik
+              Ranking TKA
             </h1>
 
           </div>
@@ -253,337 +247,228 @@ export default function RankingPage() {
               router.push("/dashboard")
             }
             className="
-              bg-blue-600
-              hover:bg-blue-700
-              text-white
-              px-5 py-3
+              h-11
+              px-5
               rounded-2xl
-              font-semibold
-              transition-all
+              bg-blue-600
+              text-white
+              text-sm
+              font-bold
             "
           >
-            ← Dashboard
+            Dashboard
           </button>
 
         </div>
 
       </div>
 
-      {/* CONTENT */}
       <div className="
-        max-w-7xl
+        max-w-6xl
         mx-auto
-        p-5
+        px-4
+        pt-6
       ">
 
-        {/* FILTER */}
+        {/* PODIUM */}
         <div className="
-          flex flex-wrap
-          gap-3
-          mb-6
+          grid
+          grid-cols-3
+          gap-4
+          items-end
+          mb-8
         ">
 
-          {listKategori.map((item) => (
+          {top2 && (
+            <PodiumCard
+              data={top2}
+              rank={2}
+            />
+          )}
 
-            <button
-              key={item}
-              onClick={() =>
-                setKategori(item)
-              }
-              className={`
-                px-5 py-3
-                rounded-2xl
-                text-sm
-                font-semibold
-                transition-all
+          {top1 && (
+            <PodiumCard
+              data={top1}
+              rank={1}
+              big
+            />
+          )}
 
-                ${kategori === item
+          {top3 && (
+            <PodiumCard
+              data={top3}
+              rank={3}
+            />
+          )}
 
-                  ? `
+        </div>
+
+        {/* LIST */}
+        <div className="space-y-4">
+
+          {ranking.map((item, index) => {
+
+            const isMe =
+              item.user_id === userId
+
+            return (
+
+              <div
+                key={item.id}
+                className={`
+                  bg-white
+                  rounded-3xl
+                  p-4
+                  flex
+                  items-center
+                  justify-between
+                  shadow-sm
+                  border
+
+                  ${isMe
+                    ? "border-blue-500"
+                    : "border-white"
+                  }
+                `}
+              >
+
+                <div className="
+                  flex
+                  items-center
+                  gap-4
+                ">
+
+                  {/* RANK */}
+                  <div className="
+                    w-12
+                    h-12
+                    rounded-2xl
                     bg-blue-600
                     text-white
-                    shadow-md
-                  `
-
-                  : `
-                    bg-white
-                    border
-                    text-gray-700
-                    hover:border-blue-300
-                  `
-                }
-              `}
-            >
-              {item}
-            </button>
-
-          ))}
-
-        </div>
-
-        {/* TOP 3 */}
-        <div className="
-          bg-white
-          rounded-[35px]
-          p-5 md:p-8
-          shadow-sm
-          mb-6
-        ">
-
-          <div className="
-            flex flex-col
-            md:flex-row
-            items-end
-            justify-center
-            gap-5
-          ">
-
-            {juara2 && (
-              <TopCard
-                data={juara2}
-                rank={2}
-              />
-            )}
-
-            {juara1 && (
-              <TopCard
-                data={juara1}
-                rank={1}
-                big
-              />
-            )}
-
-            {juara3 && (
-              <TopCard
-                data={juara3}
-                rank={3}
-              />
-            )}
-
-          </div>
-
-        </div>
-
-        {/* LIST RANK */}
-        <div className="
-          bg-white
-          rounded-[35px]
-          shadow-sm
-          overflow-hidden
-        ">
-
-          <div className="
-            px-6 py-5
-            border-b
-            border-gray-100
-          ">
-
-            <h2 className="
-              text-2xl
-              font-black
-              text-gray-800
-            ">
-              Top 10 Siswa
-            </h2>
-
-          </div>
-
-          <div className="
-            p-4
-            space-y-3
-          ">
-
-            {ranking.map((
-              item,
-              index
-            ) => {
-
-              const isMe =
-                item.user_id === userId
-
-              return (
-
-                <div
-                  key={index}
-                  className={`
                     flex
                     items-center
-                    justify-between
-                    rounded-3xl
-                    p-4
-                    transition-all
-
-                    ${isMe
-
-                      ? `
-                        bg-blue-50
-                        border-2
-                        border-blue-500
-                      `
-
-                      : `
-                        bg-[#f8fafc]
-                      `
-                    }
-                  `}
-                >
-
-                  {/* LEFT */}
-                  <div className="
-                    flex
-                    items-center
-                    gap-4
-                    min-w-0
+                    justify-center
+                    font-black
                   ">
+                    #{index + 1}
+                  </div>
 
-                    {/* NOMOR */}
-                    <div className={`
-                      w-12 h-12
-                      rounded-2xl
+                  {/* FOTO */}
+                  {item.foto ? (
+
+                    <img
+                      src={item.foto}
+                      alt="foto"
+                      className="
+                        w-14
+                        h-14
+                        rounded-full
+                        object-cover
+                      "
+                    />
+
+                  ) : (
+
+                    <div className="
+                      w-14
+                      h-14
+                      rounded-full
+                      bg-blue-600
+                      text-white
                       flex
                       items-center
                       justify-center
                       font-black
-                      text-lg
-                      shrink-0
+                    ">
 
-                      ${index === 0
-
-                        ? "bg-yellow-400 text-white"
-
-                        : index === 1
-
-                        ? "bg-blue-500 text-white"
-
-                        : index === 2
-
-                        ? "bg-gray-400 text-white"
-
-                        : "bg-white border text-gray-700"}
-                    `}>
-
-                      {index + 1}
+                      {item.nama
+                        .slice(0, 2)
+                        .toUpperCase()}
 
                     </div>
 
-                    {/* FOTO */}
-                    {item.foto ? (
+                  )}
 
-                      <img
-                        src={item.foto}
-                        alt="foto"
-                        className="
-                          w-14 h-14
-                          rounded-full
-                          object-cover
-                          border-2
-                          border-white
-                          shadow-sm
-                          shrink-0
-                        "
-                      />
+                  {/* INFO */}
+                  <div>
 
-                    ) : (
-
-                      <div className="
-                        w-14 h-14
-                        rounded-full
-                        bg-blue-600
-                        text-white
-                        flex
-                        items-center
-                        justify-center
-                        font-bold
-                        text-lg
-                        shrink-0
-                      ">
-
-                        {item.nama
-                          .slice(0, 2)
-                          .toUpperCase()}
-
-                      </div>
-
-                    )}
-
-                    {/* INFO */}
                     <div className="
-                      min-w-0
+                      flex
+                      items-center
+                      gap-2
                     ">
 
-                      <div className="
-                        flex
-                        items-center
-                        gap-2
-                        flex-wrap
+                      <h1 className="
+                        font-black
+                        text-slate-800
                       ">
+                        {item.nama}
+                      </h1>
 
-                        <p className="
+                      {isMe && (
+
+                        <span className="
+                          bg-blue-600
+                          text-white
+                          text-[10px]
+                          px-2
+                          py-1
+                          rounded-full
                           font-bold
-                          text-gray-800
-                          truncate
                         ">
-                          {item.nama}
-                        </p>
+                          Kamu
+                        </span>
 
-                        {isMe && (
-
-                          <span className="
-                            bg-blue-600
-                            text-white
-                            text-xs
-                            px-3 py-1
-                            rounded-full
-                            font-semibold
-                          ">
-                            Kamu
-                          </span>
-
-                        )}
-
-                      </div>
-
-                      <p className="
-                        text-sm
-                        text-gray-500
-                        truncate
-                      ">
-                        {item.email}
-                      </p>
+                      )}
 
                     </div>
-
-                  </div>
-
-                  {/* SCORE */}
-                  <div className="
-                    text-right
-                    shrink-0
-                  ">
-
-                    <p className="
-                      text-3xl
-                      font-black
-                      text-blue-700
-                    ">
-                      {item.skor}
-                    </p>
 
                     <p className="
                       text-sm
-                      text-gray-500
+                      text-slate-500
                     ">
-                      Nilai
+                      {item.email}
+                    </p>
+
+                    <p className="
+                      text-xs
+                      text-blue-600
+                      font-bold
+                      mt-1
+                    ">
+                      Ujian selesai:
+                      {" "}
+                      {item.jumlah_ujian}/4
                     </p>
 
                   </div>
 
                 </div>
 
-              )
-            })}
+                {/* SCORE */}
+                <div className="text-right">
 
-          </div>
+                  <h1 className="
+                    text-4xl
+                    font-black
+                    text-blue-700
+                  ">
+                    {item.total_skor}
+                  </h1>
+
+                  <p className="
+                    text-xs
+                    text-slate-500
+                  ">
+                    total skor
+                  </p>
+
+                </div>
+
+              </div>
+
+            )
+          })}
 
         </div>
 
@@ -593,8 +478,10 @@ export default function RankingPage() {
   )
 }
 
-/* TOP CARD */
-function TopCard({
+/* =========================
+   PODIUM
+========================= */
+function PodiumCard({
   data,
   rank,
   big
@@ -602,163 +489,148 @@ function TopCard({
 
   const bg =
     rank === 1
-
-      ? "from-yellow-400 to-yellow-500"
-
+      ? "from-yellow-400 to-orange-500"
       : rank === 2
-
-      ? "from-blue-500 to-blue-600"
-
-      : "from-gray-400 to-gray-500"
+      ? "from-blue-500 to-indigo-600"
+      : "from-slate-500 to-slate-700"
 
   return (
 
     <div className={`
-      relative
-      rounded-[35px]
+      rounded-[32px]
       bg-gradient-to-b
       ${bg}
       text-white
-      text-center
       shadow-xl
+      relative
+      overflow-hidden
 
       ${big
-
-        ? `
-          w-full
-          md:w-[320px]
-          py-10
-        `
-
-        : `
-          w-full
-          md:w-[270px]
-          py-8
-        `
+        ? "pt-7 pb-8"
+        : "pt-5 pb-6"
       }
     `}>
 
-      {/* RANK */}
       <div className="
         absolute
-        top-4 right-4
-        w-12 h-12
+        top-3
+        right-3
+        w-9
+        h-9
         rounded-2xl
         bg-white/20
         flex
         items-center
         justify-center
         font-black
-        text-xl
+      ">
+        #{rank}
+      </div>
+
+      <div className="
+        flex
+        justify-center
       ">
 
-        #{rank}
+        {data.foto ? (
+
+          <img
+            src={data.foto}
+            alt="foto"
+            className={`
+              rounded-full
+              border-4
+              border-white
+              object-cover
+
+              ${big
+                ? "w-24 h-24"
+                : "w-20 h-20"
+              }
+            `}
+          />
+
+        ) : (
+
+          <div className={`
+            rounded-full
+            border-4
+            border-white
+            bg-white/20
+            flex
+            items-center
+            justify-center
+            font-black
+
+            ${big
+              ? "w-24 h-24 text-3xl"
+              : "w-20 h-20 text-2xl"
+            }
+          `}>
+
+            {data.nama
+              .slice(0, 2)
+              .toUpperCase()}
+
+          </div>
+
+        )}
 
       </div>
 
-      {/* FOTO */}
-      {data.foto ? (
+      <div className="
+        text-center
+        mt-4
+        px-3
+      ">
 
-        <img
-          src={data.foto}
-          alt="foto"
-          className={`
-            mx-auto
-            rounded-full
-            object-cover
-            border-4
-            border-white
-            shadow-lg
-
-            ${big
-
-              ? "w-32 h-32"
-
-              : "w-28 h-28"}
-          `}
-        />
-
-      ) : (
-
-        <div className={`
-          mx-auto
-          rounded-full
-          bg-white/20
-          flex
-          items-center
-          justify-center
+        <h1 className={`
           font-black
-          border-4
-          border-white
+          truncate
 
           ${big
-
-            ? `
-              w-32 h-32
-              text-4xl
-            `
-
-            : `
-              w-28 h-28
-              text-3xl
-            `
+            ? "text-xl"
+            : "text-base"
           }
         `}>
+          {data.nama}
+        </h1>
 
-          {data.nama
-            .slice(0, 2)
-            .toUpperCase()}
+        <p className="
+          text-white/80
+          text-xs
+          truncate
+        ">
+          {data.email}
+        </p>
 
-        </div>
+      </div>
 
-      )}
-
-      {/* NAMA */}
-      <h2 className="
-        mt-5
-        text-2xl
-        font-black
-        truncate
-        px-4
-      ">
-        {data.nama}
-      </h2>
-
-      <p className="
-        text-white/80
-        text-sm
-        px-6
-        truncate
-      ">
-        {data.email}
-      </p>
-
-      {/* SCORE */}
       <div className="
-        mt-6
-        bg-white/20
-        mx-6
-        rounded-3xl
-        py-4
+        text-center
+        mt-4
       ">
 
         <p className="
-          text-sm
+          text-xs
+          text-white/80
         ">
-          Nilai
+          TOTAL SKOR
         </p>
 
-        <h1 className="
-          text-5xl
+        <h1 className={`
           font-black
-          mt-1
-        ">
-          {data.skor}
+
+          ${big
+            ? "text-5xl"
+            : "text-3xl"
+          }
+        `}>
+          {data.total_skor}
         </h1>
 
       </div>
 
     </div>
-
   )
 }

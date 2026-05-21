@@ -1,11 +1,17 @@
 "use client"
 
 import { useEffect, useState } from "react"
+
 import { supabase } from "../../../../lib/supabase"
+
 import {
   useParams,
-  useRouter
+  useRouter,
 } from "next/navigation"
+
+// ======================
+// TYPES
+// ======================
 
 type PackageType = {
   id: number
@@ -19,13 +25,22 @@ type SubjectType = {
   subject: string
 }
 
+// ======================
+// MAIN PAGE
+// ======================
+
 export default function PackagePage() {
 
   const params = useParams()
+
   const router = useRouter()
 
   const packageId =
     Number(params.id)
+
+  // ======================
+  // STATES
+  // ======================
 
   const [paket, setPaket] =
     useState<PackageType | null>(null)
@@ -49,6 +64,14 @@ export default function PackagePage() {
     setSelectedSubject] =
     useState("")
 
+  const [savedPendamping,
+    setSavedPendamping] =
+    useState("")
+
+  // ======================
+  // INIT
+  // ======================
+
   useEffect(() => {
 
     if (!packageId) return
@@ -57,15 +80,34 @@ export default function PackagePage() {
 
   }, [packageId])
 
+  // ======================
+  // GET DATA
+  // ======================
+
   async function getData() {
 
     try {
 
       setLoading(true)
 
+      // ======================
+      // USER
+      // ======================
+
+      const {
+        data: userData,
+      } = await supabase.auth.getUser()
+
+      const user =
+        userData.user
+
+      // ======================
+      // PACKAGE
+      // ======================
+
       const {
         data: packageData,
-        error: packageError
+        error: packageError,
       } = await supabase
         .from("packages")
         .select("*")
@@ -83,9 +125,13 @@ export default function PackagePage() {
 
       setPaket(packageData)
 
+      // ======================
+      // SUBJECTS
+      // ======================
+
       const {
         data: subjectData,
-        error: subjectError
+        error: subjectError,
       } = await supabase
         .from("package_subjects")
         .select("*")
@@ -103,6 +149,42 @@ export default function PackagePage() {
         subjectData || []
       )
 
+      // ======================
+      // CHECK PENDAMPING
+      // ======================
+
+      if (user) {
+
+        const {
+          data: pilihanData,
+        } = await supabase
+          .from(
+            "pilihan_pendamping"
+          )
+          .select("*")
+          .eq("user_id", user.id)
+          .eq(
+            "package_id",
+            String(packageId)
+          )
+          .maybeSingle()
+
+        if (pilihanData) {
+
+          setSavedPendamping(
+            pilihanData.pilihan
+          )
+
+          // ======================
+          // JANGAN AUTO MASUK
+          // ======================
+
+          // setSelectedSubject(
+          //   pilihanData.pilihan
+          // )
+        }
+      }
+
       setLoading(false)
 
     } catch (err) {
@@ -112,6 +194,10 @@ export default function PackagePage() {
       setLoading(false)
     }
   }
+
+  // ======================
+  // TOKEN
+  // ======================
 
   function handleToken() {
 
@@ -130,6 +216,101 @@ export default function PackagePage() {
     setAllowed(true)
   }
 
+  // ======================
+  // PILIH PENDAMPING
+  // ======================
+
+  async function pilihPendamping(
+    subject: string
+  ) {
+
+    try {
+
+      // ======================
+      // USER
+      // ======================
+
+      const {
+        data: userData,
+      } = await supabase.auth.getUser()
+
+      const user =
+        userData.user
+
+      if (!user) {
+
+        alert("Harus login")
+
+        return
+      }
+
+      // ======================
+      // SUDAH PILIH
+      // ======================
+
+      if (
+        savedPendamping &&
+        savedPendamping !== subject
+      ) {
+
+        alert(
+          `Kamu sudah memilih ${savedPendamping}`
+        )
+
+        return
+      }
+
+      // ======================
+      // SIMPAN PERTAMA KALI
+      // ======================
+
+      if (!savedPendamping) {
+
+        const {
+          error,
+        } = await supabase
+          .from(
+            "pilihan_pendamping"
+          )
+          .insert([
+            {
+              user_id: user.id,
+              package_id:
+                String(packageId),
+              pilihan: subject,
+            },
+          ])
+
+        if (error) {
+
+          console.log(error)
+
+          alert(
+            "Gagal memilih pendamping"
+          )
+
+          return
+        }
+
+        setSavedPendamping(
+          subject
+        )
+      }
+
+      setSelectedSubject(subject)
+
+    } catch (err) {
+
+      console.log(err)
+
+      alert("Terjadi kesalahan")
+    }
+  }
+
+  // ======================
+  // START EXAM
+  // ======================
+
   async function handleStartExam(
     kategori: string
   ) {
@@ -138,7 +319,7 @@ export default function PackagePage() {
 
       const {
         data,
-        error
+        error,
       } = await supabase
         .from("soal")
         .select("id")
@@ -154,7 +335,10 @@ export default function PackagePage() {
         return
       }
 
-      if (!data || data.length === 0) {
+      if (
+        !data ||
+        data.length === 0
+      ) {
 
         alert(
           `Soal ${kategori} belum tersedia`
@@ -164,7 +348,11 @@ export default function PackagePage() {
       }
 
       router.push(
-        `/ujian/${encodeURIComponent(kategori)}`
+        `/ujian/${encodeURIComponent(
+          kategori
+        )}?paket=${encodeURIComponent(
+          paket?.nama_paket || ""
+        )}&package_id=${packageId}`
       )
 
     } catch (err) {
@@ -175,7 +363,10 @@ export default function PackagePage() {
     }
   }
 
+  // ======================
   // LOADING
+  // ======================
+
   if (loading) {
 
     return (
@@ -193,16 +384,32 @@ export default function PackagePage() {
 
         <div className="
           bg-white
-          px-6 py-4
-          rounded-3xl
+          px-8 py-6
+          rounded-[32px]
           shadow-2xl
-          text-lg md:text-2xl
-          font-black
-          text-violet-700
-          animate-pulse
+          border
+          border-white
         ">
 
-          Loading...
+          <div className="
+            w-12
+            h-12
+            border-4
+            border-violet-500
+            border-t-transparent
+            rounded-full
+            animate-spin
+            mx-auto
+            mb-4
+          " />
+
+          <p className="
+            text-xl
+            font-black
+            text-violet-700
+          ">
+            Loading...
+          </p>
 
         </div>
 
@@ -210,7 +417,10 @@ export default function PackagePage() {
     )
   }
 
+  // ======================
   // NOT FOUND
+  // ======================
+
   if (!paket) {
 
     return (
@@ -227,15 +437,19 @@ export default function PackagePage() {
         <div className="
           bg-white
           p-8
-          rounded-3xl
+          rounded-[32px]
           shadow-xl
           text-center
-          max-w-sm
+          max-w-md
           w-full
         ">
 
+          <div className="text-6xl mb-4">
+            😢
+          </div>
+
           <h1 className="
-            text-2xl
+            text-3xl
             font-black
             text-red-600
             mb-3
@@ -251,7 +465,10 @@ export default function PackagePage() {
     )
   }
 
+  // ======================
   // TOKEN PAGE
+  // ======================
+
   if (!allowed) {
 
     return (
@@ -275,19 +492,17 @@ export default function PackagePage() {
           backdrop-blur-xl
           max-w-md
           w-full
-          p-6 md:p-10
-          rounded-[32px]
-          shadow-[0_20px_60px_rgba(0,0,0,0.12)]
-          border border-white
+          p-7 md:p-10
+          rounded-[36px]
+          shadow-[0_25px_80px_rgba(0,0,0,0.12)]
         ">
 
-          {/* GLOW */}
           <div className="
             absolute
-            -top-16
-            -right-16
-            w-40
-            h-40
+            -top-24
+            -right-24
+            w-52
+            h-52
             bg-violet-300/30
             rounded-full
             blur-3xl
@@ -295,77 +510,74 @@ export default function PackagePage() {
 
           <div className="
             absolute
-            -bottom-16
-            -left-16
-            w-40
-            h-40
+            -bottom-24
+            -left-24
+            w-52
+            h-52
             bg-cyan-300/30
             rounded-full
             blur-3xl
           " />
 
-          {/* ICON */}
-          <div className="
-            relative z-10
-            w-20 h-20
-            md:w-24 md:h-24
-            rounded-full
-            bg-gradient-to-r
-            from-violet-600
-            to-cyan-500
-            flex
-            items-center
-            justify-center
-            text-4xl
-            md:text-5xl
-            mx-auto
-            mb-5
-            shadow-xl
-          ">
-            🔐
-          </div>
-
-          {/* TITLE */}
-          <h1 className="
-            relative z-10
-            text-2xl md:text-4xl
-            font-black
-            text-center
-            mb-2
-            bg-gradient-to-r
-            from-violet-700
-            to-cyan-600
-            bg-clip-text
-            text-transparent
-          ">
-
-            Masukkan Token
-
-          </h1>
-
-          <p className="
-            relative z-10
-            text-center
-            text-gray-700
-            text-sm md:text-base
-            mb-6
-            leading-relaxed
-          ">
-
-            Untuk membuka paket
-            {" "}
-
-            <span className="
-              font-bold
-              text-violet-700
-            ">
-              {paket.nama_paket}
-            </span>
-
-          </p>
-
-          {/* INPUT */}
           <div className="relative z-10">
+
+            <div className="
+              w-24
+              h-24
+              rounded-full
+              bg-gradient-to-r
+              from-violet-600
+              to-cyan-500
+              flex
+              items-center
+              justify-center
+              text-5xl
+              mx-auto
+              shadow-2xl
+              mb-6
+            ">
+              🔐
+            </div>
+
+            <h1 className="
+              text-3xl
+              md:text-4xl
+              font-black
+              text-center
+              leading-tight
+              mb-3
+              bg-gradient-to-r
+              from-violet-700
+              to-cyan-600
+              bg-clip-text
+              text-transparent
+            ">
+
+              Masukkan Token
+
+            </h1>
+
+            <p className="
+              text-center
+              text-gray-600
+              text-base
+              leading-relaxed
+              mb-7
+            ">
+
+              Gunakan token untuk membuka paket
+
+              <span className="
+                block
+                mt-2
+                text-violet-700
+                font-black
+                text-xl
+              ">
+                {paket.nama_paket}
+              </span>
+
+            </p>
 
             <input
               value={token}
@@ -377,22 +589,20 @@ export default function PackagePage() {
               placeholder="Masukkan token paket..."
               className="
                 w-full
-                bg-white
+                h-14
+                rounded-2xl
                 border-2
                 border-violet-200
+                px-5
                 text-gray-800
-                placeholder:text-gray-400
-                p-4
-                rounded-2xl
-                mb-4
+                font-bold
+                text-base
                 outline-none
-                text-sm md:text-base
-                font-semibold
                 focus:border-violet-500
                 focus:ring-4
                 focus:ring-violet-200
                 transition-all
-                shadow-sm
+                mb-5
               "
             />
 
@@ -400,16 +610,14 @@ export default function PackagePage() {
               onClick={handleToken}
               className="
                 w-full
+                h-14
+                rounded-2xl
                 bg-gradient-to-r
                 from-violet-600
                 to-cyan-500
-                hover:from-violet-700
-                hover:to-cyan-600
                 text-white
-                py-3.5
-                rounded-2xl
                 font-black
-                text-sm md:text-base
+                text-lg
                 shadow-xl
                 hover:scale-[1.02]
                 active:scale-95
@@ -427,7 +635,10 @@ export default function PackagePage() {
     )
   }
 
-  // SUBJECT SELECT
+  // ======================
+  // SUBJECT PAGE
+  // ======================
+
   if (!selectedSubject) {
 
     return (
@@ -444,17 +655,17 @@ export default function PackagePage() {
         <div className="max-w-7xl mx-auto">
 
           {/* HERO */}
+
           <div className="
             relative
             overflow-hidden
-            rounded-[28px]
-            md:rounded-[40px]
+            rounded-[40px]
             bg-gradient-to-r
             from-violet-700
             via-blue-600
             to-cyan-500
-            p-5 md:p-10
-            mb-6 md:mb-10
+            p-7 md:p-12
+            mb-8
             shadow-2xl
           ">
 
@@ -462,8 +673,8 @@ export default function PackagePage() {
               absolute
               top-0
               right-0
-              w-52 md:w-72
-              h-52 md:h-72
+              w-72
+              h-72
               bg-white/10
               rounded-full
               blur-3xl
@@ -474,20 +685,20 @@ export default function PackagePage() {
               <p className="
                 text-cyan-100
                 font-bold
-                text-xs md:text-sm
-                mb-2
-                tracking-widest
+                text-sm
+                tracking-[4px]
+                mb-3
               ">
                 PAKET PEMBELAJARAN
               </p>
 
               <h1 className="
-                text-2xl
-                md:text-5xl
+                text-3xl
+                md:text-6xl
                 font-black
                 text-white
-                mb-3
                 leading-tight
+                mb-4
               ">
 
                 {paket.nama_paket}
@@ -496,10 +707,14 @@ export default function PackagePage() {
 
               <p className="
                 text-cyan-100
-                text-sm md:text-lg
+                text-base
+                md:text-xl
+                leading-relaxed
+                max-w-2xl
               ">
 
-                Pilih mata pelajaran 🚀
+                Pilih 1 mata pelajaran pendamping.
+                Setelah dipilih, pilihan lain akan otomatis terkunci.
 
               </p>
 
@@ -507,114 +722,185 @@ export default function PackagePage() {
 
           </div>
 
-          {/* SUBJECT */}
+          {/* SUBJECTS */}
+
           <div className="
             grid
-            grid-cols-2
-            md:grid-cols-2
+            grid-cols-1
+            sm:grid-cols-2
             lg:grid-cols-3
-            gap-4 md:gap-7
+            gap-5 md:gap-7
           ">
 
-            {subjects.map((item, index) => (
+            {subjects.map((item, index) => {
 
-              <button
-                key={item.id}
-                onClick={() =>
-                  setSelectedSubject(
-                    item.subject
-                  )
-                }
-                className="
-                  group
-                  relative
-                  overflow-hidden
-                  bg-white/90
-                  backdrop-blur-xl
-                  rounded-[24px]
-                  md:rounded-[35px]
-                  p-4 md:p-7
-                  shadow-lg
-                  hover:shadow-2xl
-                  hover:-translate-y-2
-                  transition-all duration-500
-                  text-left
-                "
-              >
+              const locked =
+                savedPendamping &&
+                savedPendamping !== item.subject
 
-                <div className="
-                  absolute
-                  top-3
-                  right-3
-                  text-4xl md:text-6xl
-                  font-black
-                  text-gray-100
-                ">
-                  0{index + 1}
-                </div>
+              const selected =
+                savedPendamping === item.subject
 
-                <div className="
-                  w-12 h-12
-                  md:w-20 md:h-20
-                  rounded-2xl
-                  bg-gradient-to-r
-                  from-violet-600
-                  to-cyan-500
-                  flex items-center
-                  justify-center
-                  text-2xl md:text-4xl
-                  shadow-lg
-                  mb-4
-                ">
-                  📘
-                </div>
+              return (
 
-                <p className="
-                  text-[10px]
-                  md:text-sm
-                  font-bold
-                  text-violet-600
-                  mb-1
-                ">
-                  Pendamping
-                </p>
+                <button
+                  key={item.id}
+                  disabled={!!locked}
+                  onClick={() =>
+                    pilihPendamping(
+                      item.subject
+                    )
+                  }
+                  className={`
+                    relative
+                    overflow-hidden
+                    rounded-[32px]
+                    p-6
+                    text-left
+                    transition-all
+                    duration-300
+                    border
+                    ${
+                      locked
+                        ? `
+                          bg-slate-200
+                          border-slate-300
+                          opacity-70
+                          cursor-not-allowed
+                        `
+                        : selected
+                        ? `
+                          bg-gradient-to-br
+                          from-violet-600
+                          to-cyan-500
+                          border-transparent
+                          shadow-2xl
+                          scale-[1.02]
+                        `
+                        : `
+                          bg-white
+                          border-white
+                          shadow-lg
+                          hover:-translate-y-2
+                          hover:shadow-2xl
+                        `
+                    }
+                  `}
+                >
 
-                <h2 className="
-                  text-sm
-                  md:text-3xl
-                  font-black
-                  text-gray-800
-                  mb-2
-                  leading-tight
-                ">
+                  <div className="
+                    absolute
+                    top-4
+                    right-4
+                    text-6xl
+                    font-black
+                    text-white/10
+                  ">
+                    0{index + 1}
+                  </div>
 
-                  {item.subject}
+                  <div className={`
+                    w-20
+                    h-20
+                    rounded-3xl
+                    flex
+                    items-center
+                    justify-center
+                    text-4xl
+                    mb-6
+                    shadow-xl
+                    ${
+                      selected
+                        ? "bg-white text-violet-700"
+                        : locked
+                        ? "bg-slate-400 text-white"
+                        : "bg-gradient-to-r from-violet-600 to-cyan-500 text-white"
+                    }
+                  `}>
 
-                </h2>
+                    {locked
+                      ? "🔒"
+                      : selected
+                      ? "✅"
+                      : "📘"}
 
-                <p className="
-                  text-gray-500
-                  text-[11px]
-                  md:text-sm
-                  mb-4
-                ">
-                  Mulai latihan soal ✨
-                </p>
+                  </div>
 
-                <div className="
-                  inline-flex
-                  items-center
-                  gap-2
-                  text-violet-600
-                  text-xs md:text-base
-                  font-bold
-                ">
-                  Pilih →
-                </div>
+                  <p className={`
+                    text-sm
+                    font-black
+                    tracking-wide
+                    mb-2
+                    ${
+                      selected
+                        ? "text-cyan-100"
+                        : "text-violet-600"
+                    }
+                  `}>
+                    PENDAMPING
+                  </p>
 
-              </button>
+                  <h2 className={`
+                    text-2xl
+                    md:text-3xl
+                    font-black
+                    leading-tight
+                    ${
+                      selected
+                        ? "text-white"
+                        : "text-gray-800"
+                    }
+                  `}>
 
-            ))}
+                    {item.subject}
+
+                  </h2>
+
+                  {selected && (
+
+                    <div className="
+                      mt-5
+                      inline-flex
+                      items-center
+                      gap-2
+                      bg-white/20
+                      text-white
+                      px-4
+                      py-2
+                      rounded-2xl
+                      text-sm
+                      font-black
+                    ">
+
+                      ✅ Pendamping dipilih
+
+                    </div>
+                  )}
+
+                  {locked && (
+
+                    <div className="
+                      mt-5
+                      inline-flex
+                      items-center
+                      gap-2
+                      bg-red-100
+                      text-red-600
+                      px-4
+                      py-2
+                      rounded-2xl
+                      text-sm
+                      font-black
+                    ">
+
+                      🔒 Terkunci
+
+                    </div>
+                  )}
+
+                </button>
+              )
+            })}
 
           </div>
 
@@ -624,32 +910,41 @@ export default function PackagePage() {
     )
   }
 
+  // ======================
   // MAPEL
+  // ======================
+
   const mapel = [
     {
       nama: "Matematika",
       kategori: "Matematika",
       icon: "📐",
-      color: "from-blue-600 to-cyan-500"
+      color:
+        "from-blue-600 to-cyan-500",
     },
     {
       nama: "Bahasa Indonesia",
-      kategori: "Bahasa Indonesia",
+      kategori:
+        "Bahasa Indonesia",
       icon: "📖",
-      color: "from-orange-500 to-pink-500"
+      color:
+        "from-orange-500 to-pink-500",
     },
     {
       nama: "Bahasa Inggris",
-      kategori: "Bahasa Inggris",
+      kategori:
+        "Bahasa Inggris",
       icon: "🌍",
-      color: "from-emerald-500 to-green-600"
+      color:
+        "from-emerald-500 to-green-600",
     },
     {
       nama: selectedSubject,
       kategori: selectedSubject,
       icon: "🎯",
-      color: "from-violet-600 to-fuchsia-500"
-    }
+      color:
+        "from-violet-600 to-fuchsia-500",
+    },
   ]
 
   return (
@@ -666,49 +961,34 @@ export default function PackagePage() {
       <div className="max-w-7xl mx-auto">
 
         {/* HEADER */}
+
         <div className="
-          relative
-          overflow-hidden
-          rounded-[28px]
-          md:rounded-[40px]
-          bg-gradient-to-r
-          from-violet-700
-          via-blue-600
-          to-cyan-500
-          p-5 md:p-10
-          mb-6 md:mb-10
-          shadow-2xl
+          flex
+          flex-col
+          md:flex-row
+          md:items-center
+          md:justify-between
+          gap-5
+          mb-8
         ">
 
-          <div className="
-            absolute
-            -top-10
-            -right-10
-            w-56 md:w-72
-            h-56 md:h-72
-            bg-white/10
-            rounded-full
-            blur-3xl
-          " />
-
-          <div className="relative z-10">
+          <div>
 
             <p className="
-              text-cyan-100
-              font-semibold
-              text-xs md:text-sm
+              text-violet-600
+              font-black
+              tracking-[3px]
+              text-sm
               mb-2
-              tracking-widest
             ">
-              PAKET PEMBELAJARAN
+              UJIAN TKA
             </p>
 
             <h1 className="
-              text-2xl
+              text-3xl
               md:text-5xl
               font-black
-              text-white
-              mb-3
+              text-gray-800
               leading-tight
             ">
 
@@ -716,21 +996,32 @@ export default function PackagePage() {
 
             </h1>
 
+          </div>
+
+          <div className="
+            bg-white
+            rounded-3xl
+            px-6
+            py-4
+            shadow-lg
+          ">
+
             <p className="
               text-sm
-              md:text-lg
-              text-cyan-100
+              text-gray-500
+              font-bold
+              mb-1
+            ">
+              Pendamping Dipilih
+            </p>
+
+            <p className="
+              text-2xl
+              font-black
+              text-violet-700
             ">
 
-              Pendamping:
-              {" "}
-
-              <span className="
-                font-black
-                text-white
-              ">
-                {selectedSubject}
-              </span>
+              {selectedSubject}
 
             </p>
 
@@ -739,12 +1030,13 @@ export default function PackagePage() {
         </div>
 
         {/* MAPEL */}
+
         <div className="
           grid
-          grid-cols-2
-          md:grid-cols-2
+          grid-cols-1
+          sm:grid-cols-2
           xl:grid-cols-4
-          gap-4 md:gap-7
+          gap-5 md:gap-7
         ">
 
           {mapel.map((item, index) => (
@@ -752,118 +1044,88 @@ export default function PackagePage() {
             <div
               key={item.nama}
               className="
-                group
                 relative
                 overflow-hidden
                 bg-white/90
                 backdrop-blur-xl
-                rounded-[24px]
-                md:rounded-[35px]
-                p-4 md:p-7
+                rounded-[32px]
+                p-6
                 shadow-lg
-                border border-white
-                hover:shadow-2xl
+                border
+                border-white
                 hover:-translate-y-2
-                transition-all duration-500
+                hover:shadow-2xl
+                transition-all
+                duration-300
               "
             >
 
               <div className="
                 absolute
-                top-3
-                right-3
-                text-4xl md:text-6xl
+                top-4
+                right-4
+                text-6xl
                 font-black
                 text-gray-100
               ">
                 0{index + 1}
               </div>
 
-              {/* ICON */}
               <div className={`
-                relative
-                z-10
-                w-12 h-12
-                md:w-20 md:h-20
-                rounded-2xl
+                w-20
+                h-20
+                rounded-3xl
                 bg-gradient-to-r
                 ${item.color}
                 flex
                 items-center
                 justify-center
-                text-2xl md:text-4xl
-                shadow-xl
-                mb-4
+                text-4xl
+                shadow-2xl
+                mb-6
               `}>
 
                 {item.icon}
 
               </div>
 
-              {/* CONTENT */}
-              <div className="relative z-10">
+              <h2 className="
+                text-2xl
+                font-black
+                text-gray-800
+                leading-tight
+                mb-5
+              ">
 
-                <p className="
-                  text-[10px]
-                  md:text-sm
-                  font-bold
-                  text-violet-600
-                  mb-1
-                  uppercase
-                  tracking-wider
-                ">
+                {item.nama}
 
-                  Mata Pelajaran
+              </h2>
 
-                </p>
-
-                <h2 className="
-                  text-sm
-                  md:text-3xl
+              <button
+                onClick={() =>
+                  handleStartExam(
+                    item.kategori
+                  )
+                }
+                className={`
+                  w-full
+                  h-14
+                  rounded-2xl
+                  bg-gradient-to-r
+                  ${item.color}
+                  text-white
                   font-black
-                  text-gray-800
-                  leading-tight
-                  mb-3
-                ">
+                  text-base
+                  shadow-lg
+                  hover:scale-[1.03]
+                  active:scale-95
+                  transition-all
+                `}
+              >
 
-                  {item.nama}
+                Mulai Ujian
 
-                </h2>
-
-                <p className="
-                  text-gray-500
-                  text-[11px]
-                  md:text-sm
-                  mb-5
-                ">
-                  Kerjakan soal terbaik 🚀
-                </p>
-
-                <button
-                  onClick={() =>
-                    handleStartExam(
-                      item.kategori
-                    )
-                  }
-                  className={`
-                    w-full
-                    bg-gradient-to-r
-                    ${item.color}
-                    text-white
-                    py-3
-                    rounded-2xl
-                    font-black
-                    text-xs md:text-base
-                    shadow-lg
-                    hover:scale-105
-                    active:scale-95
-                    transition-all
-                  `}
-                >
-                  Mulai Ujian
-                </button>
-
-              </div>
+              </button>
 
             </div>
 

@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
 
@@ -6,6 +6,18 @@ const nextConfig: NextConfig = {
     "192.168.100.117",
   ],
 
-};
+  images: {
 
-export default nextConfig;
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname:
+          "mrqqxaqvinvehfbpyoel.supabase.co",
+      },
+    ],
+
+  },
+
+}
+
+export default nextConfig

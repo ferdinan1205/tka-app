@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   memo,
+  useMemo,
 } from "react"
 
 import { supabase } from "../../lib/supabase"
@@ -14,6 +15,24 @@ import {
   MathJax,
   MathJaxContext,
 } from "better-react-mathjax"
+
+// =========================
+// TYPES
+// =========================
+type DetailItem = {
+  soal: string
+  jawaban_user: string
+  jawaban_benar: string
+  benar: boolean
+  pembahasan?: string
+}
+
+type HasilType = {
+  id: number
+  kategori: string
+  skor: number
+  detail: DetailItem[]
+}
 
 // =========================
 // MATH CONFIG
@@ -35,6 +54,10 @@ const mathJaxConfig = {
     ],
 
     processEscapes: true,
+
+    packages: {
+      "[+]": ["ams"],
+    },
   },
 
   options: {
@@ -49,6 +72,7 @@ const mathJaxConfig = {
     scale: 1,
     minScale: 0.5,
     matchFontHeight: false,
+    mtextInheritFont: true,
   },
 }
 
@@ -58,7 +82,6 @@ const mathJaxConfig = {
 function formatText(
   text: string
 ) {
-
   if (!text) return ""
 
   let result = text
@@ -84,8 +107,23 @@ function formatText(
   )
 
   result = result.replace(
+    /<table/gi,
+    `<table class="w-full border-collapse my-3 text-sm overflow-auto block">`
+  )
+
+  result = result.replace(
+    /<td/gi,
+    `<td class="border border-slate-300 px-2 py-1 align-top break-words" `
+  )
+
+  result = result.replace(
+    /<th/gi,
+    `<th class="border border-slate-300 px-2 py-1 bg-slate-100 font-bold" `
+  )
+
+  result = result.replace(
     /<img/gi,
-    `<img class="max-w-full h-auto rounded-xl my-3 border border-slate-200" `
+    `<img class="max-w-full h-auto rounded-2xl my-4 border border-slate-200 shadow-sm" `
   )
 
   return result
@@ -97,20 +135,18 @@ function formatText(
 function extractImages(
   html: string
 ) {
-
   if (!html) return []
 
   const regex =
     /<img[^>]+src="([^">]+)"/g
 
-  const images = []
+  const images: string[] = []
 
   let match
 
   while (
     (match = regex.exec(html)) !== null
   ) {
-
     images.push(match[1])
   }
 
@@ -118,7 +154,7 @@ function extractImages(
 }
 
 // =========================
-// SAFE MATH COMPONENT
+// MATH CONTENT
 // =========================
 const MathContent = memo(
   ({
@@ -128,9 +164,13 @@ const MathContent = memo(
     html: string
     className?: string
   }) => {
+    const formatted =
+      useMemo(
+        () => formatText(html),
+        [html]
+      )
 
     return (
-
       <div
         className={`
           overflow-x-auto
@@ -139,20 +179,14 @@ const MathContent = memo(
           ${className}
         `}
       >
-
-        <MathJax>
-
+        <MathJax dynamic>
           <div
             dangerouslySetInnerHTML={{
-              __html:
-                formatText(html),
+              __html: formatted,
             }}
           />
-
         </MathJax>
-
       </div>
-
     )
   }
 )
@@ -164,9 +198,12 @@ MathContent.displayName =
 // MAIN PAGE
 // =========================
 export default function Review() {
+  const router = useRouter()
 
   const [data, setData] =
-    useState<any>(null)
+    useState<HasilType | null>(
+      null
+    )
 
   const [loading, setLoading] =
     useState(true)
@@ -174,52 +211,56 @@ export default function Review() {
   const [aiLoading, setAiLoading] =
     useState<number | null>(null)
 
-  const router = useRouter()
+  const [expanded, setExpanded] =
+    useState<number[]>([])
 
   useEffect(() => {
-
     getLastResult()
-
   }, [])
 
   // =========================
   // GET DATA
   // =========================
   async function getLastResult() {
+    try {
+      const {
+        data: userData,
+      } =
+        await supabase.auth.getUser()
 
-    const {
-      data: userData,
-    } =
-      await supabase.auth.getUser()
+      if (!userData.user) {
+        router.push("/login")
+        return
+      }
 
-    if (!userData.user) {
+      const { data, error } =
+        await supabase
+          .from("hasil")
+          .select("*")
+          .eq(
+            "user_id",
+            userData.user.id
+          )
+          .order(
+            "id",
+            {
+              ascending: false,
+            }
+          )
+          .limit(1)
+          .single()
 
-      router.push("/login")
+      if (error) {
+        console.error(error)
+        return
+      }
 
-      return
+      setData(data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
-
-    const { data } =
-      await supabase
-        .from("hasil")
-        .select("*")
-        .eq(
-          "user_id",
-          userData.user.id
-        )
-        .order(
-          "id",
-          {
-            ascending: false,
-          }
-        )
-        .limit(1)
-
-    setData(
-      data?.[0] || null
-    )
-
-    setLoading(false)
   }
 
   // =========================
@@ -227,11 +268,9 @@ export default function Review() {
   // =========================
   async function generateAI(
     index: number,
-    item: any
+    item: DetailItem
   ) {
-
     try {
-
       setAiLoading(index)
 
       const images =
@@ -249,12 +288,9 @@ export default function Review() {
             },
 
             body: JSON.stringify({
-
               soal: item.soal,
-
               jawaban_benar:
                 item.jawaban_benar,
-
               images,
             }),
           }
@@ -263,66 +299,67 @@ export default function Review() {
       const result =
         await res.json()
 
-      const updated = [
-        ...data.detail,
-      ]
+      if (!result?.text) {
+        alert(
+          "Pembahasan AI gagal dibuat"
+        )
+        return
+      }
+
+      if (!data) return
+
+      const updated =
+        [...data.detail]
 
       updated[index] = {
-
         ...updated[index],
-
         pembahasan:
           result.text,
       }
 
       setData({
-
         ...data,
-
         detail: updated,
       })
 
+      setExpanded((prev) => [
+        ...prev,
+        index,
+      ])
     } catch (err) {
-
       console.error(err)
 
       alert(
         "Gagal generate AI"
       )
-
     } finally {
-
       setAiLoading(null)
     }
+  }
+
+  // =========================
+  // TOGGLE
+  // =========================
+  function toggleExpand(
+    index: number
+  ) {
+    setExpanded((prev) =>
+      prev.includes(index)
+        ? prev.filter(
+            (i) => i !== index
+          )
+        : [...prev, index]
+    )
   }
 
   // =========================
   // LOADING
   // =========================
   if (loading) {
-
     return (
-
-      <div className="
-        min-h-screen
-        flex
-        items-center
-        justify-center
-        bg-slate-100
-      ">
-
-        <div className="
-          w-10
-          h-10
-          border-4
-          border-blue-600
-          border-t-transparent
-          rounded-full
-          animate-spin
-        " />
-
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="w-12 h-12 border-4 border-blue-700 border-t-transparent rounded-full animate-spin" />
       </div>
-
     )
   }
 
@@ -330,28 +367,19 @@ export default function Review() {
   // EMPTY
   // =========================
   if (!data) {
-
     return (
-
-      <div className="
-        min-h-screen
-        flex
-        items-center
-        justify-center
-        bg-slate-100
-        text-slate-500
-      ">
-
-        Tidak ada data
-
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-500 font-semibold">
+        Tidak ada hasil ujian
       </div>
-
     )
   }
 
+  // =========================
+  // STATS
+  // =========================
   const benar =
     data.detail.filter(
-      (d: any) => d.benar
+      (d) => d.benar
     ).length
 
   const salah =
@@ -360,67 +388,36 @@ export default function Review() {
 
   const akurasi =
     Math.round(
-      (
-        benar /
-        data.detail.length
-      ) * 100
+      (benar /
+        data.detail.length) *
+        100
     )
 
+  // =========================
+  // PAGE
+  // =========================
   return (
-
     <MathJaxContext
       config={mathJaxConfig}
     >
-
-      <div className="
-        min-h-screen
-        bg-slate-100
-        pb-10
-      ">
+      <div className="min-h-screen bg-slate-100 pb-10">
 
         {/* =========================
             HEADER
         ========================= */}
-        <div className="
-          sticky
-          top-0
-          z-50
-          bg-blue-700
-          shadow-lg
-        ">
+        <div className="sticky top-0 z-50 bg-blue-700 shadow-lg">
 
-          <div className="
-            max-w-5xl
-            mx-auto
-            px-3
-            py-3
-          ">
+          <div className="max-w-5xl mx-auto px-4 py-3">
 
-            <div className="
-              flex
-              items-center
-              justify-between
-              gap-3
-            ">
+            <div className="flex items-center justify-between gap-3">
 
               <div className="min-w-0">
 
-                <p className="
-                  text-[10px]
-                  uppercase
-                  tracking-widest
-                  text-blue-200
-                ">
+                <p className="text-[10px] uppercase tracking-widest text-blue-200">
                   Hasil Ujian
                 </p>
 
-                <h1 className="
-                  text-sm
-                  md:text-2xl
-                  font-black
-                  text-white
-                  truncate
-                ">
+                <h1 className="text-sm md:text-2xl font-black text-white truncate">
                   {data.kategori}
                 </h1>
 
@@ -433,14 +430,14 @@ export default function Review() {
                   )
                 }
                 className="
-                  h-9
-                  px-3
+                  h-10
+                  px-4
                   rounded-xl
                   bg-white
                   text-blue-700
                   text-xs
-                  font-bold
-                  shrink-0
+                  md:text-sm
+                  font-black
                   active:scale-95
                   transition-all
                 "
@@ -457,23 +454,12 @@ export default function Review() {
         {/* =========================
             CONTENT
         ========================= */}
-        <div className="
-          max-w-5xl
-          mx-auto
-          px-2
-          md:px-5
-          py-3
-        ">
+        <div className="max-w-5xl mx-auto px-3 md:px-5 py-4">
 
           {/* =========================
-              CARD STATS
+              STATS
           ========================= */}
-          <div className="
-            grid
-            grid-cols-4
-            gap-2
-            mb-4
-          ">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
 
             <Card
               title="Skor"
@@ -508,385 +494,404 @@ export default function Review() {
           {/* =========================
               REVIEW LIST
           ========================= */}
-          {data.detail.map(
-            (
-              item: any,
-              i: number
-            ) => {
+          <div className="space-y-4">
 
-              const isEmpty =
-                !item.pembahasan
+            {data.detail.map(
+              (
+                item,
+                i
+              ) => {
 
-              return (
+                const isExpanded =
+                  expanded.includes(i)
 
-                <div
-                  key={i}
-                  className="
-                    bg-white
-                    rounded-2xl
-                    border
-                    border-slate-200
-                    shadow-sm
-                    mb-3
-                    overflow-hidden
-                  "
-                >
+                return (
 
-                  {/* TOP */}
-                  <div className="
-                    px-3
-                    py-2.5
-                    border-b
-                    border-slate-100
-                    flex
-                    items-center
-                    justify-between
-                    gap-2
-                  ">
-
-                    <div className="
-                      flex
-                      items-center
-                      gap-2
-                    ">
-
-                      <div className="
-                        w-8
-                        h-8
-                        rounded-xl
-                        bg-blue-700
-                        text-white
-                        text-xs
-                        font-black
-                        flex
-                        items-center
-                        justify-center
-                      ">
-                        {i + 1}
-                      </div>
-
-                      <div>
-
-                        <p className="
-                          text-[10px]
-                          text-slate-400
-                          uppercase
-                        ">
-                          Soal
-                        </p>
-
-                        <p className="
-                          text-xs
-                          font-bold
-                          text-slate-700
-                        ">
-                          Review
-                        </p>
-
-                      </div>
-
-                    </div>
-
-                    {item.benar ? (
-
-                      <div className="
-                        px-2.5
-                        py-1
-                        rounded-full
-                        bg-green-100
-                        text-green-700
-                        text-[10px]
-                        font-bold
-                      ">
-                        ✔ Benar
-                      </div>
-
-                    ) : (
-
-                      <div className="
-                        px-2.5
-                        py-1
-                        rounded-full
-                        bg-orange-100
-                        text-orange-700
-                        text-[10px]
-                        font-bold
-                      ">
-                        ✖ Salah
-                      </div>
-
-                    )}
-
-                  </div>
-
-                  {/* CONTENT */}
-                  <div className="
-                    p-3
-                    md:p-5
-                  ">
-
-                    {/* SOAL */}
-                    <div className="
-                      bg-slate-50
+                  <div
+                    key={i}
+                    className="
+                      bg-white
+                      rounded-3xl
                       border
                       border-slate-200
-                      rounded-2xl
-                      p-3
-                      md:p-5
-                      mb-3
-                    ">
+                      shadow-sm
+                      overflow-hidden
+                    "
+                  >
 
-                      <MathContent
-                        html={item.soal}
-                        className="
-                          text-[13px]
-                          md:text-[16px]
-                          leading-[1.8]
-                          text-slate-800
-                          font-medium
-                        "
-                      />
-
-                    </div>
-
-                    {/* JAWABAN */}
+                    {/* HEADER */}
                     <div className="
+                      px-4
+                      py-3
+                      border-b
+                      border-slate-100
                       flex
-                      flex-col
-                      sm:flex-row
-                      gap-2
-                      mb-3
+                      items-center
+                      justify-between
+                      gap-3
                     ">
 
-                      <div className="
-                        flex-1
-                        bg-slate-100
-                        rounded-xl
-                        px-3
-                        py-2
-                      ">
+                      <div className="flex items-center gap-3">
 
-                        <p className="
-                          text-[10px]
-                          text-slate-500
-                          mb-1
-                        ">
-                          Jawaban Kamu
-                        </p>
-
-                        <p className="
-                          text-sm
-                          font-black
-                          text-slate-700
-                        ">
-                          {item.jawaban_user || "-"}
-                        </p>
-
-                      </div>
-
-                      <div className="
-                        flex-1
-                        bg-green-100
-                        rounded-xl
-                        px-3
-                        py-2
-                      ">
-
-                        <p className="
-                          text-[10px]
-                          text-green-700
-                          mb-1
-                        ">
-                          Jawaban Benar
-                        </p>
-
-                        <p className="
-                          text-sm
-                          font-black
-                          text-green-700
-                        ">
-                          {item.jawaban_benar}
-                        </p>
-
-                      </div>
-
-                    </div>
-
-                    {/* AI */}
-                    {isEmpty ? (
-
-                      <button
-                        onClick={() =>
-                          generateAI(
-                            i,
-                            item
-                          )
-                        }
-                        className="
-                          w-full
-                          h-11
+                        <div className="
+                          w-10
+                          h-10
                           rounded-2xl
                           bg-blue-700
                           text-white
-                          text-sm
-                          font-bold
-                          active:scale-[0.98]
-                          transition-all
-                        "
-                      >
-
-                        {aiLoading === i
-
-                          ?
-
-                          "⏳ AI sedang berpikir..."
-
-                          :
-
-                          "✨ Generate Pembahasan AI"
-                        }
-
-                      </button>
-
-                    ) : (
-
-                      <div className="
-                        bg-blue-50
-                        border
-                        border-blue-200
-                        rounded-2xl
-                        p-3
-                        md:p-5
-                      ">
-
-                        <div className="
                           flex
                           items-center
-                          gap-2
-                          mb-3
+                          justify-center
+                          font-black
+                          text-sm
                         ">
+                          {i + 1}
+                        </div>
 
-                          <div className="
-                            w-8
-                            h-8
-                            rounded-xl
-                            bg-blue-700
-                            text-white
-                            flex
-                            items-center
-                            justify-center
-                            text-sm
+                        <div>
+
+                          <p className="
+                            text-[10px]
+                            uppercase
+                            text-slate-400
                           ">
-                            📘
-                          </div>
+                            Soal
+                          </p>
 
-                          <div>
-
-                            <p className="
-                              text-[10px]
-                              uppercase
-                              text-blue-500
-                            ">
-                              AI
-                            </p>
-
-                            <h2 className="
-                              text-sm
-                              font-black
-                              text-blue-900
-                            ">
-                              Pembahasan
-                            </h2>
-
-                          </div>
+                          <h2 className="
+                            text-sm
+                            font-black
+                            text-slate-700
+                          ">
+                            Review Jawaban
+                          </h2>
 
                         </div>
 
+                      </div>
+
+                      {item.benar ? (
+
+                        <div className="
+                          px-3
+                          py-1.5
+                          rounded-full
+                          bg-green-100
+                          text-green-700
+                          text-[11px]
+                          font-bold
+                        ">
+                          ✔ Benar
+                        </div>
+
+                      ) : (
+
+                        <div className="
+                          px-3
+                          py-1.5
+                          rounded-full
+                          bg-red-100
+                          text-red-700
+                          text-[11px]
+                          font-bold
+                        ">
+                          ✖ Salah
+                        </div>
+
+                      )}
+
+                    </div>
+
+                    {/* BODY */}
+                    <div className="p-4 md:p-6">
+
+                      {/* SOAL */}
+                      <div className="
+                        bg-slate-50
+                        border
+                        border-slate-200
+                        rounded-2xl
+                        p-4
+                        mb-4
+                      ">
+
                         <MathContent
-                          html={
-                            item.pembahasan
-                          }
+                          html={item.soal}
                           className="
-                            text-[13px]
-                            md:text-[15px]
+                            text-[14px]
+                            md:text-[16px]
                             leading-[1.9]
-                            text-slate-700
+                            text-slate-800
                           "
                         />
 
                       </div>
 
-                    )}
+                      {/* JAWABAN */}
+                      <div className="
+                        grid
+                        grid-cols-1
+                        md:grid-cols-2
+                        gap-3
+                        mb-4
+                      ">
+
+                        <div className="
+                          bg-slate-100
+                          rounded-2xl
+                          p-4
+                        ">
+
+                          <p className="
+                            text-[11px]
+                            text-slate-500
+                            mb-1
+                          ">
+                            Jawaban Kamu
+                          </p>
+
+                          <h2 className="
+                            text-lg
+                            font-black
+                            text-slate-700
+                          ">
+                            {item.jawaban_user || "-"}
+                          </h2>
+
+                        </div>
+
+                        <div className="
+                          bg-green-100
+                          rounded-2xl
+                          p-4
+                        ">
+
+                          <p className="
+                            text-[11px]
+                            text-green-700
+                            mb-1
+                          ">
+                            Jawaban Benar
+                          </p>
+
+                          <h2 className="
+                            text-lg
+                            font-black
+                            text-green-700
+                          ">
+                            {item.jawaban_benar}
+                          </h2>
+
+                        </div>
+
+                      </div>
+
+                      {/* AI */}
+                      {!item.pembahasan ? (
+
+                        <button
+                          onClick={() =>
+                            generateAI(
+                              i,
+                              item
+                            )
+                          }
+                          disabled={
+                            aiLoading === i
+                          }
+                          className="
+                            w-full
+                            h-12
+                            rounded-2xl
+                            bg-blue-700
+                            text-white
+                            text-sm
+                            font-black
+                            disabled:opacity-60
+                            active:scale-[0.98]
+                            transition-all
+                          "
+                        >
+
+                          {aiLoading === i
+
+                            ? "⏳ AI sedang membuat pembahasan..."
+
+                            : "✨ Generate Pembahasan AI"}
+
+                        </button>
+
+                      ) : (
+
+                        <div className="
+                          bg-blue-50
+                          border
+                          border-blue-200
+                          rounded-2xl
+                          overflow-hidden
+                        ">
+
+                          <button
+                            onClick={() =>
+                              toggleExpand(i)
+                            }
+                            className="
+                              w-full
+                              px-4
+                              py-3
+                              flex
+                              items-center
+                              justify-between
+                              text-left
+                            "
+                          >
+
+                            <div className="
+                              flex
+                              items-center
+                              gap-3
+                            ">
+
+                              <div className="
+                                w-10
+                                h-10
+                                rounded-2xl
+                                bg-blue-700
+                                text-white
+                                flex
+                                items-center
+                                justify-center
+                              ">
+                                📘
+                              </div>
+
+                              <div>
+
+                                <p className="
+                                  text-[10px]
+                                  uppercase
+                                  text-blue-500
+                                ">
+                                  AI
+                                </p>
+
+                                <h2 className="
+                                  text-sm
+                                  font-black
+                                  text-blue-900
+                                ">
+                                  Pembahasan
+                                </h2>
+
+                              </div>
+
+                            </div>
+
+                            <div className="
+                              text-blue-700
+                              text-xl
+                              font-black
+                            ">
+                              {isExpanded
+                                ? "−"
+                                : "+"}
+                            </div>
+
+                          </button>
+
+                          {isExpanded && (
+
+                            <div className="
+                              px-4
+                              pb-4
+                            ">
+
+                              <MathContent
+                                html={
+                                  item.pembahasan
+                                }
+                                className="
+                                  text-[14px]
+                                  md:text-[15px]
+                                  leading-[1.9]
+                                  text-slate-700
+                                "
+                              />
+
+                            </div>
+
+                          )}
+
+                        </div>
+
+                      )}
+
+                    </div>
 
                   </div>
 
-                </div>
+                )
+              }
+            )}
 
-              )
-            })
-          }
+          </div>
 
         </div>
 
       </div>
-
     </MathJaxContext>
-
   )
 }
 
 // =========================
-// CARD
+// CARD COMPONENT
 // =========================
 function Card({
   title,
   value,
   bg,
   color,
-}: any) {
-
+}: {
+  title: string
+  value: string | number
+  bg: string
+  color: string
+}) {
   return (
-
     <div
       className={`
         ${bg}
-        rounded-2xl
-        px-2
-        py-3
+        rounded-3xl
+        px-3
+        py-4
         text-center
         border
-        border-white/40
+        border-white/50
       `}
     >
 
       <h1
         className={`
           ${color}
-          text-lg
-          md:text-3xl
+          text-2xl
+          md:text-4xl
           font-black
           leading-none
         `}
       >
-
         {value}
-
       </h1>
 
       <p className="
-        mt-1
-        text-[10px]
+        mt-2
+        text-[11px]
         md:text-sm
-        font-semibold
+        font-bold
         text-slate-600
-        truncate
       ">
-
         {title}
-
       </p>
 
     </div>
-
   )
 }

@@ -8,11 +8,14 @@ import {
   useRef,
 } from "react"
 
+import Image from "next/image"
+
 import { supabase } from "../../../lib/supabase"
 
 import {
   useRouter,
   useParams,
+  useSearchParams,
 } from "next/navigation"
 
 import {
@@ -20,6 +23,9 @@ import {
   MathJaxContext,
 } from "better-react-mathjax"
 
+// ======================
+// TYPES
+// ======================
 type Soal = {
   id: number
   pertanyaan: string
@@ -30,61 +36,72 @@ type Soal = {
   opsi_e?: string
   jawaban_benar: string
   kategori: string
-  pembahasan?: string
-  video_url?: string
-  pengantar?: string
-  bacaan?: string
   gambar?: string
 }
 
+type SavedState = {
+  answers: Record<number, string>
+  currentSoal: number
+  timeLeft: number
+}
+
 // ======================
-// MATHJAX CONFIG
+// MATH CONFIG
 // ======================
 const mathJaxConfig = {
   loader: {
     load: ["input/tex", "output/chtml"],
   },
+
   tex: {
     inlineMath: [
       ["$", "$"],
       ["\\(", "\\)"],
     ],
+
     displayMath: [
       ["$$", "$$"],
       ["\\[", "\\]"],
     ],
+
     processEscapes: true,
-    packages: { "[+]": ["ams"] },
   },
+
   options: {
     enableMenu: false,
-    renderActions: { addMenu: [] },
+
+    renderActions: {
+      addMenu: [],
+    },
   },
+
   chtml: {
     scale: 1,
     minScale: 0.5,
     matchFontHeight: false,
-    mtextInheritFont: true,
+    linebreaks: {
+      automatic: true,
+    },
   },
 }
 
 // ======================
-// FORMAT SOAL
+// FORMAT TEXT
 // ======================
-function formatSoal(text: string): string {
+function formatSoal(text: string) {
   if (!text) return ""
 
   return text
+    .replace(/\n/g, "<br/>")
     .replace(/\(1\)/g, "<br/><br/>(1)")
     .replace(/\(2\)/g, "<br/>(2)")
     .replace(/\(3\)/g, "<br/>(3)")
     .replace(/\(4\)/g, "<br/>(4)")
     .replace(/\(5\)/g, "<br/>(5)")
-    .replace(/\n/g, "<br/>")
 }
 
 // ======================
-// MATH RENDERER
+// MATH RENDER
 // ======================
 const MathRenderer = memo(
   ({
@@ -94,20 +111,43 @@ const MathRenderer = memo(
     text: string
     className?: string
   }) => {
-    const html = useMemo(() => formatSoal(text), [text])
+
+    const html = useMemo(
+      () => formatSoal(text),
+      [text]
+    )
 
     return (
+
       <div
-        className={`overflow-x-auto break-words whitespace-normal ${className}`}
+        className={`
+          overflow-x-auto
+          break-words
+          whitespace-normal
+          w-full
+          ${className}
+        `}
       >
-        <MathJax
-          key={text}
-          dynamic
-          renderMode="post"
-        >
-          <span dangerouslySetInnerHTML={{ __html: html }} />
+
+        <MathJax dynamic>
+
+          <div
+            className="
+              text-wrap
+              break-words
+              leading-loose
+              [&_*]:max-w-full
+              [&_img]:max-w-full
+            "
+            dangerouslySetInnerHTML={{
+              __html: html,
+            }}
+          />
+
         </MathJax>
+
       </div>
+
     )
   }
 )
@@ -124,49 +164,121 @@ function OptionBadge({
   label: string
   selected: boolean
 }) {
+
   return (
-    <span
+
+    <div
       className={`
-        flex items-center justify-center
-        w-7 h-7 min-w-[28px]
-        rounded-lg text-[10px]
-        font-black transition-all
-        ${selected
-          ? "bg-white text-blue-700"
-          : "bg-slate-100 text-slate-600"
+        w-9
+        h-9
+        min-w-[36px]
+        rounded-xl
+        flex
+        items-center
+        justify-center
+        text-sm
+        font-black
+        transition-all
+        ${
+          selected
+            ? "bg-white text-blue-700"
+            : "bg-slate-100 text-slate-700"
         }
       `}
     >
+
       {label}
-    </span>
+
+    </div>
+
   )
 }
 
 // ======================
-// MAIN COMPONENT
+// MAIN PAGE
 // ======================
-export default function Ujian() {
+export default function UjianPage() {
+
   const router = useRouter()
+
   const params = useParams()
-  const kategori = decodeURIComponent(params.kategori as string)
 
-  const [soal, setSoal] = useState<Soal[]>([])
-  const [jawabanUser, setJawabanUser] = useState<Record<number, string>>({})
-  const [currentSoal, setCurrentSoal] = useState(0)
-  const [timeLeft, setTimeLeft] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [allowed, setAllowed] = useState(false)
-  const [tokenInput, setTokenInput] = useState("")
-  const [storageKey, setStorageKey] = useState("")
-  const [tokenKey, setTokenKey] = useState("")
-  const [submitting, setSubmitting] = useState(false)
+  const searchParams =
+    useSearchParams()
 
-  const stateRef = useRef({ jawabanUser, currentSoal, timeLeft })
+  const kategori =
+    decodeURIComponent(
+      params.kategori as string
+    )
+
+  const paket =
+    searchParams.get("paket") || ""
+
+  const packageId =
+    searchParams.get("package_id") || null
+
+  // ======================
+  // STATES
+  // ======================
+  const [loading, setLoading] =
+    useState(true)
+
+  const [allowed, setAllowed] =
+    useState(false)
+
+  const [tokenInput, setTokenInput] =
+    useState("")
+
+  const [soal, setSoal] = useState<
+    Soal[]
+  >([])
+
+  const [jawabanUser, setJawabanUser] =
+    useState<Record<number, string>>(
+      {}
+    )
+
+  const [currentSoal, setCurrentSoal] =
+    useState(0)
+
+  const [timeLeft, setTimeLeft] =
+    useState(0)
+
+  const [submitting, setSubmitting] =
+    useState(false)
+
+  const [storageKey, setStorageKey] =
+    useState("")
+
+  const [tokenKey, setTokenKey] =
+    useState("")
+
+  // ======================
+  // REF
+  // ======================
+  const stateRef = useRef({
+    jawabanUser,
+    currentSoal,
+    timeLeft,
+  })
 
   useEffect(() => {
-    stateRef.current = { jawabanUser, currentSoal, timeLeft }
-  }, [jawabanUser, currentSoal, timeLeft])
 
+    stateRef.current = {
+      jawabanUser,
+      currentSoal,
+      timeLeft,
+    }
+
+  }, [
+    jawabanUser,
+    currentSoal,
+    timeLeft,
+  ])
+
+  // ======================
+  // INIT
+  // ======================
   useEffect(() => {
     init()
   }, [])
@@ -175,167 +287,322 @@ export default function Ujian() {
   // TIMER
   // ======================
   useEffect(() => {
-    if (!allowed || !storageKey || timeLeft <= 0) return
+
+    if (
+      !allowed ||
+      !storageKey ||
+      timeLeft <= 0
+    ) return
 
     const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        const newTime = prev - 1
 
-        const { jawabanUser: j, currentSoal: c } = stateRef.current
+      setTimeLeft((prev) => {
+
+        const newTime =
+          prev - 1
+
+        const {
+          jawabanUser,
+          currentSoal,
+        } = stateRef.current
 
         localStorage.setItem(
           storageKey,
           JSON.stringify({
-            ...j,
-            currentSoal: c,
+            answers: jawabanUser,
+            currentSoal,
             timeLeft: newTime,
           })
         )
 
         if (newTime <= 0) {
+
           clearInterval(interval)
+
           handleAutoSubmit()
+
           return 0
         }
 
         return newTime
       })
+
     }, 1000)
 
-    return () => clearInterval(interval)
-  }, [allowed, storageKey])
+    return () =>
+      clearInterval(interval)
+
+  }, [
+    allowed,
+    storageKey,
+    timeLeft,
+  ])
 
   // ======================
-  // INIT
+  // INIT APP
   // ======================
   async function init() {
-    const { data } = await supabase.auth.getUser()
 
-    if (!data.user) {
-      router.push("/login")
-      return
+    try {
+
+      const { data } =
+        await supabase.auth.getUser()
+
+      const user =
+        data.user
+
+      if (!user) {
+
+        router.push("/login")
+
+        return
+      }
+
+      const userId =
+        user.id
+
+      const key =
+        `ujian_${kategori}_${userId}`
+
+      const tokenStorage =
+        `token_${kategori}_${userId}`
+
+      setStorageKey(key)
+
+      setTokenKey(tokenStorage)
+
+      // ======================
+      // CEK TOKEN USED
+      // ======================
+      const {
+        data: tokenUsed,
+      } = await supabase
+        .from("token_used")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("kategori", kategori)
+        .maybeSingle()
+
+      if (tokenUsed) {
+
+        alert(
+          "Kamu sudah mengerjakan ujian ini"
+        )
+
+        router.push("/dashboard")
+
+        return
+      }
+
+      // ======================
+      // CEK JADWAL
+      // ======================
+      const {
+        data: jadwal,
+      } = await supabase
+        .from("jadwal_ujian")
+        .select("*")
+        .eq("kategori", kategori)
+        .eq("status", true)
+        .single()
+
+      if (!jadwal) {
+
+        alert("Ujian belum dibuka")
+
+        router.push("/dashboard")
+
+        return
+      }
+
+      // ======================
+      // LOAD SOAL
+      // ======================
+      await getSoal(userId)
+
+      // ======================
+      // RESTORE
+      // ======================
+      const saved =
+        localStorage.getItem(key)
+
+      if (saved) {
+
+        const parsed: SavedState =
+          JSON.parse(saved)
+
+        setJawabanUser(
+          parsed.answers || {}
+        )
+
+        setCurrentSoal(
+          parsed.currentSoal || 0
+        )
+
+        setTimeLeft(
+          parsed.timeLeft ||
+            jadwal.durasi * 60
+        )
+
+      } else {
+
+        setTimeLeft(
+          jadwal.durasi * 60
+        )
+      }
+
+      // ======================
+      // TOKEN VALID
+      // ======================
+      const savedToken =
+        localStorage.getItem(
+          tokenStorage
+        )
+
+      if (savedToken === "true") {
+        setAllowed(true)
+      }
+
+      setLoading(false)
+
+    } catch (err) {
+
+      console.log(err)
+
+      alert("Terjadi kesalahan")
+
+      setLoading(false)
     }
-
-    const userId = data.user.id
-
-    const key = `ujian_${kategori}_${userId}`
-    const tokenStorage = `token_valid_${kategori}_${userId}`
-
-    setStorageKey(key)
-    setTokenKey(tokenStorage)
-
-    const { data: jadwal } = await supabase
-      .from("jadwal_ujian")
-      .select("*")
-      .eq("kategori", kategori)
-      .eq("status", true)
-      .single()
-
-    if (!jadwal) {
-      alert("Ujian belum dibuka admin")
-      router.push("/dashboard")
-      return
-    }
-
-    const { data: used } = await supabase
-      .from("token_used")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("kategori", kategori)
-      .single()
-
-    if (used) {
-      alert("Kamu sudah pernah mengikuti ujian ini")
-      router.push("/dashboard")
-      return
-    }
-
-    await getSoal()
-
-    const saved = localStorage.getItem(key)
-
-    if (saved) {
-      const parsed = JSON.parse(saved)
-
-      setJawabanUser(parsed)
-      setCurrentSoal(parsed.currentSoal || 0)
-      setTimeLeft(parsed.timeLeft || jadwal.durasi * 60)
-    } else {
-      setTimeLeft(jadwal.durasi * 60)
-    }
-
-    const savedToken = localStorage.getItem(tokenStorage)
-
-    if (savedToken === "true") setAllowed(true)
-
-    setLoading(false)
   }
 
   // ======================
-  // GET SOAL
+  // LOAD SOAL
   // ======================
-  async function getSoal() {
-    const { data: userData } = await supabase.auth.getUser()
+  async function getSoal(
+    userId: string
+  ) {
 
-    const userId = userData.user?.id
-    const soalKey = `soal_${kategori}_${userId}`
+    const soalKey =
+      `soal_${kategori}_${userId}`
 
-    const savedSoal = localStorage.getItem(soalKey)
+    const saved =
+      localStorage.getItem(soalKey)
 
-    if (savedSoal) {
-      setSoal(JSON.parse(savedSoal))
+    if (saved) {
+
+      setSoal(JSON.parse(saved))
+
       return
     }
 
-    const { data, error } = await supabase
-      .from("soal")
-      .select("*")
-      .eq("kategori", kategori)
+    const { data, error } =
+      await supabase
+        .from("soal")
+        .select("*")
+        .eq("kategori", kategori)
 
-    if (error) {
-      console.error(error)
+    if (error || !data) {
+
+      console.log(error)
+
       return
     }
 
-    const shuffled = (data || []).sort(() => Math.random() - 0.5)
-    const selected = shuffled.slice(0, 25)
+    const shuffled =
+      data.sort(
+        () => Math.random() - 0.5
+      )
 
-    localStorage.setItem(soalKey, JSON.stringify(selected))
+    const selected =
+      shuffled.slice(0, 25)
+
+    localStorage.setItem(
+      soalKey,
+      JSON.stringify(selected)
+    )
+
     setSoal(selected as Soal[])
   }
 
   // ======================
   // PILIH JAWABAN
   // ======================
-  function pilihJawaban(id: number, jawaban: string) {
+  function pilihJawaban(
+    id: number,
+    jawaban: string
+  ) {
+
     const updated = {
       ...jawabanUser,
       [id]: jawaban,
-      currentSoal,
-      timeLeft,
     }
 
     setJawabanUser(updated)
 
-    localStorage.setItem(storageKey, JSON.stringify(updated))
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        answers: updated,
+        currentSoal,
+        timeLeft,
+      })
+    )
   }
 
   // ======================
-  // TIMER FORMAT
+  // FORMAT TIMER
   // ======================
   function formatWaktu() {
-    const menit = Math.floor(timeLeft / 60)
-    const detik = timeLeft % 60
 
-    return `${String(menit).padStart(2, "0")}:${String(
-      detik
-    ).padStart(2, "0")}`
+    const menit =
+      Math.floor(timeLeft / 60)
+
+    const detik =
+      timeLeft % 60
+
+    return `${String(menit).padStart(
+      2,
+      "0"
+    )}:${String(detik).padStart(
+      2,
+      "0"
+    )}`
+  }
+
+  // ======================
+  // VERIFY TOKEN
+  // ======================
+  async function verifyToken() {
+
+    const { data } =
+      await supabase
+        .from("jadwal_ujian")
+        .select("*")
+        .eq("kategori", kategori)
+        .eq("token", tokenInput)
+        .eq("status", true)
+        .single()
+
+    if (!data) {
+
+      alert("Token salah")
+
+      return
+    }
+
+    localStorage.setItem(
+      tokenKey,
+      "true"
+    )
+
+    setAllowed(true)
   }
 
   // ======================
   // AUTO SUBMIT
   // ======================
   async function handleAutoSubmit() {
+
     if (submitting) return
 
     alert("Waktu habis!")
@@ -343,272 +610,538 @@ export default function Ujian() {
     await submitUjian()
   }
 
-  // ======================
-  // SUBMIT
-  // ======================
-  async function submitUjian() {
+// ======================
+// SUBMIT
+// ======================
+async function submitUjian() {
+
+  try {
+
     if (submitting) return
 
     setSubmitting(true)
 
-    let total = 0
+    const { data: authData } =
+      await supabase.auth.getUser()
 
-    const detail = soal.map((item) => {
-      const jawaban = jawabanUser[item.id]
-      const benar = jawaban === item.jawaban_benar
+    const userId =
+      authData.user?.id
 
-      if (benar) total++
+    if (!userId) {
 
-      return {
-        soal: item.pertanyaan,
-        jawaban_user: jawaban,
-        jawaban_benar: item.jawaban_benar,
-        benar,
-      }
-    })
+      alert("User tidak ditemukan")
 
-    const { data } = await supabase.auth.getUser()
-
-    const userId = data.user?.id
-
-    await supabase.from("hasil").insert([
-      {
-        skor: total,
-        kategori,
-        tanggal: new Date(),
-        user_id: userId,
-        detail,
-      },
-    ])
-
-    await supabase
-      .from("token_used")
-      .insert([{ user_id: userId, kategori }])
-
-    localStorage.removeItem(storageKey)
-    localStorage.removeItem(tokenKey)
-    localStorage.removeItem(`soal_${kategori}_${userId}`)
-
-    alert("Ujian selesai!")
-
-    router.push("/review")
-  }
-
-  // ======================
-  // VERIFY TOKEN
-  // ======================
-  async function verifyToken() {
-    const { data } = await supabase
-      .from("jadwal_ujian")
-      .select("*")
-      .eq("kategori", kategori)
-      .eq("token", tokenInput)
-      .eq("status", true)
-      .single()
-
-    if (!data) {
-      alert("Token salah")
       return
     }
 
-    localStorage.setItem(tokenKey, "true")
-    setAllowed(true)
+    // ======================
+    // CHECK SUDAH UJIAN
+    // ======================
+
+    const {
+      data: used,
+    } = await supabase
+      .from("token_used")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("kategori", kategori)
+      .maybeSingle()
+
+    if (used) {
+
+      alert(
+        "Ujian sudah pernah dikirim"
+      )
+
+      router.push("/dashboard")
+
+      return
+    }
+
+// ======================
+// HITUNG SKOR
+// ======================
+
+let total = 0
+
+const detail = soal.map(
+  (item) => {
+
+    const jawaban =
+      jawabanUser[item.id]
+
+    const benar =
+      jawaban ===
+      item.jawaban_benar
+
+    // 1 soal = 4 poin
+    if (benar) total += 4
+
+    return {
+
+      soal: item.pertanyaan,
+
+      jawaban_user:
+        jawaban || "-",
+
+      jawaban_benar:
+        item.jawaban_benar,
+
+      benar,
+    }
   }
+)
+
+    // ======================
+    // INSERT HASIL
+    // ======================
+
+    const {
+      error: hasilError,
+    } = await supabase
+      .from("hasil")
+      .insert([
+        {
+          skor: total,
+
+          kategori: kategori,
+
+          tanggal:
+            new Date().toISOString(),
+
+          user_id: userId,
+
+          detail: detail,
+
+          paket:
+            paket || null,
+
+          package_id:
+            packageId || null,
+        },
+      ])
+
+    if (hasilError) {
+
+      console.log(hasilError)
+
+      alert(
+        "Gagal simpan hasil"
+      )
+
+      return
+    }
+
+    // ======================
+    // INSERT TOKEN USED
+    // ======================
+
+    const {
+      error: tokenError,
+    } = await supabase
+      .from("token_used")
+      .insert([
+        {
+          user_id: userId,
+
+          kategori: kategori,
+
+          package_id:
+            packageId || null,
+        },
+      ])
+
+    if (tokenError) {
+
+      console.log(tokenError)
+    }
+
+    // ======================
+    // UPDATE RANKING TKA
+    // ======================
+
+    if (packageId) {
+
+      // ambil ranking lama
+
+      const {
+        data: rankingData,
+      } = await supabase
+        .from("ranking_tka")
+        .select("*")
+        .eq("user_id", userId)
+        .eq(
+          "package_id",
+          packageId
+        )
+        .maybeSingle()
+
+      // ======================
+      // BELUM ADA RANKING
+      // ======================
+
+      if (!rankingData) {
+
+        const selesai =
+          1 >= 4
+
+        await supabase
+          .from("ranking_tka")
+          .insert([
+            {
+              user_id: userId,
+
+              package_id:
+                packageId,
+
+              total_skor:
+                total,
+
+              jumlah_ujian: 1,
+
+              selesai:
+                selesai,
+            },
+          ])
+
+      } else {
+
+        // ======================
+        // UPDATE RANKING
+        // ======================
+
+        const newJumlah =
+          (rankingData.jumlah_ujian || 0) + 1
+
+        const newTotal =
+          (rankingData.total_skor || 0) + total
+
+        const selesai =
+          newJumlah >= 4
+
+        await supabase
+          .from("ranking_tka")
+          .update({
+            total_skor:
+              newTotal,
+
+            jumlah_ujian:
+              newJumlah,
+
+            selesai:
+              selesai,
+          })
+          .eq(
+            "id",
+            rankingData.id
+          )
+      }
+    }
+
+    // ======================
+    // CLEAR STORAGE
+    // ======================
+
+    localStorage.removeItem(
+      storageKey
+    )
+
+    localStorage.removeItem(
+      tokenKey
+    )
+
+    localStorage.removeItem(
+      `soal_${kategori}_${userId}`
+    )
+
+    // ======================
+    // ALERT
+    // ======================
+
+    alert(
+      `Ujian selesai!\n\nSkor kamu: ${total}/${soal.length}`
+    )
+
+    // ======================
+    // REDIRECT
+    // ======================
+
+    router.replace("/review")
+
+  } catch (err) {
+
+    console.log(err)
+
+    alert("Gagal submit")
+
+  } finally {
+
+    setSubmitting(false)
+  }
+}
 
   // ======================
   // LOADING
   // ======================
   if (loading) {
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-10 h-10 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+
+        <div className="w-10 h-10 border-4 border-blue-700 border-t-transparent rounded-full animate-spin" />
+
       </div>
+
     )
   }
 
   // ======================
-  // TOKEN
+  // TOKEN PAGE
   // ======================
   if (!allowed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4">
-        <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl">
-          <h1 className="text-2xl font-black text-center mb-2">
-            Token Ujian
-          </h1>
 
-          <p className="text-center text-slate-500 mb-5 text-sm">
-            {kategori}
-          </p>
+    return (
+
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
+
+        <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl">
+
+          <div className="text-center mb-5">
+
+            <div className="text-5xl mb-3">
+              🔐
+            </div>
+
+            <h1 className="text-2xl font-black">
+              Token Ujian
+            </h1>
+
+            <p className="text-slate-500 mt-1">
+              {kategori}
+            </p>
+
+          </div>
 
           <input
             value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
+            onChange={(e) =>
+              setTokenInput(
+                e.target.value
+              )
+            }
             placeholder="Masukkan token"
-            className="w-full h-12 border rounded-2xl px-4 mb-3 outline-none"
+            className="
+              w-full
+              h-12
+              border
+              border-slate-300
+              rounded-2xl
+              px-4
+              mb-4
+              outline-none
+              text-black
+            "
           />
 
           <button
             onClick={verifyToken}
-            className="w-full h-12 rounded-2xl bg-blue-700 text-white font-bold"
+            className="
+              w-full
+              h-12
+              rounded-2xl
+              bg-blue-700
+              text-white
+              font-black
+              active:scale-[0.98]
+            "
           >
             Mulai Ujian
           </button>
+
         </div>
+
       </div>
+
     )
   }
 
+  // ======================
+  // EMPTY
+  // ======================
   if (!soal.length) {
+
     return (
-      <div className="min-h-screen flex items-center justify-center">
+
+      <div className="min-h-screen flex items-center justify-center text-slate-500">
+
         Tidak ada soal
+
       </div>
+
     )
   }
 
-  const soalAktif = soal[currentSoal]
+  const soalAktif =
+    soal[currentSoal]
 
-  const progress = ((currentSoal + 1) / soal.length) * 100
+  const progress =
+    ((currentSoal + 1) /
+      soal.length) *
+    100
 
   const opsiList = [
-    { key: "a", value: soalAktif.opsi_a },
-    { key: "b", value: soalAktif.opsi_b },
-    { key: "c", value: soalAktif.opsi_c },
-    { key: "d", value: soalAktif.opsi_d },
+    {
+      key: "a",
+      value: soalAktif.opsi_a,
+    },
+    {
+      key: "b",
+      value: soalAktif.opsi_b,
+    },
+    {
+      key: "c",
+      value: soalAktif.opsi_c,
+    },
+    {
+      key: "d",
+      value: soalAktif.opsi_d,
+    },
+
     ...(soalAktif.opsi_e
-      ? [{ key: "e", value: soalAktif.opsi_e }]
+      ? [
+          {
+            key: "e",
+            value:
+              soalAktif.opsi_e,
+          },
+        ]
       : []),
   ]
 
-  const answeredCount = Object.keys(jawabanUser).filter(
-    (k) => !["currentSoal", "timeLeft"].includes(k)
-  ).length
-
   return (
-    <MathJaxContext config={mathJaxConfig}>
-      <div className="min-h-screen bg-slate-100 pb-24">
 
-        {/* =========================
-            MOBILE HEADER COMPACT
-        ========================= */}
-        <div className="sticky top-0 z-50 bg-blue-700 shadow-lg">
+    <MathJaxContext
+      config={mathJaxConfig}
+    >
 
-          <div className="px-3 pt-2 pb-2">
+      <div className="min-h-screen bg-slate-100 pb-28">
 
-            {/* TOP */}
-            <div className="flex items-center justify-between gap-2">
+        {/* HEADER */}
+        <div className="sticky top-0 bg-blue-700 z-50 shadow-lg">
+
+          <div className="px-3 py-3">
+
+            <div className="flex justify-between gap-3">
 
               <div className="min-w-0">
-                <p className="text-[9px] uppercase tracking-widest text-blue-200">
+
+                <p className="text-blue-200 text-[10px] uppercase tracking-widest">
                   Ujian
                 </p>
 
-                <h1 className="text-sm font-black text-white truncate">
+                <h1 className="text-white font-black text-sm md:text-lg truncate">
                   {kategori}
                 </h1>
+
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="bg-white rounded-xl px-3 py-2 shrink-0">
 
-                <div className="bg-white/15 rounded-xl px-2 py-1">
-                  <p className="text-[9px] text-blue-200">
-                    Soal
-                  </p>
+                <p className="text-[10px] text-slate-500">
+                  Timer
+                </p>
 
-                  <p className="text-xs font-black text-white">
-                    {currentSoal + 1}/{soal.length}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl px-3 py-1">
-                  <p className="text-[9px] text-slate-500">
-                    Timer
-                  </p>
-
-                  <p className="text-sm font-black text-blue-700 tabular-nums">
-                    {formatWaktu()}
-                  </p>
-                </div>
+                <p className="font-black text-blue-700 tabular-nums">
+                  {formatWaktu()}
+                </p>
 
               </div>
 
             </div>
 
             {/* PROGRESS */}
-            <div className="mt-2 h-1.5 bg-white/20 rounded-full overflow-hidden">
+            <div className="mt-3 h-2 bg-white/20 rounded-full overflow-hidden">
+
               <div
-                className="h-full bg-white rounded-full transition-all"
-                style={{ width: `${progress}%` }}
+                className="h-full bg-white transition-all"
+                style={{
+                  width: `${progress}%`,
+                }}
               />
-            </div>
-
-          </div>
-
-          {/* MOBILE NAV */}
-          <div className="overflow-x-auto border-t border-white/10">
-            <div className="flex gap-1 px-2 py-2 w-max">
-
-              {soal.map((item, index) => {
-
-                const active = currentSoal === index
-                const answered = jawabanUser[item.id]
-
-                return (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentSoal(index)}
-                    className={`
-                      min-w-[34px] h-8 rounded-lg
-                      text-[10px] font-black
-                      transition-all
-                      ${active
-                        ? "bg-white text-blue-700"
-                        : answered
-                        ? "bg-emerald-500 text-white"
-                        : "bg-white/15 text-white"
-                      }
-                    `}
-                  >
-                    {index + 1}
-                  </button>
-                )
-              })}
 
             </div>
+
           </div>
 
         </div>
 
-        {/* =========================
-            MAIN CONTENT
-        ========================= */}
-        <div className="max-w-3xl mx-auto px-2 py-2">
+        {/* CONTENT */}
+        <div className="max-w-3xl mx-auto px-2 py-3">
 
-          {/* QUESTION CARD */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          {/* CARD SOAL */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
 
-            {/* QUESTION */}
-            <div className="p-3 md:p-5">
+            <div className="p-4 md:p-6">
 
+              {/* NOMOR */}
+              <div className="flex items-center gap-3 mb-4">
+
+                <div className="w-10 h-10 rounded-2xl bg-blue-700 text-white flex items-center justify-center font-black">
+
+                  {currentSoal + 1}
+
+                </div>
+
+                <div>
+
+                  <p className="text-xs text-slate-400">
+                    Soal
+                  </p>
+
+                  <h2 className="font-black text-slate-800">
+                    Pilih Jawaban
+                  </h2>
+
+                </div>
+
+              </div>
+
+              {/* IMAGE */}
               {soalAktif.gambar && (
-                <div className="mb-3 flex justify-center">
-                  <img
+
+                <div className="mb-5 flex justify-center">
+
+                  <Image
                     src={soalAktif.gambar}
                     alt="gambar"
-                    className="rounded-xl max-h-[220px] object-contain border"
+                    width={700}
+                    height={500}
+                    className="
+                      rounded-2xl
+                      border
+                      object-contain
+                      w-auto
+                      h-auto
+                      max-h-[350px]
+                    "
                   />
+
                 </div>
+
               )}
 
-              <div className="bg-slate-50 border rounded-2xl p-3 md:p-5">
+              {/* SOAL */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-5">
 
                 <MathRenderer
-                  text={soalAktif.pertanyaan}
+                  text={
+                    soalAktif.pertanyaan
+                  }
                   className="
-                    text-[14px]
-                    md:text-[16px]
-                    leading-[1.8]
+                    text-[15px]
+                    md:text-[17px]
+                    leading-[2]
                     text-slate-800
                     font-medium
                   "
@@ -618,15 +1151,18 @@ export default function Ujian() {
 
             </div>
 
-            {/* OPTIONS */}
-            <div className="px-3 pb-4 space-y-2.5">
+            {/* OPSI */}
+            <div className="px-4 pb-5 space-y-3">
 
               {opsiList.map((opsi) => {
 
                 const selected =
-                  jawabanUser[soalAktif.id] === opsi.key
+                  jawabanUser[
+                    soalAktif.id
+                  ] === opsi.key
 
                 return (
+
                   <button
                     key={opsi.key}
                     onClick={() =>
@@ -636,13 +1172,18 @@ export default function Ujian() {
                       )
                     }
                     className={`
-                      w-full text-left
-                      rounded-2xl border
-                      p-3 flex gap-3 items-start
+                      w-full
+                      rounded-2xl
+                      border
+                      p-4
+                      flex
+                      gap-3
+                      text-left
                       transition-all
-                      ${selected
-                        ? "bg-blue-700 border-blue-700"
-                        : "bg-white border-slate-200"
+                      ${
+                        selected
+                          ? "bg-blue-700 border-blue-700"
+                          : "bg-white border-slate-200 hover:border-blue-300"
                       }
                     `}
                   >
@@ -652,17 +1193,19 @@ export default function Ujian() {
                       selected={selected}
                     />
 
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 overflow-hidden">
 
                       <MathRenderer
                         text={opsi.value}
                         className={`
-                          text-[13px]
-                          md:text-[14px]
-                          leading-[1.7]
-                          ${selected
-                            ? "text-white"
-                            : "text-slate-700"
+                          text-[14px]
+                          md:text-[15px]
+                          leading-[1.9]
+                          font-medium
+                          ${
+                            selected
+                              ? "text-white"
+                              : "text-slate-700"
                           }
                         `}
                       />
@@ -670,6 +1213,7 @@ export default function Ujian() {
                     </div>
 
                   </button>
+
                 )
               })}
 
@@ -677,40 +1221,10 @@ export default function Ujian() {
 
           </div>
 
-          {/* ANSWERED INFO */}
-          <div className="mt-3 bg-white rounded-2xl border border-slate-200 p-3">
-
-            <div className="flex items-center justify-between mb-2">
-
-              <p className="text-xs text-slate-500">
-                Progress Jawaban
-              </p>
-
-              <p className="text-xs font-bold text-slate-700">
-                {answeredCount}/{soal.length}
-              </p>
-
-            </div>
-
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 rounded-full"
-                style={{
-                  width: `${
-                    (answeredCount / soal.length) * 100
-                  }%`,
-                }}
-              />
-            </div>
-
-          </div>
-
         </div>
 
-        {/* =========================
-            BOTTOM NAV
-        ========================= */}
-        <div className="fixed bottom-0 left-0 w-full z-50 bg-white border-t border-slate-200">
+        {/* BOTTOM */}
+        <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 z-50">
 
           <div className="max-w-3xl mx-auto p-2 flex gap-2">
 
@@ -720,11 +1234,16 @@ export default function Ujian() {
                   Math.max(p - 1, 0)
                 )
               }
-              disabled={currentSoal === 0}
+              disabled={
+                currentSoal === 0
+              }
               className="
-                flex-1 h-11 rounded-xl
-                bg-slate-800 text-white
-                text-sm font-bold
+                flex-1
+                h-12
+                rounded-xl
+                bg-slate-800
+                text-white
+                font-bold
                 disabled:opacity-40
               "
             >
@@ -735,13 +1254,18 @@ export default function Ujian() {
               onClick={submitUjian}
               disabled={submitting}
               className="
-                flex-1 h-11 rounded-xl
-                bg-blue-700 text-white
-                text-sm font-black
+                flex-1
+                h-12
+                rounded-xl
+                bg-blue-700
+                text-white
+                font-black
                 disabled:opacity-50
               "
             >
-              {submitting ? "Mengirim..." : "Submit"}
+              {submitting
+                ? "Mengirim..."
+                : "Submit"}
             </button>
 
             <button
@@ -754,12 +1278,16 @@ export default function Ujian() {
                 )
               }
               disabled={
-                currentSoal === soal.length - 1
+                currentSoal ===
+                soal.length - 1
               }
               className="
-                flex-1 h-11 rounded-xl
-                bg-emerald-600 text-white
-                text-sm font-bold
+                flex-1
+                h-12
+                rounded-xl
+                bg-emerald-600
+                text-white
+                font-bold
                 disabled:opacity-40
               "
             >
@@ -771,6 +1299,8 @@ export default function Ujian() {
         </div>
 
       </div>
+
     </MathJaxContext>
+
   )
 }

@@ -15,16 +15,13 @@ type Materi = {
 
 export default function MateriPage() {
 
-  const [materi,
-    setMateri] =
+  const [materi, setMateri] =
     useState<Materi[]>([])
 
-  const [loading,
-    setLoading] =
+  const [loading, setLoading] =
     useState(true)
 
-  const [search,
-    setSearch] =
+  const [search, setSearch] =
     useState("")
 
   const [kategoriAktif,
@@ -69,7 +66,7 @@ export default function MateriPage() {
         .from("materi")
         .select("*")
         .order("id", {
-          ascending: false
+          ascending: false,
         })
 
     setMateri(data || [])
@@ -90,11 +87,16 @@ export default function MateriPage() {
             search.toLowerCase()
           )
 
-      return cocokKategori &&
+      return (
+        cocokKategori &&
         cocokSearch
+      )
     })
 
-  if (loading)
+  // =========================
+  // LOADING
+  // =========================
+  if (loading) {
 
     return (
 
@@ -103,62 +105,86 @@ export default function MateriPage() {
         flex
         items-center
         justify-center
-        bg-[#f4f7fb]
+        bg-slate-100
       ">
 
         <div className="
-          text-2xl
-          font-bold
-          text-blue-700
+          flex
+          flex-col
+          items-center
+          gap-4
         ">
-          Loading...
+
+          <div className="
+            w-12
+            h-12
+            border-4
+            border-blue-600
+            border-t-transparent
+            rounded-full
+            animate-spin
+          " />
+
+          <p className="
+            text-blue-700
+            font-bold
+          ">
+            Loading...
+          </p>
+
         </div>
 
       </div>
     )
+  }
 
   return (
 
     <div className="
       min-h-screen
-      bg-[#f4f7fb]
+      bg-slate-100
+      pb-10
     ">
 
       {/* HEADER */}
       <div className="
+        sticky
+        top-0
+        z-40
         bg-white
         border-b
-        border-gray-200
-        sticky top-0
-        z-30
+        border-slate-200
       ">
 
         <div className="
-          max-w-7xl
+          max-w-6xl
           mx-auto
-          px-5 py-5
+          px-3
+          py-3
           flex
           items-center
           justify-between
-          gap-4
+          gap-3
         ">
 
-          <div>
+          <div className="min-w-0">
 
             <p className="
+              text-[10px]
+              uppercase
+              tracking-widest
               text-blue-600
-              text-sm
-              font-semibold
-              tracking-wide
+              font-black
             ">
-              LAMPUNG CERDAS
+              Lampung Cerdas
             </p>
 
             <h1 className="
-              text-3xl
+              text-lg
+              md:text-3xl
               font-black
-              text-gray-800
-              mt-1
+              text-slate-800
+              truncate
             ">
               Materi Pembelajaran
             </h1>
@@ -170,17 +196,19 @@ export default function MateriPage() {
               router.push("/dashboard")
             }
             className="
+              h-10
+              px-4
+              rounded-xl
               bg-blue-600
               hover:bg-blue-700
               text-white
-              px-5 py-3
-              rounded-2xl
-              font-semibold
-              transition-all
+              text-sm
+              font-bold
+              transition
               shrink-0
             "
           >
-            ← Dashboard
+            Dashboard
           </button>
 
         </div>
@@ -189,82 +217,113 @@ export default function MateriPage() {
 
       {/* CONTENT */}
       <div className="
-        max-w-7xl
+        max-w-6xl
         mx-auto
-        p-5
+        px-3
+        pt-3
       ">
 
         {/* SEARCH */}
         <div className="
           bg-white
-          rounded-[30px]
-          p-5
+          rounded-3xl
+          border
+          border-slate-200
+          p-3
+          mb-4
           shadow-sm
-          mb-6
         ">
 
-          <input
-            type="text"
-            placeholder="Cari materi pembelajaran..."
-            value={search}
-            onChange={(e) =>
-              setSearch(
-                e.target.value
-              )
-            }
-            className="
-              w-full
-              border
-              border-gray-200
-              rounded-2xl
-              px-5 py-4
-              outline-none
-              focus:border-blue-500
-              text-gray-700
-            "
-          />
+          {/* TITLE */}
+          <div className="mb-3">
+
+         
+       
+
+          </div>
+
+          {/* INPUT */}
+          <div className="relative">
+
+            <input
+              type="text"
+              placeholder="Cari materi matematika, TPS, bahasa..."
+              value={search}
+              onChange={(e) =>
+                setSearch(
+                  e.target.value
+                )
+              }
+              className="
+                w-full
+                h-12
+                rounded-2xl
+                border-2
+                border-slate-200
+                bg-slate-50
+                px-4
+                text-sm
+                text-slate-700
+                outline-none
+                focus:border-blue-500
+                focus:bg-white
+                transition-all
+              "
+            />
+
+          </div>
 
           {/* FILTER */}
           <div className="
-            flex flex-wrap
-            gap-3
-            mt-5
+            mt-4
+            overflow-x-auto
+            scrollbar-hide
           ">
 
-            {kategoriList.map((item) => (
+            <div className="
+              flex
+              gap-2
+              min-w-max
+              pb-1
+            ">
 
-              <button
-                key={item}
-                onClick={() =>
-                  setKategoriAktif(item)
-                }
-                className={`
-                  px-5 py-3
-                  rounded-2xl
-                  text-sm
-                  font-semibold
-                  transition-all
+              {kategoriList.map((item) => (
 
-                  ${kategoriAktif === item
-
-                    ? `
-                      bg-blue-600
-                      text-white
-                      shadow-md
-                    `
-
-                    : `
-                      bg-[#f4f7fb]
-                      text-gray-700
-                      hover:bg-blue-100
-                    `
+                <button
+                  key={item}
+                  onClick={() =>
+                    setKategoriAktif(item)
                   }
-                `}
-              >
-                {item}
-              </button>
+                  className={`
+                    whitespace-nowrap
+                    px-4
+                    h-10
+                    rounded-2xl
+                    text-xs
+                    font-black
+                    transition-all
+                    active:scale-95
 
-            ))}
+                    ${kategoriAktif === item
+                      ? `
+                        bg-blue-600
+                        text-white
+                        shadow-lg
+                      `
+                      : `
+                        bg-slate-100
+                        text-slate-700
+                        hover:bg-blue-100
+                      `
+                    }
+                  `}
+                >
+                  {item}
+                </button>
+
+              ))}
+
+            </div>
 
           </div>
 
@@ -275,31 +334,33 @@ export default function MateriPage() {
 
           <div className="
             bg-white
-            rounded-[35px]
+            rounded-3xl
+            border
+            border-slate-200
             p-10
             text-center
-            shadow-sm
           ">
 
-            <div className="text-6xl">
+            <div className="text-5xl">
               📚
             </div>
 
             <h2 className="
-              text-2xl
+              text-xl
               font-black
-              text-gray-800
               mt-4
+              text-slate-800
             ">
               Materi Tidak Ditemukan
             </h2>
 
             <p className="
-              text-gray-500
+              text-sm
+              text-slate-500
               mt-2
             ">
               Coba gunakan kata
-              kunci lain.
+              kunci lain
             </p>
 
           </div>
@@ -308,9 +369,10 @@ export default function MateriPage() {
 
           <div className="
             grid
-            md:grid-cols-2
-            xl:grid-cols-3
-            gap-6
+            grid-cols-1
+            sm:grid-cols-2
+            lg:grid-cols-3
+            gap-4
           ">
 
             {filteredMateri.map((item) => (
@@ -319,12 +381,15 @@ export default function MateriPage() {
                 key={item.id}
                 className="
                   bg-white
-                  rounded-[35px]
+                  rounded-3xl
                   overflow-hidden
+                  border
+                  border-slate-200
                   shadow-sm
                   hover:shadow-xl
+                  hover:-translate-y-1
                   transition-all
-                  group
+                  duration-300
                 "
               >
 
@@ -338,16 +403,15 @@ export default function MateriPage() {
                     src={
                       item.gambar &&
                       item.gambar !== ""
-
                         ? item.gambar
-
                         : "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=1200"
                     }
+                    alt={item.judul}
                     className="
                       w-full
-                      h-56
+                      h-44
                       object-cover
-                      group-hover:scale-105
+                      hover:scale-105
                       transition-all
                       duration-500
                     "
@@ -358,45 +422,26 @@ export default function MateriPage() {
                     absolute
                     inset-0
                     bg-gradient-to-t
-                    from-black/60
+                    from-black/70
                     to-transparent
                   " />
 
                   {/* BADGE */}
                   <div className="
                     absolute
-                    top-4 left-4
+                    top-3
+                    left-3
                   ">
 
-                    <span className={`
-                      px-4 py-2
+                    <span className="
+                      px-3
+                      py-1.5
                       rounded-full
-                      text-xs
-                      font-bold
-                      backdrop-blur-md
-
-                      ${item.tipe
-                        .toLowerCase() === "video"
-
-                        ? `
-                          bg-red-500/90
-                          text-white
-                        `
-
-                        : item.tipe
-                            .toLowerCase() === "pdf"
-
-                        ? `
-                          bg-green-500/90
-                          text-white
-                        `
-
-                        : `
-                          bg-blue-500/90
-                          text-white
-                        `
-                      }
-                    `}>
+                      bg-blue-600
+                      text-white
+                      text-[10px]
+                      font-black
+                    ">
 
                       {item.tipe.toUpperCase()}
 
@@ -407,13 +452,14 @@ export default function MateriPage() {
                   {/* KATEGORI */}
                   <div className="
                     absolute
-                    bottom-4 left-4
+                    bottom-3
+                    left-3
                   ">
 
                     <p className="
                       text-white
-                      text-sm
-                      font-semibold
+                      text-xs
+                      font-bold
                     ">
                       {item.kategori}
                     </p>
@@ -423,84 +469,54 @@ export default function MateriPage() {
                 </div>
 
                 {/* CONTENT */}
-                <div className="
-                  p-6
-                ">
+                <div className="p-4">
 
                   <h2 className="
-                    text-2xl
+                    text-base
+                    md:text-lg
                     font-black
-                    text-gray-800
-                    leading-snug
+                    text-slate-800
                     line-clamp-2
+                    leading-snug
                   ">
                     {item.judul}
                   </h2>
 
                   <p className="
-                    text-gray-500
-                    mt-3
-                    text-sm
+                    text-xs
+                    text-slate-500
                     leading-relaxed
+                    mt-2
+                    line-clamp-2
                   ">
-                    Materi pembelajaran
-                    untuk meningkatkan
-                    pemahaman akademik
-                    siswa.
+                    Materi pembelajaran untuk
+                    membantu siswa belajar
+                    lebih mudah dan cepat.
                   </p>
 
                   {/* BUTTON */}
                   <a
                     href={item.link}
                     target="_blank"
-                    className={`
-                      mt-6
-                      block
-                      text-center
-                      py-4
+                    rel="noopener noreferrer"
+                    className="
+                      mt-4
+                      h-11
                       rounded-2xl
-                      font-bold
+                      bg-blue-600
+                      hover:bg-blue-700
+                      text-white
+                      text-sm
+                      font-black
+                      flex
+                      items-center
+                      justify-center
                       transition-all
-
-                      ${item.tipe
-                        .toLowerCase() === "video"
-
-                        ? `
-                          bg-red-500
-                          hover:bg-red-600
-                          text-white
-                        `
-
-                        : item.tipe
-                            .toLowerCase() === "pdf"
-
-                        ? `
-                          bg-green-500
-                          hover:bg-green-600
-                          text-white
-                        `
-
-                        : `
-                          bg-blue-600
-                          hover:bg-blue-700
-                          text-white
-                        `
-                      }
-                    `}
+                      active:scale-95
+                    "
                   >
 
-                    {item.tipe
-                      .toLowerCase() === "video"
-
-                      ? "▶ Tonton Video"
-
-                      : item.tipe
-                          .toLowerCase() === "pdf"
-
-                      ? "📄 Buka PDF"
-
-                      : "📚 Buka Materi"
-                    }
+                    📚 Buka Materi
 
                   </a>
 
