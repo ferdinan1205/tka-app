@@ -11,6 +11,19 @@ type Hasil = {
   skor: number
   kategori: string
   tanggal: string
+  paket?: string | null
+  package_id?: number | null
+}
+
+type PaketSummary = {
+  package_id: number | null
+  paket: string
+  total_ujian: number
+  total_nilai: number
+  rata_rata: number
+  tertinggi: number
+  terendah: number
+  data: Hasil[]
 }
 
 export default function RekapPage() {
@@ -44,6 +57,10 @@ export default function RekapPage() {
     setHasil] =
     useState<Hasil[]>([])
 
+  const [paketSummary,
+    setPaketSummary] =
+    useState<PaketSummary[]>([])
+
   useEffect(() => {
     init()
   }, [])
@@ -69,6 +86,10 @@ export default function RekapPage() {
       user.email || ""
     )
 
+    // ======================
+    // PROFILE
+    // ======================
+
     const {
       data: profile,
     } = await supabase
@@ -86,6 +107,10 @@ export default function RekapPage() {
       profile?.foto || ""
     )
 
+    // ======================
+    // HASIL
+    // ======================
+
     const {
       data: hasilData,
     } = await supabase
@@ -96,13 +121,94 @@ export default function RekapPage() {
         ascending: false,
       })
 
-    setHasil(
+    const finalHasil =
       (hasilData as Hasil[]) ||
       []
+
+    setHasil(finalHasil)
+
+    // ======================
+    // GROUP PACKAGE
+    // ======================
+
+    const grouped:
+      Record<string, PaketSummary> = {}
+
+    finalHasil.forEach((item) => {
+
+      const key =
+        item.package_id
+          ? String(item.package_id)
+          : "umum"
+
+      if (!grouped[key]) {
+
+        grouped[key] = {
+
+          package_id:
+            item.package_id || null,
+
+          paket:
+            item.paket ||
+            "Ujian Umum",
+
+          total_ujian: 0,
+
+          total_nilai: 0,
+
+          rata_rata: 0,
+
+          tertinggi: 0,
+
+          terendah: 0,
+
+          data: [],
+        }
+      }
+
+      grouped[key].data.push(item)
+
+      grouped[key].total_ujian += 1
+
+      grouped[key].total_nilai +=
+        item.skor
+    })
+
+    // ======================
+    // HITUNG SUMMARY
+    // ======================
+
+    Object.values(grouped)
+      .forEach((group) => {
+
+        const nilai =
+          group.data.map(
+            (x) => x.skor
+          )
+
+        group.rata_rata =
+          Math.round(
+            group.total_nilai /
+            group.total_ujian
+          )
+
+        group.tertinggi =
+          Math.max(...nilai)
+
+        group.terendah =
+          Math.min(...nilai)
+      })
+
+    setPaketSummary(
+      Object.values(grouped)
     )
 
     setLoading(false)
   }
+
+  // ======================
+  // GLOBAL STATS
+  // ======================
 
   function rataRata() {
 
@@ -171,9 +277,9 @@ export default function RekapPage() {
     return "E"
   }
 
-  // =========================
-  // DOWNLOAD PDF FINAL FIX
-  // =========================
+  // ======================
+  // PDF
+  // ======================
 
   async function downloadPDF() {
 
@@ -187,72 +293,14 @@ export default function RekapPage() {
       const element =
         printRef.current
 
-      // FIX COLOR LAB
-      document.body.style.background =
-        "#f4f7fb"
-
       const dataUrl =
         await toPng(
           element,
           {
             cacheBust: true,
-
             pixelRatio: 2,
-
             backgroundColor:
               "#ffffff",
-
-            skipFonts: true,
-
-            style: {
-
-              background:
-                "#ffffff",
-
-              color:
-                "#000000",
-            },
-
-            filter: (
-              node: HTMLElement
-            ) => {
-
-              try {
-
-                const style =
-                  window.getComputedStyle(
-                    node
-                  )
-
-                const hasLab =
-                  style.color.includes(
-                    "lab"
-                  ) ||
-
-                  style.backgroundColor.includes(
-                    "lab"
-                  ) ||
-
-                  style.borderColor.includes(
-                    "lab"
-                  )
-
-                if (hasLab) {
-
-                  node.style.color =
-                    "#111827"
-
-                  node.style.backgroundColor =
-                    "#ffffff"
-
-                  node.style.borderColor =
-                    "#d1d5db"
-                }
-
-              } catch (e) {}
-
-              return true
-            },
           }
         )
 
@@ -287,7 +335,6 @@ export default function RekapPage() {
 
       let position = 0
 
-      // PAGE 1
       pdf.addImage(
         dataUrl,
         "PNG",
@@ -300,7 +347,6 @@ export default function RekapPage() {
       heightLeft -=
         pdfHeight
 
-      // MULTI PAGE
       while (
         heightLeft > 0
       ) {
@@ -339,10 +385,12 @@ export default function RekapPage() {
     } finally {
 
       setPdfLoading(false)
-
     }
-
   }
+
+  // ======================
+  // LOADING
+  // ======================
 
   if (loading) {
 
@@ -358,14 +406,13 @@ export default function RekapPage() {
 
         <div className="
         bg-white
-        px-8 py-6
+        px-8
+        py-6
         rounded-3xl
         shadow-sm
-        text-gray-700
-        font-semibold
         ">
 
-          Loading rekap...
+          Loading...
 
         </div>
 
@@ -393,7 +440,8 @@ export default function RekapPage() {
         <div className="
         max-w-7xl
         mx-auto
-        px-5 py-5
+        px-5
+        py-5
         flex
         flex-col
         md:flex-row
@@ -422,26 +470,12 @@ export default function RekapPage() {
               Rekap Akademik
             </h1>
 
-            <p className="
-            text-gray-500
-            mt-1
-            ">
-              Rapor digital dan
-              hasil evaluasi siswa.
-            </p>
-
           </div>
 
           <div className="
           flex
-          flex-col
-          sm:flex-row
           gap-3
-          w-full
-          md:w-auto
           ">
-
-            {/* DASHBOARD */}
 
             <button
               onClick={() =>
@@ -451,25 +485,15 @@ export default function RekapPage() {
               }
               className="
               bg-white
-              text-gray-800
               border
               border-gray-300
-              hover:bg-gray-100
               px-5 py-3
               rounded-2xl
               font-bold
-              transition-all
-              shadow-sm
-              w-full
-              sm:w-auto
               "
             >
-
               Dashboard
-
             </button>
-
-            {/* PDF */}
 
             <button
               onClick={
@@ -480,29 +504,17 @@ export default function RekapPage() {
               }
               className="
               bg-blue-600
-              hover:bg-blue-700
               text-white
               px-6 py-3
               rounded-2xl
               font-bold
-              transition-all
-              shadow-lg
-              w-full
-              sm:w-auto
-              disabled:opacity-60
               "
             >
 
               {
                 pdfLoading
-
-                  ?
-
-                  "Membuat PDF..."
-
-                  :
-
-                  "Download PDF"
+                  ? "Membuat PDF..."
+                  : "Download PDF"
               }
 
             </button>
@@ -531,7 +543,7 @@ export default function RekapPage() {
           "
         >
 
-          {/* TOP */}
+          {/* PROFILE */}
 
           <div className="
           flex
@@ -546,17 +558,11 @@ export default function RekapPage() {
           mb-8
           ">
 
-            {/* LEFT */}
-
             <div className="
             flex
-            flex-col
-            sm:flex-row
-            sm:items-center
+            items-center
             gap-5
             ">
-
-              {/* FOTO */}
 
               {foto ? (
 
@@ -567,8 +573,6 @@ export default function RekapPage() {
                   w-24 h-24
                   rounded-full
                   object-cover
-                  border-4
-                  border-blue-100
                   "
                 />
 
@@ -591,28 +595,14 @@ export default function RekapPage() {
                     .toUpperCase()}
 
                 </div>
-
               )}
-
-              {/* INFO */}
 
               <div>
 
-                <p className="
-                text-blue-600
-                font-semibold
-                text-sm
-                tracking-wide
-                ">
-                  RAPOR DIGITAL
-                </p>
-
                 <h2 className="
-                text-3xl md:text-4xl
+                text-4xl
                 font-black
                 text-gray-800
-                mt-1
-                break-words
                 ">
                   {nama}
                 </h2>
@@ -620,7 +610,6 @@ export default function RekapPage() {
                 <p className="
                 text-gray-500
                 mt-1
-                break-all
                 ">
                   {email}
                 </p>
@@ -644,15 +633,11 @@ export default function RekapPage() {
 
             </div>
 
-            {/* RIGHT */}
-
             <div className="
             bg-[#f4f7fb]
             rounded-3xl
             px-8 py-6
             text-center
-            w-full
-            lg:w-auto
             ">
 
               <p className="
@@ -675,14 +660,14 @@ export default function RekapPage() {
 
           </div>
 
-          {/* STAT */}
+          {/* GLOBAL STAT */}
 
           <div className="
           grid
           grid-cols-1
           md:grid-cols-3
           gap-5
-          mb-8
+          mb-10
           ">
 
             <StatCard
@@ -705,152 +690,89 @@ export default function RekapPage() {
 
           </div>
 
-          {/* MOBILE CARD */}
+          {/* PACKAGE SUMMARY */}
 
           <div className="
-          block md:hidden
-          space-y-4
+          space-y-8
           ">
 
-            {hasil.map(
-              (
-                item,
-                i
-              ) => (
+            {paketSummary.map(
+              (paketItem, index) => (
 
-                <div
-                  key={item.id}
-                  className="
-                  border
-                  border-gray-200
-                  rounded-3xl
-                  p-5
-                  bg-white
-                  shadow-sm
-                  "
-                >
+              <div
+                key={index}
+                className="
+                border
+                border-gray-200
+                rounded-[30px]
+                overflow-hidden
+                "
+              >
 
-                  <div className="
-                  flex
-                  items-center
-                  justify-between
-                  mb-4
-                  ">
+                {/* HEADER */}
 
-                    <div className="
-                    flex
-                    items-center
-                    gap-3
-                    ">
-
-                      <div className="
-                      w-12 h-12
-                      rounded-2xl
-                      bg-blue-100
-                      flex
-                      items-center
-                      justify-center
-                      text-xl
-                      ">
-                        📘
-                      </div>
-
-                      <div>
-
-                        <p className="
-                        text-sm
-                        text-gray-500
-                        ">
-                          Pelajaran
-                        </p>
-
-                        <h2 className="
-                        font-bold
-                        text-gray-800
-                        ">
-                          {item.kategori}
-                        </h2>
-
-                      </div>
-
-                    </div>
-
-                    <div className="
-                    text-right
-                    ">
-
-                      <p className="
-                      text-sm
-                      text-gray-500
-                      ">
-                        Nilai
-                      </p>
-
-                      <h2 className="
-                      text-3xl
-                      font-black
-                      text-blue-700
-                      ">
-                        {item.skor}
-                      </h2>
-
-                    </div>
-
-                  </div>
+                <div className="
+                bg-gradient-to-r
+                from-violet-600
+                to-blue-600
+                p-6
+                text-white
+                ">
 
                   <div className="
                   flex
-                  items-center
-                  justify-between
-                  pt-4
-                  border-t
-                  border-gray-100
+                  flex-col
+                  md:flex-row
+                  md:items-center
+                  md:justify-between
+                  gap-4
                   ">
 
                     <div>
 
                       <p className="
+                      text-violet-100
                       text-sm
-                      text-gray-500
+                      font-semibold
                       ">
-                        Grade
+                        PAKET
                       </p>
 
-                      <span className="
-                      inline-block
-                      mt-1
-                      bg-green-100
-                      text-green-700
-                      px-4 py-2
-                      rounded-full
-                      font-semibold
-                      text-sm
+                      <h2 className="
+                      text-3xl
+                      font-black
                       ">
-                        {grade(item.skor)}
-                      </span>
+                        {paketItem.paket}
+                      </h2>
 
                     </div>
 
                     <div className="
-                    text-right
+                    flex
+                    gap-3
+                    flex-wrap
                     ">
 
-                      <p className="
-                      text-sm
-                      text-gray-500
-                      ">
-                        Tanggal
-                      </p>
+                      <MiniStat
+                        label="Ujian"
+                        value={
+                          paketItem.total_ujian
+                        }
+                      />
 
-                      <p className="
-                      font-semibold
-                      text-gray-700
-                      mt-1
-                      ">
-                        {new Date(
-                          item.tanggal
-                        ).toLocaleDateString()}
-                      </p>
+                      <MiniStat
+                        label="Rata-rata"
+                        value={
+                          paketItem.rata_rata
+                        }
+                      />
+
+                      <MiniStat
+                        label="Tertinggi"
+                        value={
+                          paketItem.tertinggi
+                        }
+                      />
 
                     </div>
 
@@ -858,152 +780,96 @@ export default function RekapPage() {
 
                 </div>
 
-              )
-            )}
+                {/* TABLE */}
 
-          </div>
+                <div className="
+                overflow-x-auto
+                ">
 
-          {/* DESKTOP TABLE */}
-
-          <div className="
-          hidden md:block
-          rounded-3xl
-          border
-          border-gray-200
-          overflow-hidden
-          ">
-
-            <div className="
-            overflow-x-auto
-            ">
-
-              <table className="
-              w-full
-              border-collapse
-              ">
-
-                <thead>
-
-                  <tr className="
-                  bg-[#f8fafc]
-                  text-gray-700
+                  <table className="
+                  w-full
                   ">
 
-                    <th className="
-                    p-4
-                    text-left
-                    font-bold
+                    <thead className="
+                    bg-[#f8fafc]
                     ">
-                      No
-                    </th>
 
-                    <th className="
-                    p-4
-                    text-left
-                    font-bold
-                    ">
-                      Mata Pelajaran
-                    </th>
+                      <tr>
 
-                    <th className="
-                    p-4
-                    text-left
-                    font-bold
-                    ">
-                      Nilai
-                    </th>
-
-                    <th className="
-                    p-4
-                    text-left
-                    font-bold
-                    ">
-                      Grade
-                    </th>
-
-                    <th className="
-                    p-4
-                    text-left
-                    font-bold
-                    ">
-                      Tanggal
-                    </th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {hasil.map(
-                    (
-                      item,
-                      i
-                    ) => (
-
-                      <tr
-                        key={
-                          item.id
-                        }
-                        className="
-                        border-t
-                        border-gray-100
-                        hover:bg-[#f8fafc]
-                        transition-all
-                        "
-                      >
-
-                        <td className="
+                        <th className="
                         p-4
-                        font-semibold
-                        text-gray-700
+                        text-left
                         ">
-                          {i + 1}
-                        </td>
+                          No
+                        </th>
 
-                        <td className="
+                        <th className="
                         p-4
+                        text-left
                         ">
+                          Mata Pelajaran
+                        </th>
 
-                          <div className="
-                          flex items-center
-                          gap-3
+                        <th className="
+                        p-4
+                        text-left
+                        ">
+                          Nilai
+                        </th>
+
+                        <th className="
+                        p-4
+                        text-left
+                        ">
+                          Grade
+                        </th>
+
+                        <th className="
+                        p-4
+                        text-left
+                        ">
+                          Tanggal
+                        </th>
+
+                      </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                      {paketItem.data.map(
+                        (
+                          item,
+                          i
+                        ) => (
+
+                        <tr
+                          key={item.id}
+                          className="
+                          border-t
+                          border-gray-100
+                          "
+                        >
+
+                          <td className="
+                          p-4
+                          font-semibold
                           ">
+                            {i + 1}
+                          </td>
 
-                            <div className="
-                            w-10 h-10
-                            rounded-2xl
-                            bg-blue-100
-                            flex
-                            items-center
-                            justify-center
-                            text-lg
-                            ">
-                              📘
-                            </div>
+                          <td className="
+                          p-4
+                          font-bold
+                          text-gray-800
+                          ">
+                            {
+                              item.kategori
+                            }
+                          </td>
 
-                            <div>
-
-                              <p className="
-                              font-bold
-                              text-gray-800
-                              ">
-                                {
-                                  item.kategori
-                                }
-                              </p>
-
-                            </div>
-
-                          </div>
-
-                        </td>
-
-                        <td className="
-                        p-4
-                        ">
-
-                          <div className="
+                          <td className="
+                          p-4
                           text-2xl
                           font-black
                           text-blue-700
@@ -1011,49 +877,51 @@ export default function RekapPage() {
                             {
                               item.skor
                             }
-                          </div>
+                          </td>
 
-                        </td>
-
-                        <td className="
-                        p-4
-                        ">
-
-                          <span className="
-                          bg-green-100
-                          text-green-700
-                          px-4 py-2
-                          rounded-full
-                          font-semibold
-                          text-sm
+                          <td className="
+                          p-4
                           ">
-                            {grade(
-                              item.skor
-                            )}
-                          </span>
 
-                        </td>
+                            <span className="
+                            bg-green-100
+                            text-green-700
+                            px-4 py-2
+                            rounded-full
+                            text-sm
+                            font-bold
+                            ">
 
-                        <td className="
-                        p-4
-                        text-gray-500
-                        font-medium
-                        ">
-                          {new Date(
-                            item.tanggal
-                          ).toLocaleDateString()}
-                        </td>
+                              {grade(
+                                item.skor
+                              )}
 
-                      </tr>
+                            </span>
 
-                    )
-                  )}
+                          </td>
 
-                </tbody>
+                          <td className="
+                          p-4
+                          text-gray-500
+                          ">
 
-              </table>
+                            {new Date(
+                              item.tanggal
+                            ).toLocaleDateString()}
 
-            </div>
+                          </td>
+
+                        </tr>
+                      ))}
+
+                    </tbody>
+
+                  </table>
+
+                </div>
+
+              </div>
+            ))}
 
           </div>
 
@@ -1062,66 +930,28 @@ export default function RekapPage() {
           {hasil.length ===
             0 && (
 
+            <div className="
+            text-center
+            py-20
+            ">
+
               <div className="
-              text-center
-              py-16
+              text-6xl
               ">
-
-                <div className="
-                text-6xl
-                ">
-                  📚
-                </div>
-
-                <h2 className="
-                text-2xl
-                font-black
-                text-gray-800
-                mt-4
-                ">
-                  Belum Ada Nilai
-                </h2>
-
-                <p className="
-                text-gray-500
-                mt-2
-                ">
-                  Kerjakan ujian untuk
-                  melihat rekap akademik.
-                </p>
-
+                📚
               </div>
 
-            )}
+              <h2 className="
+              text-3xl
+              font-black
+              text-gray-800
+              mt-4
+              ">
+                Belum Ada Nilai
+              </h2>
 
-          {/* FOOTER */}
-
-          <div className="
-          mt-10
-          pt-6
-          border-t
-          border-gray-200
-          text-center
-          ">
-
-            <p className="
-            text-sm
-            text-gray-400
-            ">
-              Dicetak otomatis dari
-              sistem akademik
-            </p>
-
-            <h2 className="
-            text-lg
-            font-bold
-            text-blue-700
-            mt-1
-            ">
-              Lampung Cerdas
-            </h2>
-
-          </div>
+            </div>
+          )}
 
         </div>
 
@@ -1182,7 +1012,6 @@ function StatCard({
         items-center
         justify-center
         text-3xl
-        shadow-lg
         ">
 
           {icon}
@@ -1190,6 +1019,40 @@ function StatCard({
         </div>
 
       </div>
+
+    </div>
+  )
+}
+
+function MiniStat({
+  label,
+  value,
+}: any) {
+
+  return (
+
+    <div className="
+    bg-white/20
+    px-5
+    py-3
+    rounded-2xl
+    backdrop-blur-xl
+    ">
+
+      <p className="
+      text-xs
+      text-white/80
+      ">
+        {label}
+      </p>
+
+      <h2 className="
+      text-2xl
+      font-black
+      text-white
+      ">
+        {value}
+      </h2>
 
     </div>
   )

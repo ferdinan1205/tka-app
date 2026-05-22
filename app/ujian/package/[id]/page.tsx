@@ -1,13 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-
 import { supabase } from "../../../../lib/supabase"
-
-import {
-  useParams,
-  useRouter,
-} from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 
 // ======================
 // TYPES
@@ -32,11 +27,9 @@ type SubjectType = {
 export default function PackagePage() {
 
   const params = useParams()
-
   const router = useRouter()
 
-  const packageId =
-    Number(params.id)
+  const packageId = parseInt(params.id as string)
 
   // ======================
   // STATES
@@ -48,16 +41,13 @@ export default function PackagePage() {
   const [subjects, setSubjects] =
     useState<SubjectType[]>([])
 
-  const [loading,
-    setLoading] =
+  const [loading, setLoading] =
     useState(true)
 
-  const [allowed,
-    setAllowed] =
+  const [allowed, setAllowed] =
     useState(false)
 
-  const [token,
-    setToken] =
+  const [token, setToken] =
     useState("")
 
   const [selectedSubject,
@@ -68,13 +58,53 @@ export default function PackagePage() {
     setSavedPendamping] =
     useState("")
 
+  const [subjectLoading,
+    setSubjectLoading] =
+    useState(false)
+
+  // ======================
+  // FALLBACK SUBJECT
+  // ======================
+
+  const PENDAMPING_MAP:
+    Record<string, string[]> = {
+
+    "Paket IPA": [
+      "Fisika",
+      "Kimia",
+      "Biologi",
+    ],
+
+    "Paket IPS": [
+      "Ekonomi",
+      "Geografi",
+      "Sosiologi",
+    ],
+
+    "Paket SMK": [
+      "PPKN",
+      "PKK",
+    ],
+
+    "Paket Bahasa": [
+      "Jerman",
+      "Jepang",
+      "Arab",
+    ],
+  }
+
   // ======================
   // INIT
   // ======================
 
   useEffect(() => {
 
-    if (!packageId) return
+    if (isNaN(packageId)) {
+
+      setLoading(false)
+
+      return
+    }
 
     getData()
 
@@ -112,11 +142,14 @@ export default function PackagePage() {
         .from("packages")
         .select("*")
         .eq("id", packageId)
-        .single()
+        .maybeSingle()
 
-      if (packageError) {
+      if (
+        packageError ||
+        !packageData
+      ) {
 
-        console.log(packageError)
+        setPaket(null)
 
         setLoading(false)
 
@@ -135,18 +168,58 @@ export default function PackagePage() {
       } = await supabase
         .from("package_subjects")
         .select("*")
-        .eq(
-          "package_id",
-          packageId
-        )
+        .eq("package_id", packageId)
+        .order("id", {
+          ascending: true,
+        })
 
       if (subjectError) {
 
-        console.log(subjectError)
+        console.log(
+          "Subject Error:",
+          subjectError
+        )
+      }
+
+      let loadedSubjects =
+        subjectData || []
+
+      // ======================
+      // FALLBACK SUBJECTS
+      // ======================
+
+      if (
+        loadedSubjects.length === 0
+      ) {
+
+        const namaPaket =
+          packageData.nama_paket
+
+        const matchedKey =
+          Object.keys(
+            PENDAMPING_MAP
+          ).find(
+            (k) =>
+              k.toLowerCase() ===
+              namaPaket.toLowerCase()
+          )
+
+        if (matchedKey) {
+
+          loadedSubjects =
+            PENDAMPING_MAP[
+              matchedKey
+            ].map((s, i) => ({
+              id: i + 1,
+              package_id:
+                packageId,
+              subject: s,
+            }))
+        }
       }
 
       setSubjects(
-        subjectData || []
+        loadedSubjects
       )
 
       // ======================
@@ -157,6 +230,7 @@ export default function PackagePage() {
 
         const {
           data: pilihanData,
+          error: pilihanError,
         } = await supabase
           .from(
             "pilihan_pendamping"
@@ -165,23 +239,29 @@ export default function PackagePage() {
           .eq("user_id", user.id)
           .eq(
             "package_id",
-            String(packageId)
+            packageId
           )
           .maybeSingle()
 
+        if (pilihanError) {
+
+          console.log(
+            "Pilihan Error:",
+            pilihanError
+          )
+        }
+
         if (pilihanData) {
+
+          // ======================
+          // SIMPAN PILIHAN
+          // TAPI JANGAN AUTO
+          // MASUK KE HALAMAN UJIAN
+          // ======================
 
           setSavedPendamping(
             pilihanData.pilihan
           )
-
-          // ======================
-          // JANGAN AUTO MASUK
-          // ======================
-
-          // setSelectedSubject(
-          //   pilihanData.pilihan
-          // )
         }
       }
 
@@ -226,13 +306,13 @@ export default function PackagePage() {
 
     try {
 
-      // ======================
-      // USER
-      // ======================
+      setSubjectLoading(true)
 
       const {
         data: userData,
-      } = await supabase.auth.getUser()
+      } = await supabase
+        .auth
+        .getUser()
 
       const user =
         userData.user
@@ -240,6 +320,8 @@ export default function PackagePage() {
       if (!user) {
 
         alert("Harus login")
+
+        setSubjectLoading(false)
 
         return
       }
@@ -257,29 +339,30 @@ export default function PackagePage() {
           `Kamu sudah memilih ${savedPendamping}`
         )
 
+        setSubjectLoading(false)
+
         return
       }
 
       // ======================
-      // SIMPAN PERTAMA KALI
+      // INSERT PERTAMA
       // ======================
 
       if (!savedPendamping) {
 
-        const {
-          error,
-        } = await supabase
-          .from(
-            "pilihan_pendamping"
-          )
-          .insert([
-            {
-              user_id: user.id,
-              package_id:
-                String(packageId),
-              pilihan: subject,
-            },
-          ])
+        const { error } =
+          await supabase
+            .from(
+              "pilihan_pendamping"
+            )
+            .insert([
+              {
+                user_id: user.id,
+                package_id:
+                  packageId,
+                pilihan: subject,
+              },
+            ])
 
         if (error) {
 
@@ -289,6 +372,8 @@ export default function PackagePage() {
             "Gagal memilih pendamping"
           )
 
+          setSubjectLoading(false)
+
           return
         }
 
@@ -297,71 +382,147 @@ export default function PackagePage() {
         )
       }
 
-      setSelectedSubject(subject)
+      // ======================
+      // SET SELECTED
+      // ======================
 
-    } catch (err) {
-
-      console.log(err)
-
-      alert("Terjadi kesalahan")
-    }
-  }
-
-  // ======================
-  // START EXAM
-  // ======================
-
-  async function handleStartExam(
-    kategori: string
-  ) {
-
-    try {
-
-      const {
-        data,
-        error,
-      } = await supabase
-        .from("soal")
-        .select("id")
-        .eq("kategori", kategori)
-        .limit(1)
-
-      if (error) {
-
-        console.log(error)
-
-        alert("Terjadi kesalahan")
-
-        return
-      }
-
-      if (
-        !data ||
-        data.length === 0
-      ) {
-
-        alert(
-          `Soal ${kategori} belum tersedia`
-        )
-
-        return
-      }
-
-      router.push(
-        `/ujian/${encodeURIComponent(
-          kategori
-        )}?paket=${encodeURIComponent(
-          paket?.nama_paket || ""
-        )}&package_id=${packageId}`
+      setSelectedSubject(
+        subject
       )
 
+      setSubjectLoading(false)
+
     } catch (err) {
 
       console.log(err)
 
       alert("Terjadi kesalahan")
+
+      setSubjectLoading(false)
     }
   }
+
+// ======================
+// START EXAM
+// ======================
+
+async function handleStartExam(
+  kategori: string
+) {
+
+  try {
+
+    // ======================
+    // USER
+    // ======================
+
+    const {
+      data: userData,
+    } = await supabase.auth.getUser()
+
+    const user =
+      userData.user
+
+    if (!user) {
+
+      alert("Harus login")
+
+      return
+    }
+
+    // ======================
+    // CEK SOAL ADA
+    // ======================
+
+    const {
+      data: soalData,
+      error: soalError,
+    } = await supabase
+      .from("soal")
+      .select("id")
+      .ilike(
+        "kategori",
+        kategori
+      )
+      .limit(1)
+
+    if (soalError) {
+
+      console.log(soalError)
+
+      alert("Terjadi kesalahan")
+
+      return
+    }
+
+    if (
+      !soalData ||
+      soalData.length === 0
+    ) {
+
+      alert(
+        `Soal ${kategori} belum tersedia`
+      )
+
+      return
+    }
+
+    // ======================
+    // CEK SUDAH DIKERJAKAN
+    // PER PACKAGE
+    // ======================
+
+    const {
+      data: usedData,
+      error: usedError,
+    } = await supabase
+      .from("token_used")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("kategori", kategori)
+      .eq(
+        "package_id",
+        packageId
+      )
+      .maybeSingle()
+
+    if (usedError) {
+
+      console.log(usedError)
+    }
+
+    // ======================
+    // SUDAH DIKERJAKAN
+    // ======================
+
+    if (usedData) {
+
+      alert(
+        `${kategori} pada paket ini sudah dikerjakan`
+      )
+
+      return
+    }
+
+    // ======================
+    // MASUK UJIAN
+    // ======================
+
+    router.push(
+      `/ujian/${encodeURIComponent(
+        kategori
+      )}?paket=${encodeURIComponent(
+        paket?.nama_paket || ""
+      )}&package_id=${packageId}`
+    )
+
+  } catch (err) {
+
+    console.log(err)
+
+    alert("Terjadi kesalahan")
+  }
+}
 
   // ======================
   // LOADING
@@ -384,11 +545,13 @@ export default function PackagePage() {
 
         <div className="
           bg-white
-          px-8 py-6
+          px-8
+          py-6
           rounded-[32px]
           shadow-2xl
           border
           border-white
+          text-center
         ">
 
           <div className="
@@ -444,7 +607,10 @@ export default function PackagePage() {
           w-full
         ">
 
-          <div className="text-6xl mb-4">
+          <div className="
+            text-6xl
+            mb-4
+          ">
             😢
           </div>
 
@@ -454,9 +620,7 @@ export default function PackagePage() {
             text-red-600
             mb-3
           ">
-
             Paket tidak ditemukan
-
           </h1>
 
         </div>
@@ -486,97 +650,38 @@ export default function PackagePage() {
       ">
 
         <div className="
-          relative
-          overflow-hidden
-          bg-white/95
-          backdrop-blur-xl
+          bg-white
           max-w-md
           w-full
-          p-7 md:p-10
+          p-8
           rounded-[36px]
-          shadow-[0_25px_80px_rgba(0,0,0,0.12)]
+          shadow-2xl
         ">
 
           <div className="
-            absolute
-            -top-24
-            -right-24
-            w-52
-            h-52
-            bg-violet-300/30
-            rounded-full
-            blur-3xl
-          " />
-
-          <div className="
-            absolute
-            -bottom-24
-            -left-24
-            w-52
-            h-52
-            bg-cyan-300/30
-            rounded-full
-            blur-3xl
-          " />
-
-          <div className="relative z-10">
+            text-center
+          ">
 
             <div className="
-              w-24
-              h-24
-              rounded-full
-              bg-gradient-to-r
-              from-violet-600
-              to-cyan-500
-              flex
-              items-center
-              justify-center
-              text-5xl
-              mx-auto
-              shadow-2xl
-              mb-6
+              text-6xl
+              mb-4
             ">
               🔐
             </div>
 
             <h1 className="
               text-3xl
-              md:text-4xl
               font-black
-              text-center
-              leading-tight
               mb-3
-              bg-gradient-to-r
-              from-violet-700
-              to-cyan-600
-              bg-clip-text
-              text-transparent
             ">
-
               Masukkan Token
-
             </h1>
 
             <p className="
-              text-center
-              text-gray-600
-              text-base
-              leading-relaxed
-              mb-7
+              text-gray-500
+              mb-6
             ">
-
-              Gunakan token untuk membuka paket
-
-              <span className="
-                block
-                mt-2
-                text-violet-700
-                font-black
-                text-xl
-              ">
-                {paket.nama_paket}
-              </span>
-
+              {paket.nama_paket}
             </p>
 
             <input
@@ -586,7 +691,7 @@ export default function PackagePage() {
                   e.target.value
                 )
               }
-              placeholder="Masukkan token paket..."
+              placeholder="Masukkan token..."
               className="
                 w-full
                 h-14
@@ -594,15 +699,8 @@ export default function PackagePage() {
                 border-2
                 border-violet-200
                 px-5
-                text-gray-800
-                font-bold
-                text-base
-                outline-none
-                focus:border-violet-500
-                focus:ring-4
-                focus:ring-violet-200
-                transition-all
                 mb-5
+                outline-none
               "
             />
 
@@ -617,11 +715,6 @@ export default function PackagePage() {
                 to-cyan-500
                 text-white
                 font-black
-                text-lg
-                shadow-xl
-                hover:scale-[1.02]
-                active:scale-95
-                transition-all
               "
             >
               Masuk Paket
@@ -639,7 +732,10 @@ export default function PackagePage() {
   // SUBJECT PAGE
   // ======================
 
-  if (!selectedSubject) {
+  if (
+    subjects.length > 0 &&
+    !selectedSubject
+  ) {
 
     return (
 
@@ -649,76 +745,55 @@ export default function PackagePage() {
         from-slate-100
         via-violet-50
         to-cyan-50
-        p-4 md:p-6
+        p-4
+        md:p-6
       ">
 
-        <div className="max-w-7xl mx-auto">
+        <div className="
+          max-w-7xl
+          mx-auto
+        ">
 
           {/* HERO */}
 
           <div className="
-            relative
-            overflow-hidden
             rounded-[40px]
             bg-gradient-to-r
             from-violet-700
             via-blue-600
             to-cyan-500
-            p-7 md:p-12
+            p-7
+            md:p-12
             mb-8
             shadow-2xl
           ">
 
-            <div className="
-              absolute
-              top-0
-              right-0
-              w-72
-              h-72
-              bg-white/10
-              rounded-full
-              blur-3xl
-            " />
+            <p className="
+              text-cyan-100
+              font-bold
+              text-sm
+              tracking-[4px]
+              mb-3
+            ">
+              PAKET PEMBELAJARAN
+            </p>
 
-            <div className="relative z-10">
+            <h1 className="
+              text-3xl
+              md:text-6xl
+              font-black
+              text-white
+              mb-4
+            ">
+              {paket.nama_paket}
+            </h1>
 
-              <p className="
-                text-cyan-100
-                font-bold
-                text-sm
-                tracking-[4px]
-                mb-3
-              ">
-                PAKET PEMBELAJARAN
-              </p>
-
-              <h1 className="
-                text-3xl
-                md:text-6xl
-                font-black
-                text-white
-                leading-tight
-                mb-4
-              ">
-
-                {paket.nama_paket}
-
-              </h1>
-
-              <p className="
-                text-cyan-100
-                text-base
-                md:text-xl
-                leading-relaxed
-                max-w-2xl
-              ">
-
-                Pilih 1 mata pelajaran pendamping.
-                Setelah dipilih, pilihan lain akan otomatis terkunci.
-
-              </p>
-
-            </div>
+            <p className="
+              text-cyan-100
+              text-lg
+            ">
+              Pilih 1 mata pelajaran pendamping
+            </p>
 
           </div>
 
@@ -729,23 +804,31 @@ export default function PackagePage() {
             grid-cols-1
             sm:grid-cols-2
             lg:grid-cols-3
-            gap-5 md:gap-7
+            gap-5
           ">
 
-            {subjects.map((item, index) => {
+            {subjects.map(
+              (item, index) => {
 
               const locked =
                 savedPendamping &&
-                savedPendamping !== item.subject
+                savedPendamping !==
+                  item.subject
 
               const selected =
-                savedPendamping === item.subject
+                savedPendamping ===
+                  item.subject ||
+                selectedSubject ===
+                  item.subject
 
               return (
 
                 <button
                   key={item.id}
-                  disabled={!!locked}
+                  disabled={
+                    !!locked ||
+                    subjectLoading
+                  }
                   onClick={() =>
                     pilihPendamping(
                       item.subject
@@ -811,10 +894,21 @@ export default function PackagePage() {
                     shadow-xl
                     ${
                       selected
-                        ? "bg-white text-violet-700"
+                        ? `
+                          bg-white
+                          text-violet-700
+                        `
                         : locked
-                        ? "bg-slate-400 text-white"
-                        : "bg-gradient-to-r from-violet-600 to-cyan-500 text-white"
+                        ? `
+                          bg-slate-400
+                          text-white
+                        `
+                        : `
+                          bg-gradient-to-r
+                          from-violet-600
+                          to-cyan-500
+                          text-white
+                        `
                     }
                   `}>
 
@@ -826,34 +920,16 @@ export default function PackagePage() {
 
                   </div>
 
-                  <p className={`
-                    text-sm
-                    font-black
-                    tracking-wide
-                    mb-2
-                    ${
-                      selected
-                        ? "text-cyan-100"
-                        : "text-violet-600"
-                    }
-                  `}>
-                    PENDAMPING
-                  </p>
-
                   <h2 className={`
                     text-2xl
-                    md:text-3xl
                     font-black
-                    leading-tight
                     ${
                       selected
                         ? "text-white"
                         : "text-gray-800"
                     }
                   `}>
-
                     {item.subject}
-
                   </h2>
 
                   {selected && (
@@ -871,9 +947,7 @@ export default function PackagePage() {
                       text-sm
                       font-black
                     ">
-
-                      ✅ Pendamping dipilih
-
+                      ✅ Dipilih
                     </div>
                   )}
 
@@ -892,9 +966,7 @@ export default function PackagePage() {
                       text-sm
                       font-black
                     ">
-
                       🔒 Terkunci
-
                     </div>
                   )}
 
@@ -911,10 +983,18 @@ export default function PackagePage() {
   }
 
   // ======================
+  // FINAL SUBJECT
+  // ======================
+
+  const finalSelectedSubject =
+    selectedSubject ||
+    savedPendamping
+
+  // ======================
   // MAPEL
   // ======================
 
-  const mapel = [
+  const mapelWajib = [
     {
       nama: "Matematika",
       kategori: "Matematika",
@@ -922,6 +1002,7 @@ export default function PackagePage() {
       color:
         "from-blue-600 to-cyan-500",
     },
+
     {
       nama: "Bahasa Indonesia",
       kategori:
@@ -930,6 +1011,7 @@ export default function PackagePage() {
       color:
         "from-orange-500 to-pink-500",
     },
+
     {
       nama: "Bahasa Inggris",
       kategori:
@@ -938,14 +1020,27 @@ export default function PackagePage() {
       color:
         "from-emerald-500 to-green-600",
     },
-    {
-      nama: selectedSubject,
-      kategori: selectedSubject,
-      icon: "🎯",
-      color:
-        "from-violet-600 to-fuchsia-500",
-    },
   ]
+
+  const mapel =
+    finalSelectedSubject
+      ? [
+          ...mapelWajib,
+
+          {
+            nama:
+              finalSelectedSubject,
+
+            kategori:
+              finalSelectedSubject,
+
+            icon: "🎯",
+
+            color:
+              "from-violet-600 to-fuchsia-500",
+          },
+        ]
+      : mapelWajib
 
   return (
 
@@ -955,10 +1050,14 @@ export default function PackagePage() {
       from-slate-100
       via-violet-50
       to-cyan-50
-      p-4 md:p-6
+      p-4
+      md:p-6
     ">
 
-      <div className="max-w-7xl mx-auto">
+      <div className="
+        max-w-7xl
+        mx-auto
+      ">
 
         {/* HEADER */}
 
@@ -989,57 +1088,61 @@ export default function PackagePage() {
               md:text-5xl
               font-black
               text-gray-800
-              leading-tight
             ">
-
               {paket.nama_paket}
-
             </h1>
 
           </div>
 
-          <div className="
-            bg-white
-            rounded-3xl
-            px-6
-            py-4
-            shadow-lg
-          ">
+          {finalSelectedSubject && (
 
-            <p className="
-              text-sm
-              text-gray-500
-              font-bold
-              mb-1
-            ">
-              Pendamping Dipilih
-            </p>
-
-            <p className="
-              text-2xl
-              font-black
-              text-violet-700
+            <div className="
+              bg-white
+              rounded-3xl
+              px-6
+              py-4
+              shadow-lg
             ">
 
-              {selectedSubject}
+              <p className="
+                text-sm
+                text-gray-500
+                font-bold
+                mb-1
+              ">
+                Pendamping Dipilih
+              </p>
 
-            </p>
+              <p className="
+                text-2xl
+                font-black
+                text-violet-700
+              ">
+                {finalSelectedSubject}
+              </p>
 
-          </div>
+            </div>
+          )}
 
         </div>
 
         {/* MAPEL */}
 
-        <div className="
+        <div className={`
           grid
+          gap-5
+          md:gap-7
           grid-cols-1
           sm:grid-cols-2
-          xl:grid-cols-4
-          gap-5 md:gap-7
-        ">
+          ${
+            mapel.length === 4
+              ? "xl:grid-cols-4"
+              : "xl:grid-cols-3"
+          }
+        `}>
 
-          {mapel.map((item, index) => (
+          {mapel.map(
+            (item, index) => (
 
             <div
               key={item.nama}
@@ -1084,21 +1187,16 @@ export default function PackagePage() {
                 shadow-2xl
                 mb-6
               `}>
-
                 {item.icon}
-
               </div>
 
               <h2 className="
                 text-2xl
                 font-black
                 text-gray-800
-                leading-tight
                 mb-5
               ">
-
                 {item.nama}
-
               </h2>
 
               <button
@@ -1122,13 +1220,10 @@ export default function PackagePage() {
                   transition-all
                 `}
               >
-
                 Mulai Ujian
-
               </button>
 
             </div>
-
           ))}
 
         </div>

@@ -12,95 +12,116 @@ type Jadwal = {
   status: boolean
 }
 
+type PackageType = {
+  id: number
+  nama_paket: string
+  token: string
+  is_custom: boolean
+  pendamping_subject?: string
+}
+
 export default function AdminToken() {
 
   const router = useRouter()
 
+  // =========================
+  // MAPEL
+  // =========================
   const kategoriList = [
     "Matematika",
     "Bahasa Indonesia",
     "Bahasa Inggris",
-
     "Fisika",
     "Kimia",
     "Biologi",
-
     "Ekonomi",
     "Geografi",
     "Sosiologi",
     "Sejarah",
     "Antropologi",
-
     "Bahasa Arab",
     "Bahasa Mandarin",
     "Bahasa Jepang",
     "Bahasa Korea",
     "Bahasa Jerman",
     "Bahasa Prancis",
-
     "PPKN",
     "PKK",
-
     "TPS",
     "Literasi",
   ]
 
-  const [kategori,
-    setKategori] =
+  // =========================
+  // STATE MAPEL
+  // =========================
+  const [kategori, setKategori] =
     useState("Matematika")
 
-  const [token,
-    setToken] =
+  const [token, setToken] =
     useState("")
 
-  const [durasi,
-    setDurasi] =
+  const [durasi, setDurasi] =
     useState(90)
 
-  const [data,
-    setData] =
+  const [data, setData] =
     useState<Jadwal[]>([])
 
-  const [loading,
-    setLoading] =
-    useState(true)
+  // =========================
+  // STATE PACKAGE
+  // =========================
+  const [packages, setPackages] =
+    useState<PackageType[]>([])
 
-  const [search,
-    setSearch] =
+  const [selectedPackageId,
+    setSelectedPackageId] =
+    useState<number | null>(null)
+
+  const [packageToken,
+    setPackageToken] =
     useState("")
 
+  // =========================
+  // GLOBAL
+  // =========================
+  const [loading, setLoading] =
+    useState(true)
+
+  const [search, setSearch] =
+    useState("")
+
+  // =========================
+  // INIT
+  // =========================
   useEffect(() => {
     init()
   }, [])
 
   async function init() {
 
-    const { data } =
-      await supabase.auth.getUser()
+    const {
+      data: authData
+    } = await supabase.auth.getUser()
 
-    if (!data.user) {
+    if (!authData.user) {
 
       router.push("/login")
-
       return
     }
 
-    // =====================
-    // CEK ADMIN
-    // =====================
-    const { data: profile } =
-      await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", data.user.id)
-        .single()
+    const {
+      data: profile
+    } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", authData.user.id)
+      .single()
 
     if (
       !profile ||
       profile.role !== "admin"
     ) {
 
-      alert("Akses ditolak!")
+      alert("Akses ditolak")
 
       router.push("/dashboard")
 
@@ -112,34 +133,42 @@ export default function AdminToken() {
     setLoading(false)
   }
 
-  // =====================
-  // AMBIL DATA
-  // =====================
+  // =========================
+  // GET DATA
+  // =========================
   async function getData() {
 
-    const { data, error } =
-      await supabase
-        .from("jadwal_ujian")
-        .select("*")
-        .order("id", {
-          ascending: false,
-        })
-
-    if (error) {
-
-      console.log(error)
-
-      return
-    }
+    // TOKEN MAPEL
+    const {
+      data: jadwalData
+    } = await supabase
+      .from("jadwal_ujian")
+      .select("*")
+      .order("id", {
+        ascending: false
+      })
 
     setData(
-      (data || []) as Jadwal[]
+      (jadwalData || []) as Jadwal[]
     )
+
+    // TOKEN PACKAGE
+    const {
+      data: packageData
+    } = await supabase
+      .from("packages")
+      .select("*")
+      .order("id")
+
+    const finalPackage =
+      (packageData || []) as PackageType[]
+
+    setPackages(finalPackage)
   }
 
-  // =====================
+  // =========================
   // GENERATE TOKEN
-  // =====================
+  // =========================
   function generateToken() {
 
     const chars =
@@ -161,75 +190,32 @@ export default function AdminToken() {
       )
     }
 
-    setToken(result)
+    return result
   }
 
-  // =====================
-  // SIMPAN TOKEN
-  // =====================
+  // =========================
+  // SIMPAN TOKEN MAPEL
+  // =========================
   async function simpanToken() {
-
-    if (!kategori) {
-
-      alert(
-        "Kategori wajib dipilih"
-      )
-
-      return
-    }
 
     if (!token) {
 
-      alert(
-        "Token wajib diisi"
-      )
-
+      alert("Token wajib diisi")
       return
     }
 
-    if (!durasi) {
-
-      alert(
-        "Durasi wajib diisi"
+    await supabase
+      .from("jadwal_ujian")
+      .update({
+        status: false
+      })
+      .eq(
+        "kategori",
+        kategori
       )
 
-      return
-    }
-
-    try {
-
-      // =====================
-      // NONAKTIFKAN TOKEN LAMA
-      // =====================
-      const {
-        error: updateError
-      } = await supabase
-        .from("jadwal_ujian")
-        .update({
-          status: false,
-        })
-        .eq(
-          "kategori",
-          kategori
-        )
-
-      if (updateError) {
-
-        console.log(updateError)
-
-        alert(
-          "Gagal nonaktifkan token lama"
-        )
-
-        return
-      }
-
-      // =====================
-      // INSERT TOKEN BARU
-      // =====================
-      const {
-        error
-      } = await supabase
+    const { error } =
+      await supabase
         .from("jadwal_ujian")
         .insert([
           {
@@ -242,63 +228,131 @@ export default function AdminToken() {
           },
         ])
 
-      if (error) {
+    if (error) {
 
-        console.log(error)
-
-        alert(error.message)
-
-        return
-      }
-
-      // =====================
-      // RESET TOKEN USER LAMA
-      // =====================
-      const {
-        error: resetError
-      } = await supabase
-        .from("token_used")
-        .delete()
-        .eq(
-          "kategori",
-          kategori
-        )
-
-      if (resetError) {
-
-        console.log(resetError)
-      }
-
-      alert(
-        "Token berhasil dibuat"
-      )
-
-      setToken("")
-
-      setDurasi(90)
-
-      await getData()
-
-    } catch (err) {
-
-      console.log(err)
-
-      alert(
-        "Terjadi kesalahan"
-      )
+      alert(error.message)
+      return
     }
+
+    alert(
+      "Token mapel berhasil dibuat"
+    )
+
+    setToken("")
+    setDurasi(90)
+
+    await getData()
   }
 
-  // =====================
-  // HAPUS TOKEN
-  // =====================
+  // =========================
+  // EDIT PACKAGE
+  // =========================
+  function editPackage(
+    item: PackageType
+  ) {
+
+    setSelectedPackageId(item.id)
+
+    setPackageToken(
+      item.token || ""
+    )
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    })
+  }
+
+  // =========================
+  // SIMPAN TOKEN PACKAGE
+  // =========================
+  async function simpanTokenPackage() {
+
+    if (!selectedPackageId) {
+
+      alert(
+        "Pilih package dulu"
+      )
+
+      return
+    }
+
+    const { error } =
+      await supabase
+        .from("packages")
+        .update({
+          token:
+            packageToken.trim()
+        })
+        .eq(
+          "id",
+          selectedPackageId
+        )
+
+    if (error) {
+
+      alert(
+        "Gagal update token"
+      )
+
+      return
+    }
+
+    alert(
+      "Token package berhasil disimpan"
+    )
+
+    setPackageToken("")
+    setSelectedPackageId(null)
+
+    await getData()
+  }
+
+  // =========================
+  // HAPUS TOKEN PACKAGE
+  // =========================
+  async function hapusPackage(
+    id: number
+  ) {
+
+    const confirmDelete =
+      confirm(
+        "Hapus token package?"
+      )
+
+    if (!confirmDelete)
+      return
+
+    const { error } =
+      await supabase
+        .from("packages")
+        .update({
+          token: null
+        })
+        .eq("id", id)
+
+    if (error) {
+
+      alert(
+        "Gagal hapus token"
+      )
+
+      return
+    }
+
+    await getData()
+  }
+
+  // =========================
+  // HAPUS TOKEN MAPEL
+  // =========================
   async function hapusToken(
     id: number
   ) {
 
     const confirmDelete =
       confirm(
-        "Hapus token ini?"
+        "Hapus token?"
       )
 
     if (!confirmDelete)
@@ -309,24 +363,22 @@ export default function AdminToken() {
       .delete()
       .eq("id", id)
 
-    getData()
+    await getData()
   }
 
-  // =====================
+  // =========================
   // TOGGLE STATUS
-  // =====================
+  // =========================
   async function toggleStatus(
     item: Jadwal
   ) {
 
-    // AKTIFKAN
     if (!item.status) {
 
-      // NONAKTIFKAN SEMUA
       await supabase
         .from("jadwal_ujian")
         .update({
-          status: false,
+          status: false
         })
         .eq(
           "kategori",
@@ -334,21 +386,20 @@ export default function AdminToken() {
         )
     }
 
-    // UPDATE TOKEN
     await supabase
       .from("jadwal_ujian")
       .update({
         status:
-          !item.status,
+          !item.status
       })
       .eq("id", item.id)
 
-    getData()
+    await getData()
   }
 
-  // =====================
-  // FILTER DATA
-  // =====================
+  // =========================
+  // FILTER
+  // =========================
   const filteredData =
     data.filter((item) => {
 
@@ -367,14 +418,21 @@ export default function AdminToken() {
       )
     })
 
-  // =====================
+  // =========================
   // LOADING
-  // =====================
+  // =========================
   if (loading) {
 
     return (
 
-      <div className="p-10">
+      <div className="
+        min-h-screen
+        flex
+        items-center
+        justify-center
+        text-xl
+        font-black
+      ">
         Loading...
       </div>
     )
@@ -382,19 +440,40 @@ export default function AdminToken() {
 
   return (
 
-    <div className="min-h-screen bg-gray-100">
+    <div className="
+      min-h-screen
+      bg-slate-100
+    ">
 
       {/* HEADER */}
-      <div className="bg-blue-800 text-white p-6 flex justify-between items-center">
+      <div className="
+        bg-gradient-to-r
+        from-blue-700
+        to-blue-900
+        text-white
+        px-5
+        py-5
+        flex
+        items-center
+        justify-between
+      ">
 
         <div>
 
-          <h1 className="text-3xl font-bold">
-            Admin Token Ujian
+          <h1 className="
+            text-2xl
+            md:text-3xl
+            font-black
+          ">
+            Admin Token
           </h1>
 
-          <p className="text-sm opacity-80">
-            Kelola token ujian semua mata pelajaran
+          <p className="
+            text-sm
+            text-blue-100
+            mt-1
+          ">
+            Kelola token ujian
           </p>
 
         </div>
@@ -403,25 +482,48 @@ export default function AdminToken() {
           onClick={() =>
             router.push("/admin")
           }
-          className="border px-4 py-2 rounded-xl hover:bg-white hover:text-blue-800"
+          className="
+            bg-white
+            text-blue-800
+            px-4
+            py-2
+            rounded-xl
+            font-black
+          "
         >
-          ← Admin
+          Admin
         </button>
 
       </div>
 
-      <div className="p-6">
+      {/* CONTENT */}
+      <div className="
+        p-4
+        grid
+        lg:grid-cols-2
+        gap-4
+      ">
 
-        {/* FORM */}
-        <div className="bg-white p-6 rounded-3xl shadow mb-6">
+        {/* TOKEN MAPEL */}
+        <div className="
+          bg-white
+          rounded-3xl
+          p-5
+          shadow-sm
+        ">
 
-          <h2 className="text-xl font-bold mb-5">
-            Buat Token Baru
+          <h2 className="
+            text-xl
+            font-black
+            mb-4
+          ">
+            Token Mapel
           </h2>
 
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="
+            space-y-3
+          ">
 
-            {/* KATEGORI */}
             <select
               value={kategori}
               onChange={(e) =>
@@ -429,7 +531,14 @@ export default function AdminToken() {
                   e.target.value
                 )
               }
-              className="border p-4 rounded-2xl"
+              className="
+                w-full
+                h-12
+                border
+                rounded-2xl
+                px-4
+                font-semibold
+              "
             >
 
               {kategoriList.map(
@@ -447,8 +556,10 @@ export default function AdminToken() {
 
             </select>
 
-            {/* TOKEN */}
-            <div className="flex gap-2">
+            <div className="
+              flex
+              gap-2
+            ">
 
               <input
                 value={token}
@@ -457,22 +568,35 @@ export default function AdminToken() {
                     e.target.value
                   )
                 }
-                placeholder="Masukkan token"
-                className="flex-1 border p-4 rounded-2xl"
+                placeholder="Token"
+                className="
+                  flex-1
+                  h-12
+                  border
+                  rounded-2xl
+                  px-4
+                  font-black
+                "
               />
 
               <button
-                onClick={
-                  generateToken
+                onClick={() =>
+                  setToken(
+                    generateToken()
+                  )
                 }
-                className="bg-gray-200 px-4 rounded-2xl hover:bg-gray-300"
+                className="
+                  bg-slate-200
+                  px-4
+                  rounded-2xl
+                  font-black
+                "
               >
                 Random
               </button>
 
             </div>
 
-            {/* DURASI */}
             <input
               type="number"
               value={durasi}
@@ -483,83 +607,389 @@ export default function AdminToken() {
                   )
                 )
               }
-              placeholder="Durasi menit"
-              className="border p-4 rounded-2xl"
+              placeholder="Durasi"
+              className="
+                w-full
+                h-12
+                border
+                rounded-2xl
+                px-4
+                font-black
+              "
             />
+
+            <button
+              onClick={simpanToken}
+              className="
+                w-full
+                h-12
+                bg-blue-700
+                text-white
+                rounded-2xl
+                font-black
+              "
+            >
+              Simpan Token
+            </button>
+
+          </div>
+
+        </div>
+
+        {/* TOKEN PACKAGE */}
+        <div className="
+          bg-white
+          rounded-3xl
+          p-5
+          shadow-sm
+        ">
+
+          <div className="
+            flex
+            items-center
+            justify-between
+            mb-4
+          ">
+
+            <h2 className="
+              text-xl
+              font-black
+            ">
+              Token Package
+            </h2>
+
+            {selectedPackageId && (
+
+              <div className="
+                text-xs
+                bg-yellow-100
+                text-yellow-700
+                px-3
+                py-1
+                rounded-full
+                font-black
+              ">
+                MODE EDIT
+              </div>
+
+            )}
+
+          </div>
+
+          <div className="
+            flex
+            gap-2
+            mb-4
+          ">
+
+            <input
+              value={packageToken}
+              onChange={(e) =>
+                setPackageToken(
+                  e.target.value
+                )
+              }
+              placeholder="Isi token package"
+              className="
+                flex-1
+                h-12
+                border
+                rounded-2xl
+                px-4
+                font-black
+              "
+            />
+
+            <button
+              onClick={() =>
+                setPackageToken(
+                  generateToken()
+                )
+              }
+              className="
+                bg-slate-200
+                px-4
+                rounded-2xl
+                font-black
+              "
+            >
+              Random
+            </button>
 
           </div>
 
           <button
             onClick={
-              simpanToken
+              simpanTokenPackage
             }
-            className="mt-5 bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-2xl"
+            className="
+              w-full
+              h-12
+              bg-green-600
+              text-white
+              rounded-2xl
+              font-black
+              mb-5
+            "
           >
-            Simpan Token
+            Simpan Token Package
           </button>
 
-        </div>
+          {/* LIST PACKAGE */}
+          <div className="
+            space-y-3
+            max-h-[500px]
+            overflow-auto
+            pr-1
+          ">
 
-        {/* SEARCH */}
-        <div className="mb-6">
-
-          <input
-            value={search}
-            onChange={(e) =>
-              setSearch(
-                e.target.value
-              )
-            }
-            placeholder="Cari kategori / token..."
-            className="w-full bg-white border p-4 rounded-2xl shadow"
-          />
-
-        </div>
-
-        {/* LIST TOKEN */}
-        <div className="space-y-4">
-
-          {filteredData.map(
-            (item) => (
+            {packages.map((item) => (
 
               <div
                 key={item.id}
-                className="bg-white p-5 rounded-2xl shadow flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5"
+                className="
+                  border
+                  rounded-2xl
+                  p-4
+                  hover:border-blue-400
+                  transition
+                "
               >
+
+                <div className="
+                  flex
+                  items-center
+                  justify-between
+                  gap-3
+                ">
+
+                  <div className="
+                    flex-1
+                  ">
+
+                    <div className="
+                      flex
+                      items-center
+                      gap-2
+                      flex-wrap
+                    ">
+
+                      <h1 className="
+                        font-black
+                        text-slate-800
+                      ">
+                        {item.nama_paket}
+                      </h1>
+
+                      <span className={`
+                        text-[10px]
+                        px-2
+                        py-1
+                        rounded-full
+                        font-black
+
+                        ${item.is_custom
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-blue-100 text-blue-700"
+                        }
+                      `}>
+                        {item.is_custom
+                          ? "CUSTOM"
+                          : "DEFAULT"}
+                      </span>
+
+                    </div>
+
+                    <p className="
+                      mt-2
+                      text-lg
+                      font-black
+                      text-blue-700
+                      tracking-wider
+                    ">
+                      {item.token || "-"}
+                    </p>
+
+                    {item.pendamping_subject && (
+
+                      <p className="
+                        text-xs
+                        text-slate-500
+                        mt-1
+                        font-semibold
+                      ">
+                        {item.pendamping_subject}
+                      </p>
+
+                    )}
+
+                  </div>
+
+                  <div className="
+                    flex
+                    flex-col
+                    gap-2
+                  ">
+
+                    <button
+                      onClick={() =>
+                        editPackage(
+                          item
+                        )
+                      }
+                      className="
+                        bg-yellow-400
+                        hover:bg-yellow-500
+                        text-black
+                        text-xs
+                        font-black
+                        px-4
+                        py-2
+                        rounded-xl
+                      "
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        hapusPackage(
+                          item.id
+                        )
+                      }
+                      className="
+                        bg-red-500
+                        hover:bg-red-600
+                        text-white
+                        text-xs
+                        font-black
+                        px-4
+                        py-2
+                        rounded-xl
+                      "
+                    >
+                      Hapus
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            ))}
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* SEARCH */}
+      <div className="
+        px-4
+      ">
+
+        <input
+          value={search}
+          onChange={(e) =>
+            setSearch(
+              e.target.value
+            )
+          }
+          placeholder="Cari token mapel..."
+          className="
+            w-full
+            h-12
+            bg-white
+            border
+            rounded-2xl
+            px-4
+            font-semibold
+          "
+        />
+
+      </div>
+
+      {/* LIST TOKEN */}
+      <div className="
+        p-4
+        space-y-3
+      ">
+
+        {filteredData.map(
+          (item) => (
+
+            <div
+              key={item.id}
+              className="
+                bg-white
+                rounded-2xl
+                p-4
+                shadow-sm
+              "
+            >
+
+              <div className="
+                flex
+                items-center
+                justify-between
+                gap-4
+              ">
 
                 <div>
 
-                  <p className="font-bold text-lg">
-                    {
-                      item.kategori
-                    }
-                  </p>
+                  <h1 className="
+                    text-lg
+                    font-black
+                    text-slate-800
+                  ">
+                    {item.kategori}
+                  </h1>
 
-                  <div className="flex gap-3 mt-3 flex-wrap">
+                  <div className="
+                    flex
+                    gap-2
+                    flex-wrap
+                    mt-2
+                  ">
 
-                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold">
-                      Token:
-                      {" "}
-                      {
-                        item.token
-                      }
+                    <span className="
+                      bg-blue-100
+                      text-blue-700
+                      px-3
+                      py-1
+                      rounded-full
+                      text-xs
+                      font-black
+                    ">
+                      {item.token}
                     </span>
 
-                    <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-semibold">
-                      {
-                        item.durasi
-                      }
-                      {" "}
-                      menit
+                    <span className="
+                      bg-yellow-100
+                      text-yellow-700
+                      px-3
+                      py-1
+                      rounded-full
+                      text-xs
+                      font-black
+                    ">
+                      {item.durasi} menit
                     </span>
 
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        item.status
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
+                    <span className={`
+                      px-3
+                      py-1
+                      rounded-full
+                      text-xs
+                      font-black
+
+                      ${item.status
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                      }
+                    `}>
                       {item.status
                         ? "Aktif"
                         : "Nonaktif"}
@@ -569,34 +999,51 @@ export default function AdminToken() {
 
                 </div>
 
-                <div className="flex gap-2 flex-wrap">
+                <div className="
+                  flex
+                  flex-col
+                  gap-2
+                ">
 
-                  {/* TOGGLE */}
                   <button
                     onClick={() =>
                       toggleStatus(
                         item
                       )
                     }
-                    className={`px-4 py-2 rounded-xl text-white font-semibold ${
-                      item.status
-                        ? "bg-red-500 hover:bg-red-600"
-                        : "bg-green-600 hover:bg-green-700"
-                    }`}
+                    className={`
+                      px-4
+                      py-2
+                      rounded-xl
+                      text-xs
+                      font-black
+                      text-white
+
+                      ${item.status
+                        ? "bg-red-500"
+                        : "bg-green-600"
+                      }
+                    `}
                   >
                     {item.status
-                      ? "Nonaktifkan"
-                      : "Aktifkan"}
+                      ? "OFF"
+                      : "ON"}
                   </button>
 
-                  {/* HAPUS */}
                   <button
                     onClick={() =>
                       hapusToken(
                         item.id
                       )
                     }
-                    className="border px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white font-semibold"
+                    className="
+                      bg-slate-200
+                      px-4
+                      py-2
+                      rounded-xl
+                      text-xs
+                      font-black
+                    "
                   >
                     Hapus
                   </button>
@@ -605,21 +1052,25 @@ export default function AdminToken() {
 
               </div>
 
-            )
-          )}
-
-          {filteredData.length ===
-            0 && (
-
-            <div className="bg-white p-10 rounded-2xl text-center text-gray-500 shadow">
-
-              Belum ada token
-
             </div>
 
-          )}
+          )
+        )}
 
-        </div>
+        {filteredData.length === 0 && (
+
+          <div className="
+            bg-white
+            rounded-2xl
+            p-10
+            text-center
+            text-slate-500
+            font-bold
+          ">
+            Belum ada token
+          </div>
+
+        )}
 
       </div>
 
