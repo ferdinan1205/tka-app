@@ -1,11 +1,19 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+
 import { supabase } from "../../../lib/supabase"
 import { useRouter } from "next/navigation"
 import * as XLSX from "xlsx"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
+
+// ── types ─────────────────────────────────────────────────────
 
 type Rekap = {
   id: number
@@ -13,613 +21,592 @@ type Rekap = {
   kategori: string
   tanggal: string
   user_id: string
+  paket?: string
+  package_id?: number
   profiles: {
     nama: string
     email: string
+    foto?: string
   }
 }
 
+type PaketSummary = {
+  paket: string
+  mapel: { kategori: string; skor: number }[]
+  total: number
+  rata: number
+  tanggal: string
+  user_id: string
+  nama: string
+  email: string
+  foto?: string
+}
+
+type ViewMode = "table" | "paket"
+
+// ── avatar color ──────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  { bg: "bg-violet-100", text: "text-violet-700" },
+  { bg: "bg-sky-100",    text: "text-sky-700"    },
+  { bg: "bg-emerald-100",text: "text-emerald-700"},
+  { bg: "bg-rose-100",   text: "text-rose-700"   },
+  { bg: "bg-amber-100",  text: "text-amber-700"  },
+  { bg: "bg-teal-100",   text: "text-teal-700"   },
+  { bg: "bg-fuchsia-100",text: "text-fuchsia-700"},
+  { bg: "bg-orange-100", text: "text-orange-700" },
+]
+
+function getAvatarColor(name: string) {
+  const idx = (name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length
+  return AVATAR_COLORS[idx]
+}
+
+// ── page ──────────────────────────────────────────────────────
+
 export default function AdminRekapPage() {
+  const router   = useRouter()
+  const printRef = useRef<HTMLDivElement>(null)
 
-  const router = useRouter()
+  const [data,          setData         ] = useState<Rekap[]>([])
+  const [loading,       setLoading      ] = useState(true)
+  const [search,        setSearch       ] = useState("")
+  const [filterMapel,   setFilterMapel  ] = useState("Semua")
+  const [filterPaket,   setFilterPaket  ] = useState("Semua")
+  const [viewMode,      setViewMode     ] = useState<ViewMode>("table")
+  const [expandedPaket, setExpandedPaket] = useState<string | null>(null)
 
-  const printRef =
-    useRef<HTMLDivElement>(null)
+  useEffect(() => { init() }, [])
 
-  const [data, setData] =
-    useState<Rekap[]>([])
-
-  const [loading, setLoading] =
-    useState(true)
-
-  const [search, setSearch] =
-    useState("")
-
-  const [filterMapel,
-    setFilterMapel] =
-    useState("Semua")
-
-  useEffect(() => {
-    init()
-  }, [])
-
-  // ==========================
-  // INIT
-  // ==========================
   async function init() {
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData?.user) { router.push("/login"); return }
 
-    const { data } =
-      await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from("profiles").select("*").eq("id", authData.user.id).single()
 
-    if (!data.user) {
-
-      router.push("/login")
-
-      return
-    }
-
-    // 🔥 CEK ADMIN
-    const { data: profile } =
-      await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", data.user.id)
-        .single()
-
-    if (
-      !profile ||
-      profile.role !== "admin"
-    ) {
-
-      alert("Akses ditolak!")
-
+    if (!profile || profile.role !== "admin") {
+      alert("Akses ditolak")
       router.push("/dashboard")
-
       return
     }
 
     await getData()
   }
 
-  // ==========================
-  // AMBIL DATA
-  // ==========================
   async function getData() {
-
     setLoading(true)
 
-    const { data: hasilData } =
-      await supabase
-        .from("hasil")
-        .select("*")
-        .order("id", {
-          ascending: false,
-        })
+    const { data: hasilData, error } = await supabase
+      .from("hasil").select("*").order("id", { ascending: false })
 
-    const { data: profiles } =
-      await supabase
-        .from("profiles")
-        .select("*")
+    if (error) { console.error(error); setLoading(false); return }
 
-    if (
-      !hasilData ||
-      !profiles
-    ) {
+    const { data: profiles } = await supabase.from("profiles").select("*")
 
-      setLoading(false)
+    const finalData = (hasilData || []).map((item: any) => {
+      const user = profiles?.find((p: any) => p.id === item.user_id)
+      return {
+        ...item,
+        profiles: {
+          nama:  user?.nama  || "Tanpa Nama",
+          email: user?.email || "-",
+          foto:  user?.foto  || "",
+        },
+      }
+    })
 
-      return
-    }
-
-    const gabung =
-      hasilData.map(
-        (item: any) => {
-
-          const user =
-            profiles.find(
-              (p: any) =>
-                p.id ===
-                item.user_id
-            )
-
-          return {
-
-            ...item,
-
-            profiles: {
-
-              nama:
-                user?.nama ||
-                "Tanpa Nama",
-
-              email:
-                user?.email ||
-                "-",
-            },
-          }
-        }
-      )
-
-    setData(gabung)
-
+    setData(finalData)
     setLoading(false)
   }
 
-  // ==========================
-  // FILTER MAPEL
-  // ==========================
-  const mapelList =
-    useMemo(() => {
+  const mapelList = useMemo(() => {
+    return ["Semua", ...Array.from(new Set(data.map((x) => x.kategori)))]
+  }, [data])
 
-      const arr =
-        data.map(
-          (x) =>
-            x.kategori
-        )
+  const paketList = useMemo(() => {
+    return ["Semua", ...Array.from(new Set(data.map((x) => x.paket).filter(Boolean)))]
+  }, [data])
 
-      return [
-
-        "Semua",
-
-        ...Array.from(
-          new Set(arr)
-        ),
-      ]
-    }, [data])
-
-  // ==========================
-  // FILTER DATA
-  // ==========================
-  const filtered =
-    useMemo(() => {
-
-      return data.filter(
-        (item) => {
-
-          const nama =
-            item.profiles.nama
-              .toLowerCase()
-
-          const email =
-            item.profiles.email
-              .toLowerCase()
-
-          const key =
-            search.toLowerCase()
-
-          const cocokSearch =
-
-            nama.includes(key) ||
-
-            email.includes(key)
-
-          const cocokMapel =
-
-            filterMapel ===
-              "Semua" ||
-
-            item.kategori ===
-              filterMapel
-
-          return (
-
-            cocokSearch &&
-
-            cocokMapel
-          )
-        }
+  const filtered = useMemo(() => {
+    return data.filter((item) => {
+      const key = search.toLowerCase()
+      return (
+        (item.profiles.nama.toLowerCase().includes(key) ||
+          item.profiles.email.toLowerCase().includes(key)) &&
+        (filterMapel === "Semua" || item.kategori === filterMapel) &&
+        (filterPaket === "Semua" || item.paket    === filterPaket)
       )
-    }, [
-      data,
-      search,
-      filterMapel,
-    ])
+    })
+  }, [data, search, filterMapel, filterPaket])
 
-  // ==========================
-  // STATISTIK
-  // ==========================
-  const totalUjian =
-    filtered.length
+  const paketSummaries = useMemo((): PaketSummary[] => {
+    const map = new Map<string, PaketSummary>()
 
-  const totalSiswa =
-    new Set(
-      filtered.map(
-        (x) =>
-          x.user_id
+    const source = data.filter((item) => {
+      const key = search.toLowerCase()
+      return (
+        (item.profiles.nama.toLowerCase().includes(key) ||
+          item.profiles.email.toLowerCase().includes(key)) &&
+        (filterPaket === "Semua" || item.paket === filterPaket)
       )
-    ).size
+    })
 
-  const rataNilai =
-
-    filtered.length === 0
-
-      ? 0
-
-      : Math.round(
-
-          filtered.reduce(
-            (a, b) =>
-              a + b.skor,
-            0
-          ) /
-
-            filtered.length
-        )
-
-  // ==========================
-  // EXPORT EXCEL
-  // ==========================
-  function exportExcel() {
-
-    const rows =
-      filtered.map(
-        (item, i) => ({
-
-          No: i + 1,
-
-          Nama:
-            item.profiles.nama,
-
-          Email:
-            item.profiles.email,
-
-          Mapel:
-            item.kategori,
-
-          Nilai:
-            item.skor,
-
-          Tanggal:
-            new Date(
-              item.tanggal
-            ).toLocaleString(),
+    source.forEach((item) => {
+      const key = `${item.user_id}__${item.paket}__${item.package_id ?? ""}`
+      if (!map.has(key)) {
+        map.set(key, {
+          paket: item.paket || "-",
+          mapel: [], total: 0, rata: 0,
+          tanggal: item.tanggal,
+          user_id: item.user_id,
+          nama:  item.profiles.nama,
+          email: item.profiles.email,
+          foto:  item.profiles.foto,
         })
-      )
+      }
+      const entry = map.get(key)!
+      entry.mapel.push({ kategori: item.kategori, skor: item.skor })
+      entry.total += item.skor
+    })
 
-    const ws =
-      XLSX.utils.json_to_sheet(
-        rows
-      )
+    map.forEach((entry) => {
+      entry.rata = entry.mapel.length > 0
+        ? Math.round(entry.total / entry.mapel.length) : 0
+    })
 
-    const wb =
-      XLSX.utils.book_new()
-
-    XLSX.utils.book_append_sheet(
-      wb,
-      ws,
-      "Rekap Nilai"
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime()
     )
+  }, [data, search, filterPaket])
 
-    XLSX.writeFile(
-      wb,
-      "rekap_nilai_admin.xlsx"
-    )
+  const totalUjian      = filtered.length
+  const totalSiswa      = new Set(filtered.map((x) => x.user_id)).size
+  const rataNilai       = filtered.length === 0 ? 0 : Math.round(filtered.reduce((a, b) => a + b.skor, 0) / filtered.length)
+  const nilaiTertinggi  = filtered.length === 0 ? 0 : Math.max(...filtered.map((x) => x.skor))
+
+  function exportExcel() {
+    if (viewMode === "table") {
+      const rows = filtered.map((item, i) => ({
+        No: i + 1,
+        Nama: item.profiles.nama,
+        Email: item.profiles.email,
+        Paket: item.paket || "-",
+        Mapel: item.kategori,
+        Nilai: item.skor,
+        Tanggal: new Date(item.tanggal).toLocaleString("id-ID"),
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Rekap")
+      XLSX.writeFile(wb, "rekap_nilai.xlsx")
+    } else {
+      const rows: any[] = []
+      paketSummaries.forEach((p, i) => {
+        const mapelObj: any = {}
+        p.mapel.forEach((m) => { mapelObj[m.kategori] = m.skor })
+        rows.push({ No: i + 1, Nama: p.nama, Email: p.email, Paket: p.paket, ...mapelObj, "Total Skor": p.total, "Rata-rata": p.rata, Tanggal: new Date(p.tanggal).toLocaleString("id-ID") })
+      })
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Rekap Per Paket")
+      XLSX.writeFile(wb, "rekap_per_paket.xlsx")
+    }
   }
 
-  // ==========================
-  // EXPORT PDF
-  // ==========================
   async function exportPDF() {
-
-    if (!printRef.current)
-      return
-
-    const canvas =
-      await html2canvas(
-        printRef.current,
-        {
-          scale: 2,
-          backgroundColor:
-            "#ffffff",
-        }
-      )
-
-    const imgData =
-      canvas.toDataURL(
-        "image/png"
-      )
-
-    const pdf =
-      new jsPDF(
-        "p",
-        "mm",
-        "a4"
-      )
-
-    const width =
-      pdf.internal
-        .pageSize
-        .getWidth()
-
-    const height =
-      (canvas.height *
-        width) /
-      canvas.width
-
-    pdf.addImage(
-      imgData,
-      "PNG",
-      0,
-      0,
-      width,
-      height
-    )
-
-    pdf.save(
-      "rekap_nilai_admin.pdf"
-    )
+    if (!printRef.current) return
+    const canvas  = await html2canvas(printRef.current, { scale: 2 })
+    const imgData = canvas.toDataURL("image/png")
+    const pdf     = new jsPDF("p", "mm", "a4")
+    const width   = pdf.internal.pageSize.getWidth()
+    const height  = (canvas.height * width) / canvas.width
+    pdf.addImage(imgData, "PNG", 0, 0, width, height)
+    pdf.save("rekap_admin.pdf")
   }
 
+  // ── loading ───────────────────────────────────────────────────
   if (loading) {
-
     return (
-
-      <div className="p-10">
-        Loading...
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
+          <p className="text-sm text-slate-400">Memuat data rekap...</p>
+        </div>
       </div>
     )
   }
 
   return (
-
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+    <div className="min-h-screen bg-slate-50">
 
       {/* HEADER */}
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-8">
-
-        <div>
-
-          <h1 className="text-2xl md:text-4xl font-bold">
-            📊 Rekap Nilai Admin
-          </h1>
-
-          <p className="text-gray-500 mt-1">
-            Semua nilai siswa
-          </p>
-
+      <div className="sticky top-0 z-50 bg-white border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold tracking-[3px] text-indigo-500 uppercase leading-none mb-0.5">
+              Admin
+            </p>
+            <h1 className="text-[15px] font-semibold text-slate-800 leading-none">
+              Rekap Nilai
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/admin")}
+              className="h-8 px-4 rounded-lg border border-slate-200 text-[13px] text-slate-600 hover:bg-slate-50 transition"
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={exportExcel}
+              className="h-8 px-4 rounded-lg bg-emerald-50 text-emerald-700 text-[13px] font-medium hover:bg-emerald-100 transition border border-emerald-200"
+            >
+              ↓ Excel
+            </button>
+            <button
+              onClick={exportPDF}
+              className="h-8 px-4 rounded-lg bg-rose-50 text-rose-600 text-[13px] font-medium hover:bg-rose-100 transition border border-rose-200"
+            >
+              ↓ PDF
+            </button>
+          </div>
         </div>
-
-        <div className="flex gap-3 flex-wrap">
-
-          <button
-            onClick={() =>
-              router.push("/admin")
-            }
-            className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-3 rounded-2xl font-semibold transition"
-          >
-            Dashboard
-          </button>
-
-          <button
-            onClick={
-              exportExcel
-            }
-            className="bg-green-500 hover:bg-green-600 text-white px-5 py-3 rounded-2xl font-semibold transition"
-          >
-            📥 Excel
-          </button>
-
-          <button
-            onClick={
-              exportPDF
-            }
-            className="bg-red-500 hover:bg-red-600 text-white px-5 py-3 rounded-2xl font-semibold transition"
-          >
-            📄 PDF
-          </button>
-
-        </div>
-
       </div>
 
-      {/* CARD */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+      <div className="max-w-6xl mx-auto px-4 py-5 space-y-4">
 
-        <Card
-          title="Total Ujian"
-          value={
-            totalUjian
-          }
-        />
+        {/* STAT CARDS */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard label="Total ujian"     value={totalUjian}     color="indigo"  />
+          <StatCard label="Total siswa"     value={totalSiswa}     color="violet"  />
+          <StatCard label="Rata-rata nilai" value={rataNilai}      color="amber"   />
+          <StatCard label="Nilai tertinggi" value={nilaiTertinggi} color="emerald" />
+        </div>
 
-        <Card
-          title="Total Siswa"
-          value={
-            totalSiswa
-          }
-        />
+        {/* FILTER ROW */}
+        <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 flex flex-col lg:flex-row gap-3">
+          <div className="relative flex-1">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari nama atau email siswa..."
+              className="w-full h-10 rounded-xl border border-slate-200 px-4 pr-10 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+          </div>
 
-        <Card
-          title="Rata-rata Nilai"
-          value={
-            rataNilai
-          }
-        />
+          <select
+            value={filterPaket}
+            onChange={(e) => setFilterPaket(e.target.value)}
+            className="h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition bg-white"
+          >
+            {paketList.map((item) => <option key={item}>{item}</option>)}
+          </select>
 
-      </div>
-
-      {/* FILTER */}
-      <div className="bg-white p-5 rounded-3xl shadow mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-
-        <input
-          placeholder="Cari nama / email"
-          value={search}
-          onChange={(e) =>
-            setSearch(
-              e.target.value
-            )
-          }
-          className="border p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-
-        <select
-          value={
-            filterMapel
-          }
-          onChange={(e) =>
-            setFilterMapel(
-              e.target.value
-            )
-          }
-          className="border p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-
-          {mapelList.map(
-            (x) => (
-
-              <option
-                key={x}
-              >
-                {x}
-              </option>
-            )
+          {viewMode === "table" && (
+            <select
+              value={filterMapel}
+              onChange={(e) => setFilterMapel(e.target.value)}
+              className="h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition bg-white"
+            >
+              {mapelList.map((item) => <option key={item}>{item}</option>)}
+            </select>
           )}
 
-        </select>
+          <button
+            onClick={getData}
+            className="h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition"
+          >
+            ↻ Refresh
+          </button>
+        </div>
 
-        <button
-          onClick={
-            getData
-          }
-          className="bg-gray-700 hover:bg-gray-800 text-white rounded-2xl font-semibold transition"
-        >
-          Refresh
-        </button>
+        {/* VIEW TOGGLE */}
+        <div className="flex gap-1.5">
+          {(["table", "paket"] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`h-8 px-4 rounded-lg text-xs font-medium transition ${
+                viewMode === mode
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white border border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+              }`}
+            >
+              {mode === "table" ? "Tabel nilai" : "Per paket"}
+            </button>
+          ))}
+          <span className="ml-auto text-[11px] text-slate-400 bg-slate-100 rounded-full px-2.5 py-1 self-center">
+            {viewMode === "table" ? `${filtered.length} baris` : `${paketSummaries.length} paket`}
+          </span>
+        </div>
 
-      </div>
+        {/* ── TABLE VIEW ── */}
+        {viewMode === "table" && (
+          <div ref={printRef} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[780px]">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    {["No", "Siswa", "Paket", "Mapel", "Nilai", "Tanggal"].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-14 text-center">
+                        <p className="text-3xl mb-2">📭</p>
+                        <p className="text-sm text-slate-500">Tidak ada data</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {data.length === 0 ? "Belum ada hasil ujian" : `${data.length} data tersedia, coba ubah filter`}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filtered.map((item, i) => {
+                      const color = getAvatarColor(item.profiles.nama)
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50 transition">
 
-      {/* TABLE */}
-      <div
-        ref={printRef}
-        className="bg-white rounded-3xl shadow overflow-x-auto"
-      >
+                          {/* No */}
+                          <td className="px-4 py-3 text-xs text-slate-400 font-medium">
+                            #{i + 1}
+                          </td>
 
-        <table className="w-full min-w-[900px]">
+                          {/* Siswa */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              {item.profiles.foto ? (
+                                <img src={item.profiles.foto} className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0" />
+                              ) : (
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 ${color.bg} ${color.text}`}>
+                                  {item.profiles.nama.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-sm font-medium text-slate-800">{item.profiles.nama}</p>
+                                <p className="text-[11px] text-slate-400">{item.profiles.email}</p>
+                              </div>
+                            </div>
+                          </td>
 
-          <thead className="bg-indigo-600 text-white">
+                          {/* Paket */}
+                          <td className="px-4 py-3">
+                            <PaketBadge paket={item.paket} />
+                          </td>
 
-            <tr>
+                          {/* Mapel */}
+                          <td className="px-4 py-3">
+                            <span className="text-sm text-slate-600">{item.kategori}</span>
+                          </td>
 
-              <th className="p-4 text-left">
-                No
-              </th>
+                          {/* Nilai */}
+                          <td className="px-4 py-3">
+                            <NilaiBadge skor={item.skor} />
+                          </td>
 
-              <th className="p-4 text-left">
-                Nama
-              </th>
+                          {/* Tanggal */}
+                          <td className="px-4 py-3 text-[11px] text-slate-400 whitespace-nowrap">
+                            {new Date(item.tanggal).toLocaleString("id-ID", {
+                              day: "numeric", month: "short", year: "numeric",
+                              hour: "2-digit", minute: "2-digit",
+                            })}
+                          </td>
 
-              <th className="p-4 text-left">
-                Email
-              </th>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
-              <th className="p-4 text-left">
-                Mapel
-              </th>
-
-              <th className="p-4 text-left">
-                Nilai
-              </th>
-
-              <th className="p-4 text-left">
-                Tanggal
-              </th>
-
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            {filtered.map(
-              (
-                item,
-                i
-              ) => (
-
-                <tr
-                  key={
-                    item.id
-                  }
-                  className="border-b hover:bg-gray-50 transition"
-                >
-
-                  <td className="p-4">
-                    {i + 1}
-                  </td>
-
-                  <td className="p-4 font-semibold">
-                    {
-                      item
-                        .profiles
-                        .nama
-                    }
-                  </td>
-
-                  <td className="p-4">
-                    {
-                      item
-                        .profiles
-                        .email
-                    }
-                  </td>
-
-                  <td className="p-4">
-                    {
-                      item.kategori
-                    }
-                  </td>
-
-                  <td className="p-4 font-bold text-green-600">
-                    {
-                      item.skor
-                    }
-                  </td>
-
-                  <td className="p-4 whitespace-nowrap">
-                    {new Date(
-                      item.tanggal
-                    ).toLocaleString()}
-                  </td>
-
-                </tr>
-              )
+        {/* ── PER PAKET VIEW ── */}
+        {viewMode === "paket" && (
+          <div ref={printRef} className="space-y-3">
+            {paketSummaries.length === 0 && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-14 text-center">
+                <p className="text-3xl mb-2">📭</p>
+                <p className="text-sm text-slate-500">Tidak ada data</p>
+                <p className="text-xs text-slate-400 mt-1">Coba ubah filter pencarian</p>
+              </div>
             )}
 
-          </tbody>
+            {paketSummaries.map((summary, i) => {
+              const key        = `${summary.user_id}-${summary.paket}-${i}`
+              const isExpanded = expandedPaket === key
+              const color      = getAvatarColor(summary.nama)
 
-        </table>
+              return (
+                <div key={key} className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition">
 
-        {filtered.length ===
-          0 && (
+                  {/* Card header */}
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition"
+                    onClick={() => setExpandedPaket(isExpanded ? null : key)}
+                  >
+                    {/* Avatar */}
+                    {summary.foto ? (
+                      <img src={summary.foto} className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0" />
+                    ) : (
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${color.bg} ${color.text}`}>
+                        {summary.nama.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
 
-          <div className="p-8 text-center text-gray-500">
-            Tidak ada data
+                    {/* Name + email */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-slate-800">{summary.nama}</p>
+                        <PaketBadge paket={summary.paket} />
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{summary.email}</p>
+                    </div>
+
+                    {/* Mapel pills (desktop) */}
+                    <div className="hidden md:flex gap-1.5 flex-wrap justify-end">
+                      {summary.mapel.map((m) => (
+                        <div key={m.kategori} className="flex items-center gap-1 bg-slate-100 rounded-lg px-2.5 py-1">
+                          <span className="text-[10px] text-slate-500">{m.kategori}</span>
+                          <span className="text-[10px] font-semibold text-indigo-600">{m.skor}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Rata-rata */}
+                    <div className="shrink-0 text-right ml-2">
+                      <p className="text-lg font-bold text-indigo-600">{summary.rata}</p>
+                      <p className="text-[10px] text-slate-400">rata-rata</p>
+                    </div>
+
+                    {/* Chevron */}
+                    <div className={`shrink-0 w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+                      ▾
+                    </div>
+                  </div>
+
+                  {/* Expanded */}
+                  {isExpanded && (
+                    <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
+                        Detail per mapel
+                      </p>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {summary.mapel.map((m) => {
+                          const pct   = Math.min(100, Math.round((m.skor / 40) * 100))
+                          const bar   =
+                            m.skor >= 30 ? "bg-emerald-500"
+                            : m.skor >= 20 ? "bg-indigo-500"
+                            : m.skor >= 10 ? "bg-amber-500"
+                            : "bg-rose-500"
+                          const score =
+                            m.skor >= 30 ? "text-emerald-600"
+                            : m.skor >= 20 ? "text-indigo-600"
+                            : m.skor >= 10 ? "text-amber-600"
+                            : "text-rose-500"
+
+                          return (
+                            <div key={m.kategori} className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                              <p className="text-[11px] font-medium text-slate-500 mb-1 truncate">{m.kategori}</p>
+                              <p className={`text-2xl font-bold mb-2 ${score}`}>{m.skor}</p>
+                              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${bar} transition-all`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Summary row */}
+                      <div className="mt-3 flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+                        <div className="flex gap-5">
+                          {[
+                            { label: "Total skor",   val: summary.total        },
+                            { label: "Rata-rata",     val: summary.rata         },
+                            { label: "Jumlah mapel",  val: summary.mapel.length },
+                          ].map((s) => (
+                            <div key={s.label}>
+                              <p className="text-[10px] text-indigo-400 font-medium">{s.label}</p>
+                              <p className="text-lg font-bold text-indigo-700">{s.val}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-indigo-400">
+                          {new Date(summary.tanggal).toLocaleDateString("id-ID", {
+                            day: "numeric", month: "long", year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 
       </div>
-
     </div>
   )
 }
 
-function Card({
-  title,
-  value,
-}: any) {
+// ── STAT CARD ─────────────────────────────────────────────────
+
+const STAT_STYLES: Record<string, { bg: string; num: string; label: string }> = {
+  indigo:  { bg: "bg-indigo-50  border-indigo-100",  num: "text-indigo-700",  label: "text-indigo-400"  },
+  violet:  { bg: "bg-violet-50  border-violet-100",  num: "text-violet-700",  label: "text-violet-400"  },
+  amber:   { bg: "bg-amber-50   border-amber-100",   num: "text-amber-700",   label: "text-amber-400"   },
+  emerald: { bg: "bg-emerald-50 border-emerald-100", num: "text-emerald-700", label: "text-emerald-400" },
+}
+
+function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+  const s = STAT_STYLES[color] ?? STAT_STYLES.indigo
+  return (
+    <div className={`border rounded-xl px-4 py-3 ${s.bg}`}>
+      <p className={`text-[11px] font-medium mb-1 ${s.label}`}>{label}</p>
+      <p className={`text-2xl font-bold ${s.num}`}>{value}</p>
+    </div>
+  )
+}
+
+// ── PAKET BADGE ───────────────────────────────────────────────
+
+const PAKET_COLORS: Record<string, string> = {
+  "Paket ipa":    "bg-sky-100    text-sky-700",
+  "Paket ips":    "bg-emerald-100 text-emerald-700",
+  "Paket bahasa": "bg-violet-100 text-violet-700",
+  "Paket smk":    "bg-orange-100 text-orange-700",
+}
+
+function PaketBadge({ paket }: { paket?: string }) {
+  const cls = PAKET_COLORS[paket || ""] || "bg-slate-100 text-slate-500"
+  return (
+    <span className={`inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${cls}`}>
+      {paket || "-"}
+    </span>
+  )
+}
+
+// ── NILAI BADGE ───────────────────────────────────────────────
+
+function NilaiBadge({ skor }: { skor: number }) {
+  const color =
+    skor >= 30 ? "bg-emerald-100 text-emerald-700"
+    : skor >= 20 ? "bg-indigo-100 text-indigo-700"
+    : skor >= 10 ? "bg-amber-100  text-amber-700"
+    : "bg-rose-100 text-rose-600"
 
   return (
-
-    <div className="bg-white p-6 rounded-3xl shadow">
-
-      <p className="text-gray-500">
-        {title}
-      </p>
-
-      <h2 className="text-3xl md:text-4xl font-bold mt-2">
-        {value}
-      </h2>
-
-    </div>
+    <span className={`inline-flex items-center justify-center h-8 min-w-[48px] px-3 rounded-lg text-sm font-bold ${color}`}>
+      {skor}
+    </span>
   )
 }

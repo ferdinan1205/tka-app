@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 
 type Ranking = {
   user_id: string
+  package_id: string
   email: string
   nama: string
   skor: number
@@ -13,929 +14,375 @@ type Ranking = {
   foto?: string
 }
 
+type Package = {
+  id: number
+  nama_paket: string
+}
+
+// ── warna avatar berdasarkan inisial ──────────────────────────
+const AVATAR_COLORS = [
+  { bg: "bg-violet-100", text: "text-violet-700" },
+  { bg: "bg-sky-100",    text: "text-sky-700"    },
+  { bg: "bg-emerald-100",text: "text-emerald-700"},
+  { bg: "bg-rose-100",   text: "text-rose-700"   },
+  { bg: "bg-amber-100",  text: "text-amber-700"  },
+  { bg: "bg-teal-100",   text: "text-teal-700"   },
+  { bg: "bg-fuchsia-100",text: "text-fuchsia-700"},
+  { bg: "bg-orange-100", text: "text-orange-700" },
+]
+
+function getAvatarColor(name: string) {
+  const idx = name.charCodeAt(0) % AVATAR_COLORS.length
+  return AVATAR_COLORS[idx]
+}
+
 export default function RankingAdmin() {
 
   const router = useRouter()
 
-  const [ranking, setRanking] =
-    useState<Ranking[]>([])
+  const [ranking,         setRanking        ] = useState<Ranking[]>([])
+  const [packages,        setPackages       ] = useState<Package[]>([])
+  const [loading,         setLoading        ] = useState(true)
+  const [search,          setSearch         ] = useState("")
+  const [selectedPackage, setSelectedPackage] = useState<string>("all")
 
-  const [loading, setLoading] =
-    useState(true)
-
-  const [search, setSearch] =
-    useState("")
-
-  useEffect(() => {
-    init()
-  }, [])
+  useEffect(() => { init() }, [])
 
   async function init() {
-
     setLoading(true)
+    const { data } = await supabase.auth.getUser()
+    if (!data.user) { router.push("/login"); return }
 
-    const { data } =
-      await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from("profiles").select("role").eq("id", data.user.id).single()
 
-    if (!data.user) {
-
-      router.push("/login")
-      return
-    }
-
-    // =========================
-    // CEK ADMIN
-    // =========================
-    const { data: profile } =
-      await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single()
-
-    if (
-      !profile ||
-      profile.role !== "admin"
-    ) {
-
+    if (!profile || profile.role !== "admin") {
       alert("Akses ditolak")
-
       router.push("/dashboard")
-
       return
     }
 
     await getRanking()
-
     setLoading(false)
   }
 
-  // =========================
-  // GET RANKING
-  // =========================
   async function getRanking() {
+    const { data: rankingData, error: rankingError } = await supabase
+      .from("ranking_tka").select("*").eq("selesai", true)
+      .order("total_skor", { ascending: false })
 
-    const {
-      data: rankingData,
-      error: rankingError
-    } = await supabase
-      .from("ranking_tka")
-      .select("*")
-      .eq("selesai", true)
-      .order("total_skor", {
-        ascending: false
-      })
+    if (rankingError) { console.log(rankingError); return }
 
-    if (rankingError) {
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles").select("*")
 
-      console.log(rankingError)
-      return
-    }
+    if (profileError) { console.log(profileError); return }
 
-    const {
-      data: profileData,
-      error: profileError
-    } = await supabase
-      .from("profiles")
-      .select("*")
+    const { data: packagesData } = await supabase
+      .from("packages").select("id, nama_paket").order("id", { ascending: true })
 
-    if (profileError) {
+    const profiles    = (profileData  || []) as any[]
+    const pkgs        = (packagesData || []) as Package[]
+    setPackages(pkgs)
 
-      console.log(profileError)
-      return
-    }
-
-    const profiles =
-      (profileData || []) as any[]
-
-    const finalRanking =
-      (rankingData || []).map(
-        (item: any) => {
-
-          const user =
-            profiles.find(
-              (p) =>
-                p.id === item.user_id
-            )
-
-          return {
-
-            user_id:
-              item.user_id,
-
-            skor:
-              item.total_skor || 0,
-
-            kategori:
-              user?.paket || "Paket",
-
-            email:
-              user?.email || "-",
-
-            nama:
-              user?.nama ||
-              "Siswa",
-
-            foto:
-              user?.foto || ""
-          }
-        }
-      )
+    const finalRanking = (rankingData || []).map((item: any) => {
+      const user  = profiles.find((p) => p.id === item.user_id)
+      const paket = pkgs.find((p) => String(p.id) === String(item.package_id))
+      return {
+        user_id:    item.user_id,
+        package_id: String(item.package_id || ""),
+        skor:       item.total_skor || 0,
+        kategori:   paket?.nama_paket || user?.paket || "Paket",
+        email:      user?.email || "-",
+        nama:       user?.nama  || "Siswa",
+        foto:       user?.foto  || "",
+      }
+    })
 
     setRanking(finalRanking)
   }
 
-  // =========================
-  // FILTER
-  // =========================
-  const filtered =
-    ranking.filter(
-      (item) =>
-
-        item.nama
-          .toLowerCase()
-          .includes(
-            search.toLowerCase()
-          ) ||
-
-        item.email
-          .toLowerCase()
-          .includes(
-            search.toLowerCase()
-          )
+  const filtered = ranking
+    .filter((item) =>
+      selectedPackage === "all" ? true : item.package_id === selectedPackage
     )
-
-  // =========================
-  // LOADING
-  // =========================
-  if (loading) {
-
-    return (
-
-      <div className="
-        min-h-screen
-        flex
-        items-center
-        justify-center
-        bg-[#eef4ff]
-      ">
-
-        <div className="
-          flex
-          flex-col
-          items-center
-          gap-5
-        ">
-
-          <div className="
-            relative
-            w-20
-            h-20
-          ">
-
-            <div className="
-              absolute
-              inset-0
-              rounded-full
-              border-[6px]
-              border-indigo-600/20
-            " />
-
-            <div className="
-              absolute
-              inset-0
-              rounded-full
-              border-[6px]
-              border-indigo-600
-              border-t-transparent
-              animate-spin
-            " />
-
-          </div>
-
-          <div className="text-center">
-
-            <h1 className="
-              text-2xl
-              font-black
-              text-indigo-700
-            ">
-              Loading Ranking
-            </h1>
-
-            <p className="
-              text-slate-500
-              mt-1
-            ">
-              Mengambil data siswa...
-            </p>
-
-          </div>
-
-        </div>
-
-      </div>
+    .filter((item) =>
+      item.nama.toLowerCase().includes(search.toLowerCase()) ||
+      item.email.toLowerCase().includes(search.toLowerCase())
     )
-  }
 
   const top1 = filtered[0]
   const top2 = filtered[1]
   const top3 = filtered[2]
 
+  // ── loading ───────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
+          <p className="text-sm text-slate-400">Memuat data ranking...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── main ──────────────────────────────────────────────────────
   return (
-
-    <div className="
-      min-h-screen
-      bg-gradient-to-b
-      from-[#eef4ff]
-      via-[#f8fbff]
-      to-[#ffffff]
-      overflow-hidden
-    ">
-
-      {/* BACKGROUND */}
-      <div className="
-        fixed
-        top-[-120px]
-        left-[-120px]
-        w-[320px]
-        h-[320px]
-        rounded-full
-        bg-blue-400/20
-        blur-3xl
-      " />
-
-      <div className="
-        fixed
-        bottom-[-120px]
-        right-[-120px]
-        w-[320px]
-        h-[320px]
-        rounded-full
-        bg-purple-400/20
-        blur-3xl
-      " />
+    <div className="min-h-screen bg-slate-50">
 
       {/* HEADER */}
-      <div className="
-        sticky
-        top-0
-        z-50
-        backdrop-blur-xl
-        bg-white/70
-        border-b
-        border-white/40
-      ">
-
-        <div className="
-          max-w-7xl
-          mx-auto
-          px-4
-          py-4
-          flex
-          items-center
-          justify-between
-          gap-4
-        ">
-
+      <div className="sticky top-0 z-50 bg-white border-b border-slate-200">
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <div>
-
-            <p className="
-              text-xs
-              font-black
-              tracking-[5px]
-              text-indigo-600
-            ">
-              ADMIN RANKING
+            <p className="text-[10px] font-semibold tracking-[3px] text-indigo-500 uppercase leading-none mb-0.5">
+              Admin
             </p>
-
-            <h1 className="
-              text-3xl
-              md:text-5xl
-              font-black
-              text-slate-800
-              leading-tight
-            ">
-              🏆 Ranking Siswa
+            <h1 className="text-[15px] font-semibold text-slate-800 leading-none">
+              Ranking Siswa
             </h1>
-
           </div>
-
           <button
-            onClick={() =>
-              router.push("/admin")
-            }
-            className="
-              h-12
-              px-6
-              rounded-2xl
-              bg-indigo-600
-              hover:bg-indigo-700
-              text-white
-              font-black
-              shadow-lg
-              transition
-              hover:scale-105
-            "
+            onClick={() => router.push("/admin")}
+            className="h-8 px-4 rounded-lg border border-slate-200 text-[13px] text-slate-600 hover:bg-slate-50 transition"
           >
             Dashboard
           </button>
-
         </div>
-
       </div>
 
-      <div className="
-        max-w-7xl
-        mx-auto
-        px-4
-        py-6
-      ">
+      <div className="max-w-4xl mx-auto px-4 py-5 space-y-4">
+
+        {/* FILTER PAKET */}
+        <div className="flex flex-wrap gap-2">
+          <FilterBtn
+            label="Semua paket"
+            active={selectedPackage === "all"}
+            onClick={() => setSelectedPackage("all")}
+          />
+          {packages.map((pkg) => (
+            <FilterBtn
+              key={pkg.id}
+              label={pkg.nama_paket}
+              active={selectedPackage === String(pkg.id)}
+              onClick={() => setSelectedPackage(String(pkg.id))}
+            />
+          ))}
+        </div>
 
         {/* SEARCH */}
-        <div className="
-          mb-8
-        ">
+        <div className="relative">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari nama atau email siswa..."
+            className="w-full h-10 rounded-xl bg-white border border-slate-200 px-4 pr-10 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+        </div>
 
-          <div className="
-            relative
-            max-w-xl
-          ">
-
-            <input
-              value={search}
-              onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
-              }
-              placeholder="Cari nama / email siswa..."
-              className="
-                w-full
-                h-16
-                rounded-3xl
-                bg-white/90
-                backdrop-blur-xl
-                border
-                border-white
-                shadow-xl
-                px-6
-                text-lg
-                font-semibold
-                outline-none
-                focus:ring-4
-                focus:ring-indigo-200
-              "
-            />
-
-            <div className="
-              absolute
-              right-5
-              top-1/2
-              -translate-y-1/2
-              text-2xl
-            ">
-              🔍
-            </div>
-
-          </div>
-
+        {/* SECTION LABEL */}
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-slate-600">
+            {selectedPackage === "all"
+              ? "Semua paket — leaderboard gabungan"
+              : packages.find((p) => String(p.id) === selectedPackage)?.nama_paket
+            }
+          </p>
+          <span className="text-[11px] text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">
+            {filtered.length} siswa
+          </span>
         </div>
 
         {/* PODIUM */}
         {filtered.length >= 1 && (
-
-          <div className="
-            grid
-            grid-cols-3
-            gap-4
-            items-end
-            mb-10
-          ">
-
-            {top2 && (
-              <PodiumCard
-                data={top2}
-                rank={2}
-              />
-            )}
-
-            {top1 && (
-              <PodiumCard
-                data={top1}
-                rank={1}
-                big
-              />
-            )}
-
-            {top3 && (
-              <PodiumCard
-                data={top3}
-                rank={3}
-              />
-            )}
-
+          <div className="grid grid-cols-3 gap-3 items-end">
+            {top2 ? <PodiumCard data={top2} rank={2} /> : <div />}
+            {top1 ? <PodiumCard data={top1} rank={1} /> : <div />}
+            {top3 ? <PodiumCard data={top3} rank={3} /> : <div />}
           </div>
-
         )}
 
         {/* LIST */}
-        <div className="
-          grid
-          gap-4
-        ">
+        <div className="flex flex-col gap-2">
+          {filtered.map((item, index) => (
+            <RankItem
+              key={`${item.user_id}_${item.package_id}`}
+              item={item}
+              index={index}
+              onClick={() => router.push(`/admin/siswa/${item.user_id}`)}
+            />
+          ))}
 
-          {filtered.map(
-            (
-              item,
-              index
-            ) => (
-
-              <div
-                key={
-                  item.user_id
-                }
-                onClick={() =>
-                  router.push(
-                    `/admin/siswa/${item.user_id}`
-                  )
-                }
-                className="
-                  group
-                  relative
-                  overflow-hidden
-                  bg-white/80
-                  backdrop-blur-xl
-                  rounded-[32px]
-                  p-5
-                  border
-                  border-white
-                  shadow-xl
-                  hover:shadow-2xl
-                  transition-all
-                  duration-300
-                  cursor-pointer
-                  hover:-translate-y-1
-                "
-              >
-
-                {/* glow */}
-                <div className="
-                  absolute
-                  inset-0
-                  bg-gradient-to-r
-                  from-indigo-500/0
-                  via-blue-500/0
-                  to-purple-500/0
-                  group-hover:from-indigo-500/5
-                  group-hover:to-purple-500/5
-                  transition
-                " />
-
-                <div className="
-                  relative
-                  flex
-                  items-center
-                  justify-between
-                  gap-4
-                ">
-
-                  {/* LEFT */}
-                  <div className="
-                    flex
-                    items-center
-                    gap-4
-                    min-w-0
-                  ">
-
-                    {/* RANK */}
-                    <div className={`
-                      w-16
-                      h-16
-                      rounded-3xl
-                      flex
-                      items-center
-                      justify-center
-                      font-black
-                      text-lg
-                      shrink-0
-                      shadow-lg
-
-                      ${index === 0
-                        ? "bg-gradient-to-br from-yellow-400 to-orange-500 text-white"
-                        : index === 1
-                        ? "bg-gradient-to-br from-slate-300 to-slate-500 text-white"
-                        : index === 2
-                        ? "bg-gradient-to-br from-orange-300 to-orange-500 text-white"
-                        : "bg-gradient-to-br from-indigo-500 to-blue-600 text-white"
-                      }
-                    `}>
-
-                      #{index + 1}
-
-                    </div>
-
-                    {/* FOTO */}
-                    {item.foto ? (
-
-                      <img
-                        src={item.foto}
-                        alt="foto"
-                        className="
-                          w-20
-                          h-20
-                          rounded-full
-                          object-cover
-                          border-4
-                          border-white
-                          shadow-lg
-                          shrink-0
-                        "
-                      />
-
-                    ) : (
-
-                      <div className="
-                        w-20
-                        h-20
-                        rounded-full
-                        bg-gradient-to-br
-                        from-indigo-500
-                        to-blue-600
-                        text-white
-                        flex
-                        items-center
-                        justify-center
-                        text-2xl
-                        font-black
-                        border-4
-                        border-white
-                        shadow-lg
-                        shrink-0
-                      ">
-
-                        {item.nama
-                          .slice(0, 2)
-                          .toUpperCase()}
-
-                      </div>
-
-                    )}
-
-                    {/* INFO */}
-                    <div className="
-                      min-w-0
-                    ">
-
-                      <h1 className="
-                        text-xl
-                        md:text-2xl
-                        font-black
-                        text-slate-800
-                        truncate
-                      ">
-                        {item.nama}
-                      </h1>
-
-                      <p className="
-                        text-slate-500
-                        truncate
-                        mt-1
-                      ">
-                        {item.email}
-                      </p>
-
-                      <div className="
-                        mt-3
-                        flex
-                        items-center
-                        gap-2
-                        flex-wrap
-                      ">
-
-                        <span className="
-                          px-4
-                          py-1.5
-                          rounded-full
-                          bg-indigo-100
-                          text-indigo-700
-                          text-xs
-                          font-black
-                        ">
-
-                          {item.kategori}
-
-                        </span>
-
-                        {index === 0 && (
-
-                          <span className="
-                            px-4
-                            py-1.5
-                            rounded-full
-                            bg-yellow-100
-                            text-yellow-700
-                            text-xs
-                            font-black
-                            animate-pulse
-                          ">
-
-                            TOP 1
-
-                          </span>
-
-                        )}
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                  {/* RIGHT */}
-                  <div className="
-                    text-right
-                    shrink-0
-                  ">
-
-                    <p className="
-                      text-xs
-                      text-slate-400
-                      font-black
-                      tracking-[2px]
-                    ">
-                      TOTAL SKOR
-                    </p>
-
-                    <h1 className="
-                      text-4xl
-                      md:text-5xl
-                      font-black
-                      bg-gradient-to-r
-                      from-indigo-600
-                      to-blue-600
-                      bg-clip-text
-                      text-transparent
-                    ">
-                      {item.skor}
-                    </h1>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            )
-          )}
-
-          {/* EMPTY */}
           {filtered.length === 0 && (
-
-            <div className="
-              bg-white
-              rounded-[32px]
-              p-16
-              text-center
-              shadow-xl
-            ">
-
-              <div className="
-                text-7xl
-                mb-5
-              ">
-                🏆
-              </div>
-
-              <h1 className="
-                text-3xl
-                font-black
-                text-slate-700
-              ">
-                Ranking Belum Ada
-              </h1>
-
-              <p className="
-                text-slate-500
-                mt-3
-                text-lg
-              ">
-                Data ranking siswa belum tersedia
+            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
+              <div className="text-4xl mb-3">🏆</div>
+              <p className="text-sm font-medium text-slate-700">Ranking belum tersedia</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {selectedPackage === "all"
+                  ? "Data ranking siswa belum ada"
+                  : "Belum ada siswa yang selesai di paket ini"}
               </p>
-
             </div>
-
           )}
-
         </div>
 
       </div>
-
     </div>
   )
 }
 
-/* =========================
-   PODIUM CARD
-========================= */
-function PodiumCard({
-  data,
-  rank,
-  big
-}: any) {
+// ── sub-components ────────────────────────────────────────────
 
-  const bg =
-    rank === 1
-      ? "from-yellow-400 via-orange-400 to-orange-500"
-      : rank === 2
-      ? "from-indigo-500 to-blue-600"
-      : "from-slate-500 to-slate-700"
+function FilterBtn({
+  label, active, onClick
+}: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-8 px-4 rounded-full text-xs font-medium transition ${
+        active
+          ? "bg-indigo-600 text-white shadow-sm"
+          : "bg-white border border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ── PODIUM CARD ───────────────────────────────────────────────
+const PODIUM_STYLE = {
+  1: {
+    wrap:   "border-amber-200 bg-white",
+    badge:  "bg-amber-100 text-amber-700",
+    score:  "text-amber-600",
+    avatar: "border-amber-200",
+  },
+  2: {
+    wrap:   "border-indigo-100 bg-white",
+    badge:  "bg-indigo-100 text-indigo-600",
+    score:  "text-indigo-600",
+    avatar: "border-indigo-100",
+  },
+  3: {
+    wrap:   "border-orange-100 bg-white",
+    badge:  "bg-orange-100 text-orange-600",
+    score:  "text-orange-600",
+    avatar: "border-orange-100",
+  },
+} as const
+
+function PodiumCard({ data, rank }: { data: Ranking; rank: 1 | 2 | 3 }) {
+  const s       = PODIUM_STYLE[rank]
+  const isFirst = rank === 1
+  const color   = getAvatarColor(data.nama)
 
   return (
+    <div className={`border rounded-2xl text-center transition ${s.wrap} ${isFirst ? "py-5 px-3" : "py-4 px-2"}`}>
 
-    <div className={`
-      relative
-      overflow-hidden
-      rounded-[36px]
-      bg-gradient-to-b
-      ${bg}
-      text-white
-      shadow-2xl
-      border
-      border-white/20
-      hover:scale-[1.03]
-      transition-all
-      duration-300
-
-      ${big
-        ? "pt-8 pb-10"
-        : "pt-6 pb-7"
-      }
-    `}>
-
-      {/* glow */}
-      <div className="
-        absolute
-        -top-10
-        -right-10
-        w-40
-        h-40
-        rounded-full
-        bg-white/10
-      " />
-
-      {/* rank */}
-      <div className="
-        absolute
-        top-4
-        right-4
-        w-12
-        h-12
-        rounded-2xl
-        bg-white/20
-        backdrop-blur-xl
-        flex
-        items-center
-        justify-center
-        font-black
-        text-lg
-      ">
-
-        #{rank}
-
-      </div>
-
-      {/* crown */}
-      {rank === 1 && (
-
-        <div className="
-          absolute
-          top-3
-          left-1/2
-          -translate-x-1/2
-          text-4xl
-          animate-bounce
-        ">
-          👑
-        </div>
-
-      )}
+      {isFirst && <div className="text-lg mb-2">👑</div>}
 
       {/* avatar */}
-      <div className="
-        flex
-        justify-center
-        mt-4
-      ">
+      {data.foto ? (
+        <img
+          src={data.foto}
+          alt="foto"
+          className={`rounded-full object-cover border-2 mx-auto mb-2 ${s.avatar} ${isFirst ? "w-14 h-14" : "w-11 h-11"}`}
+        />
+      ) : (
+        <div className={`rounded-full flex items-center justify-center font-semibold mx-auto mb-2 border-2 ${s.avatar} ${color.bg} ${color.text} ${isFirst ? "w-14 h-14 text-sm" : "w-11 h-11 text-xs"}`}>
+          {data.nama.slice(0, 2).toUpperCase()}
+        </div>
+      )}
 
-        {data.foto ? (
+      {/* rank badge */}
+      <span className={`inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full mb-1.5 ${s.badge}`}>
+        #{rank}
+      </span>
 
-          <img
-            src={data.foto}
-            alt="foto"
-            className={`
-              rounded-full
-              border-[5px]
-              border-white
-              object-cover
-              shadow-2xl
+      {/* nama */}
+      <p className={`font-semibold text-slate-800 truncate leading-tight ${isFirst ? "text-sm" : "text-xs"}`}>
+        {data.nama}
+      </p>
+      {/* paket */}
+      <p className="text-[10px] text-slate-400 truncate mt-0.5 mb-2 px-1">
+        {data.kategori}
+      </p>
 
-              ${big
-                ? "w-28 h-28"
-                : "w-24 h-24"
-              }
-            `}
-          />
+      {/* skor */}
+      <p className="text-[9px] text-slate-400 uppercase tracking-widest">Skor</p>
+      <p className={`font-bold ${s.score} ${isFirst ? "text-2xl" : "text-lg"}`}>
+        {data.skor}
+      </p>
+    </div>
+  )
+}
 
-        ) : (
+// ── RANK ITEM (list row) ──────────────────────────────────────
+const RANK_NUM_STYLE: Record<number, string> = {
+  0: "bg-amber-100  text-amber-700",
+  1: "bg-indigo-100 text-indigo-600",
+  2: "bg-orange-100 text-orange-600",
+}
 
-          <div className={`
-            rounded-full
-            border-[5px]
-            border-white
-            bg-white/20
-            backdrop-blur-xl
-            flex
-            items-center
-            justify-center
-            font-black
-            shadow-2xl
+const RANK_SCORE_COLOR: Record<number, string> = {
+  0: "text-amber-600",
+  1: "text-indigo-600",
+  2: "text-orange-600",
+}
 
-            ${big
-              ? "w-28 h-28 text-4xl"
-              : "w-24 h-24 text-3xl"
-            }
-          `}>
+function RankItem({
+  item, index, onClick
+}: { item: Ranking; index: number; onClick: () => void }) {
+  const color       = getAvatarColor(item.nama)
+  const numStyle    = RANK_NUM_STYLE[index]    ?? "bg-slate-100 text-slate-500"
+  const scoreColor  = RANK_SCORE_COLOR[index]  ?? "text-slate-700"
 
-            {data.nama
-              .slice(0, 2)
-              .toUpperCase()}
-
-          </div>
-
-        )}
-
+  return (
+    <div
+      onClick={onClick}
+      className="group bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 cursor-pointer hover:border-indigo-200 hover:bg-indigo-50/30 transition"
+    >
+      {/* rank number */}
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold shrink-0 ${numStyle}`}>
+        #{index + 1}
       </div>
+
+      {/* avatar */}
+      {item.foto ? (
+        <img
+          src={item.foto}
+          alt="foto"
+          className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+        />
+      ) : (
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold border border-slate-100 shrink-0 ${color.bg} ${color.text}`}>
+          {item.nama.slice(0, 2).toUpperCase()}
+        </div>
+      )}
 
       {/* info */}
-      <div className="
-        text-center
-        mt-5
-        px-4
-      ">
-
-        <h1 className={`
-          font-black
-          truncate
-
-          ${big
-            ? "text-2xl"
-            : "text-lg"
-          }
-        `}>
-          {data.nama}
-        </h1>
-
-        <p className="
-          text-white/80
-          text-sm
-          truncate
-          mt-1
-        ">
-          {data.email}
-        </p>
-
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-800 truncate">{item.nama}</p>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <span className="text-[11px] text-slate-400 truncate max-w-[150px]">{item.email}</span>
+          <span className="text-[10px] text-slate-500 bg-slate-100 rounded-full px-2 py-px shrink-0">
+            {item.kategori}
+          </span>
+          {index === 0 && (
+            <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-2 py-px shrink-0">
+              Top 1
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* score */}
-      <div className="
-        text-center
-        mt-5
-      ">
-
-        <p className="
-          text-xs
-          tracking-[3px]
-          text-white/80
-          font-black
-        ">
-          TOTAL SKOR
-        </p>
-
-        <h1 className={`
-          font-black
-          drop-shadow-xl
-
-          ${big
-            ? "text-6xl"
-            : "text-4xl"
-          }
-        `}>
-          {data.skor}
-        </h1>
-
+      {/* skor */}
+      <div className="text-right shrink-0">
+        <p className="text-[9px] font-medium tracking-widest text-slate-400 uppercase">Skor</p>
+        <p className={`text-xl font-bold ${scoreColor}`}>{item.skor}</p>
       </div>
-
     </div>
   )
 }

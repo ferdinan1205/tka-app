@@ -13,805 +13,403 @@ type Materi = {
   gambar?: string | null
 }
 
+const KATEGORI_OPTIONS = [
+  "Matematika",
+  "Bahasa Indonesia",
+  "Bahasa Inggris",
+  "TPS",
+  "Literasi",
+]
+
+const TIPE_OPTIONS = [
+  { value: "video",   label: "Video"   },
+  { value: "pdf",     label: "PDF"     },
+  { value: "artikel", label: "Artikel" },
+]
+
+const TIPE_STYLE: Record<string, string> = {
+  video:   "bg-sky-100 text-sky-700",
+  pdf:     "bg-rose-100 text-rose-700",
+  artikel: "bg-emerald-100 text-emerald-700",
+}
+
+const KATEGORI_STYLE: Record<string, string> = {
+  "Matematika":       "bg-violet-100 text-violet-700",
+  "Bahasa Indonesia": "bg-amber-100  text-amber-700",
+  "Bahasa Inggris":   "bg-sky-100    text-sky-700",
+  "TPS":              "bg-teal-100   text-teal-700",
+  "Literasi":         "bg-orange-100 text-orange-700",
+}
+
 export default function AdminMateri() {
-
-  const [materi, setMateri] =
-    useState<Materi[]>([])
-
-  const [loading, setLoading] =
-    useState(true)
-
-  const [showModal, setShowModal] =
-    useState(false)
-
-  const [editingId, setEditingId] =
-    useState<number | null>(null)
-
-  const [file, setFile] =
-    useState<File | null>(null)
-
-  const [form, setForm] =
-    useState<Materi>({
-      judul: "",
-      kategori: "Matematika",
-      tipe: "video",
-      link: "",
-      gambar: null,
-    })
 
   const router = useRouter()
 
-  useEffect(() => {
-    init()
-  }, [])
+  const [materi,     setMateri    ] = useState<Materi[]>([])
+  const [loading,    setLoading   ] = useState(true)
+  const [showModal,  setShowModal ] = useState(false)
+  const [editingId,  setEditingId ] = useState<number | null>(null)
+  const [file,       setFile      ] = useState<File | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [form,       setForm      ] = useState<Materi>({
+    judul: "", kategori: "Matematika", tipe: "video", link: "", gambar: null,
+  })
+
+  useEffect(() => { init() }, [])
 
   async function init() {
+    const { data } = await supabase.auth.getUser()
+    if (!data.user) { router.push("/login"); return }
 
-    const { data } =
-      await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from("profiles").select("role").eq("id", data.user.id).single()
 
-    if (!data.user) {
-
-      router.push("/login")
-      return
-    }
-
-    const { data: profile } =
-      await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single()
-
-    if (
-      !profile ||
-      profile.role !== "admin"
-    ) {
-
+    if (!profile || profile.role !== "admin") {
       alert("Akses ditolak")
-
       router.push("/dashboard")
-
       return
     }
 
     await getMateri()
-
     setLoading(false)
   }
 
   async function getMateri() {
-
-    const { data } =
-      await supabase
-        .from("materi")
-        .select("*")
-        .order("id", {
-          ascending: false,
-        })
-
+    const { data } = await supabase
+      .from("materi").select("*").order("id", { ascending: false })
     setMateri(data || [])
   }
 
   function handleChange(e: any) {
-
-    setForm({
-      ...form,
-      [e.target.name]:
-        e.target.value,
-    })
+    setForm({ ...form, [e.target.name]: e.target.value })
   }
 
   function openTambah() {
-
     setEditingId(null)
-
-    setForm({
-      judul: "",
-      kategori: "Matematika",
-      tipe: "video",
-      link: "",
-      gambar: null,
-    })
-
+    setForm({ judul: "", kategori: "Matematika", tipe: "video", link: "", gambar: null })
     setFile(null)
-
     setShowModal(true)
   }
 
   function openEdit(item: Materi) {
-
-    setEditingId(
-      item.id || null
-    )
-
+    setEditingId(item.id || null)
     setForm(item)
-
+    setFile(null)
     setShowModal(true)
   }
 
   async function uploadGambar() {
-
     if (!file) return null
-
-    const fileExt =
-      file.name
-        .split(".")
-        .pop()
-
-    const fileName =
-      `${Date.now()}.${fileExt}`
-
-    const { error } =
-      await supabase.storage
-        .from("materi")
-        .upload(
-          fileName,
-          file
-        )
-
-    if (error) {
-
-      alert(
-        "Upload gagal: " +
-        error.message
-      )
-
-      return null
-    }
-
-    const { data } =
-      supabase.storage
-        .from("materi")
-        .getPublicUrl(
-          fileName
-        )
-
+    const ext      = file.name.split(".").pop()
+    const fileName = `${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from("materi").upload(fileName, file)
+    if (error) { alert("Upload gagal: " + error.message); return null }
+    const { data } = supabase.storage.from("materi").getPublicUrl(fileName)
     return data.publicUrl
   }
 
   async function handleSubmit() {
+    if (!form.judul || !form.link) { alert("Judul & link wajib diisi"); return }
+    if (!editingId && !file)       { alert("Gambar wajib diisi!");       return }
 
-    if (
-      !form.judul ||
-      !form.link
-    ) {
+    setSubmitting(true)
 
-      alert(
-        "Judul & link wajib diisi"
-      )
-
-      return
-    }
-
-    if (
-      !editingId &&
-      !file
-    ) {
-
-      alert(
-        "Gambar wajib diisi!"
-      )
-
-      return
-    }
-
-    let gambarUrl =
-      form.gambar || null
-
+    let gambarUrl = form.gambar || null
     if (file) {
-
-      const uploaded =
-        await uploadGambar()
-
-      if (!uploaded) {
-
-        alert(
-          "Upload gagal"
-        )
-
-        return
-      }
-
+      const uploaded = await uploadGambar()
+      if (!uploaded) { setSubmitting(false); return }
       gambarUrl = uploaded
     }
 
-    const payload = {
-      ...form,
-      gambar: gambarUrl,
-    }
+    const payload = { ...form, gambar: gambarUrl }
+    const res = editingId
+      ? await supabase.from("materi").update(payload).eq("id", editingId)
+      : await supabase.from("materi").insert([payload])
 
-    let error
+    setSubmitting(false)
 
-    if (editingId) {
-
-      const res =
-        await supabase
-          .from("materi")
-          .update(payload)
-          .eq(
-            "id",
-            editingId
-          )
-
-      error = res.error
-
-    } else {
-
-      const res =
-        await supabase
-          .from("materi")
-          .insert([
-            payload,
-          ])
-
-      error = res.error
-    }
-
-    if (error) {
-
-      alert(
-        "Gagal simpan: " +
-        error.message
-      )
-
-      return
-    }
-
-    alert(
-      "Berhasil disimpan"
-    )
+    if (res.error) { alert("Gagal simpan: " + res.error.message); return }
 
     setShowModal(false)
-
     getMateri()
   }
 
-  async function handleDelete(
-    id: number
-  ) {
-
-    if (
-      !confirm(
-        "Hapus materi?"
-      )
-    ) return
-
-    await supabase
-      .from("materi")
-      .delete()
-      .eq("id", id)
-
+  async function handleDelete(id: number) {
+    if (!confirm("Hapus materi ini?")) return
+    await supabase.from("materi").delete().eq("id", id)
     getMateri()
   }
 
+  // ── loading ───────────────────────────────────────────────────
   if (loading) {
-
     return (
-
-      <div className="
-      min-h-screen
-      flex
-      items-center
-      justify-center
-      bg-gray-100
-      ">
-
-        <div className="
-        bg-white
-        px-8 py-5
-        rounded-3xl
-        shadow-lg
-        text-lg
-        font-bold
-        text-gray-700
-        ">
-
-          Loading...
-
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
+          <p className="text-sm text-slate-400">Memuat materi...</p>
         </div>
-
       </div>
     )
   }
 
   return (
-
-    <div className="
-    min-h-screen
-    bg-gradient-to-br
-    from-gray-100
-    to-gray-200
-    p-4 md:p-8 lg:p-10
-    ">
+    <div className="min-h-screen bg-slate-50">
 
       {/* HEADER */}
-      <div className="
-      flex
-      flex-col
-      md:flex-row
-      md:items-center
-      md:justify-between
-      gap-5
-      mb-10
-      ">
-
-        <div>
-
-          <h1 className="
-          text-3xl
-          md:text-5xl
-          font-black
-          text-gray-800
-          ">
-
-            📚 Admin Materi
-
-          </h1>
-
-          <p className="
-          text-gray-600
-          mt-2
-          text-base
-          md:text-lg
-          ">
-
-            Kelola materi pembelajaran siswa
-
-          </p>
-
+      <div className="sticky top-0 z-50 bg-white border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-semibold tracking-[3px] text-indigo-500 uppercase leading-none mb-0.5">
+              Admin
+            </p>
+            <h1 className="text-[15px] font-semibold text-slate-800 leading-none">
+              Materi Pembelajaran
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/admin")}
+              className="h-8 px-4 rounded-lg border border-slate-200 text-[13px] text-slate-600 hover:bg-slate-50 transition"
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={openTambah}
+              className="h-8 px-4 rounded-lg bg-indigo-600 text-white text-[13px] font-medium hover:bg-indigo-700 transition"
+            >
+              + Tambah
+            </button>
+          </div>
         </div>
-
-        <div className="
-        flex
-        flex-wrap
-        gap-3
-        ">
-
-          <button
-            onClick={() =>
-              router.push("/admin")
-            }
-            className="
-            bg-gray-700
-            hover:bg-gray-800
-            text-white
-            px-6 py-3
-            rounded-2xl
-            font-bold
-            shadow-lg
-            transition-all
-            "
-          >
-
-            Dashboard
-
-          </button>
-
-          <button
-            onClick={openTambah}
-            className="
-            bg-green-600
-            hover:bg-green-700
-            text-white
-            px-6 py-3
-            rounded-2xl
-            font-bold
-            shadow-lg
-            transition-all
-            "
-          >
-
-            + Tambah Materi
-
-          </button>
-
-        </div>
-
       </div>
 
-      {/* CARD LIST */}
-      <div className="
-      grid
-      grid-cols-1
-      sm:grid-cols-2
-      xl:grid-cols-3
-      gap-7
-      ">
+      <div className="max-w-6xl mx-auto px-4 py-5">
 
-        {materi.map((item) => (
+        {/* COUNT */}
+        <div className="flex items-center gap-2 mb-5">
+          <p className="text-sm font-medium text-slate-600">Daftar materi</p>
+          <span className="text-[11px] text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">
+            {materi.length} materi
+          </span>
+        </div>
 
-          <div
-            key={item.id}
-            className="
-            bg-white
-            rounded-[30px]
-            overflow-hidden
-            shadow-xl
-            border
-            border-gray-200
-            hover:-translate-y-2
-            hover:shadow-2xl
-            transition-all
-            duration-300
-            "
-          >
-
-            {/* IMAGE */}
-            <div className="relative">
-
-              <img
-                src={
-                  item.gambar
-                    ? item.gambar
-                    : "https://via.placeholder.com/400x200"
-                }
-                className="
-                w-full
-                h-56
-                object-cover
-                "
-              />
-
-              {/* OVERLAY */}
-              <div className="
-              absolute
-              inset-0
-              bg-gradient-to-t
-              from-black/70
-              via-black/20
-              to-transparent
-              " />
-
-              {/* BADGE */}
-              <div className="
-              absolute
-              top-4
-              right-4
-              bg-white
-              text-blue-700
-              px-4 py-2
-              rounded-full
-              text-xs
-              font-black
-              shadow-lg
-              uppercase
-              ">
-
-                {item.tipe}
-
-              </div>
-
-              {/* TITLE DI GAMBAR */}
-              <div className="
-              absolute
-              bottom-4
-              left-4
-              right-4
-              ">
-
-                <h2 className="
-                text-white
-                text-xl
-                font-black
-                leading-snug
-                drop-shadow-lg
-                ">
-
-                  {item.judul}
-
-                </h2>
-
-              </div>
-
-            </div>
-
-            {/* CONTENT */}
-            <div className="p-5">
-
-              <div className="
-              inline-flex
-              items-center
-              gap-2
-              bg-blue-100
-              text-blue-700
-              px-4 py-2
-              rounded-full
-              text-sm
-              font-bold
-              mb-5
-              ">
-
-                📘 {item.kategori}
-
-              </div>
-
-              <div className="
-              flex
-              gap-3
-              ">
-
-                <button
-                  onClick={() =>
-                    openEdit(item)
-                  }
-                  className="
-                  flex-1
-                  bg-yellow-500
-                  hover:bg-yellow-600
-                  text-white
-                  py-3
-                  rounded-2xl
-                  font-bold
-                  transition-all
-                  shadow-md
-                  "
-                >
-
-                  Edit
-
-                </button>
-
-                <button
-                  onClick={() =>
-                    handleDelete(
-                      item.id!
-                    )
-                  }
-                  className="
-                  flex-1
-                  bg-red-500
-                  hover:bg-red-600
-                  text-white
-                  py-3
-                  rounded-2xl
-                  font-bold
-                  transition-all
-                  shadow-md
-                  "
-                >
-
-                  Hapus
-
-                </button>
-
-              </div>
-
-            </div>
-
+        {/* EMPTY STATE */}
+        {materi.length === 0 && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center">
+            <div className="text-4xl mb-3">📚</div>
+            <p className="text-sm font-medium text-slate-700">Belum ada materi</p>
+            <p className="text-xs text-slate-400 mt-1">Klik tombol tambah untuk menambahkan materi baru</p>
           </div>
-        ))}
+        )}
+
+        {/* CARD GRID */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {materi.map((item) => (
+            <MateriCard
+              key={item.id}
+              item={item}
+              onEdit={() => openEdit(item)}
+              onDelete={() => handleDelete(item.id!)}
+            />
+          ))}
+        </div>
 
       </div>
 
       {/* MODAL */}
       {showModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
 
-        <div className="
-        fixed
-        inset-0
-        bg-black/60
-        backdrop-blur-sm
-        flex
-        items-center
-        justify-center
-        z-50
-        p-4
-        ">
-
-          <div className="
-          bg-white
-          rounded-[35px]
-          p-7
-          w-full
-          max-w-xl
-          shadow-2xl
-          animate-in
-          fade-in
-          zoom-in-95
-          ">
-
-            <h2 className="
-            text-3xl
-            font-black
-            text-gray-800
-            mb-6
-            ">
-
-              {editingId
-                ? "✏️ Edit Materi"
-                : "📚 Tambah Materi"}
-
-            </h2>
-
-            <div className="space-y-4">
-
-              <input
-                name="judul"
-                placeholder="Judul Materi"
-                className="
-                w-full
-                border-2
-                border-gray-200
-                focus:border-blue-500
-                outline-none
-                p-4
-                rounded-2xl
-                font-medium
-                text-gray-700
-                "
-                value={form.judul}
-                onChange={handleChange}
-              />
-
-              <select
-                name="kategori"
-                className="
-                w-full
-                border-2
-                border-gray-200
-                focus:border-blue-500
-                outline-none
-                p-4
-                rounded-2xl
-                font-medium
-                text-gray-700
-                "
-                value={form.kategori}
-                onChange={handleChange}
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <h2 className="text-[15px] font-semibold text-slate-800">
+                {editingId ? "Edit materi" : "Tambah materi"}
+              </h2>
+              <button
+                onClick={() => setShowModal(false)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition text-lg leading-none"
               >
+                ×
+              </button>
+            </div>
 
-                <option>
-                  Matematika
-                </option>
+            {/* Modal body */}
+            <div className="px-5 py-4 space-y-3">
 
-                <option>
-                  Bahasa Indonesia
-                </option>
-
-                <option>
-                  Bahasa Inggris
-                </option>
-
-                <option>
-                  TPS
-                </option>
-
-                <option>
-                  Literasi
-                </option>
-
-              </select>
-
-              <select
-                name="tipe"
-                className="
-                w-full
-                border-2
-                border-gray-200
-                focus:border-blue-500
-                outline-none
-                p-4
-                rounded-2xl
-                font-medium
-                text-gray-700
-                "
-                value={form.tipe}
-                onChange={handleChange}
-              >
-
-                <option value="video">
-                  Video
-                </option>
-
-                <option value="pdf">
-                  PDF
-                </option>
-
-                <option value="artikel">
-                  Artikel
-                </option>
-
-              </select>
-
-              <input
-                name="link"
-                placeholder="Link Materi"
-                className="
-                w-full
-                border-2
-                border-gray-200
-                focus:border-blue-500
-                outline-none
-                p-4
-                rounded-2xl
-                font-medium
-                text-gray-700
-                "
-                value={form.link}
-                onChange={handleChange}
-              />
-
-              <div className="
-              border-2
-              border-dashed
-              border-gray-300
-              rounded-2xl
-              p-5
-              bg-gray-50
-              ">
-
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Judul materi</label>
                 <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) =>
-                    setFile(
-                      e.target
-                        .files?.[0] ||
-                      null
-                    )
-                  }
-                  className="w-full"
+                  name="judul"
+                  placeholder="Masukkan judul materi"
+                  value={form.judul}
+                  onChange={handleChange}
+                  className="w-full h-10 border border-slate-200 rounded-xl px-3 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition"
                 />
+              </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Kategori</label>
+                  <select
+                    name="kategori"
+                    value={form.kategori}
+                    onChange={handleChange}
+                    className="w-full h-10 border border-slate-200 rounded-xl px-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition bg-white"
+                  >
+                    {KATEGORI_OPTIONS.map((k) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Tipe</label>
+                  <select
+                    name="tipe"
+                    value={form.tipe}
+                    onChange={handleChange}
+                    className="w-full h-10 border border-slate-200 rounded-xl px-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition bg-white"
+                  >
+                    {TIPE_OPTIONS.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Link materi</label>
+                <input
+                  name="link"
+                  placeholder="https://..."
+                  value={form.link}
+                  onChange={handleChange}
+                  className="w-full h-10 border border-slate-200 rounded-xl px-3 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Gambar {editingId && <span className="text-slate-400">(kosongkan jika tidak diganti)</span>}
+                </label>
+
+                {/* preview gambar lama saat edit */}
+                {editingId && form.gambar && !file && (
+                  <div className="mb-2 rounded-xl overflow-hidden border border-slate-200">
+                    <img src={form.gambar} alt="preview" className="w-full h-32 object-cover" />
+                  </div>
+                )}
+
+                {/* preview file baru */}
+                {file && (
+                  <div className="mb-2 rounded-xl overflow-hidden border border-slate-200">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt="preview baru"
+                      className="w-full h-32 object-cover"
+                    />
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 h-10 border border-dashed border-slate-300 rounded-xl px-3 cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/40 transition">
+                  <span className="text-sm text-slate-400">
+                    {file ? file.name : "Pilih gambar..."}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                </label>
               </div>
 
             </div>
 
-            <div className="
-            flex
-            gap-4
-            mt-7
-            ">
-
+            {/* Modal footer */}
+            <div className="flex items-center gap-2 px-5 py-4 border-t border-slate-200">
               <button
-                onClick={
-                  handleSubmit
-                }
-                className="
-                flex-1
-                bg-blue-600
-                hover:bg-blue-700
-                text-white
-                py-4
-                rounded-2xl
-                font-black
-                shadow-lg
-                transition-all
-                "
+                onClick={() => setShowModal(false)}
+                className="flex-1 h-9 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition"
               >
-
-                Simpan
-
-              </button>
-
-              <button
-                onClick={() =>
-                  setShowModal(false)
-                }
-                className="
-                flex-1
-                bg-gray-300
-                hover:bg-gray-400
-                text-gray-800
-                py-4
-                rounded-2xl
-                font-black
-                transition-all
-                "
-              >
-
                 Batal
-
               </button>
-
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="flex-1 h-9 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60 transition"
+              >
+                {submitting ? "Menyimpan..." : "Simpan"}
+              </button>
             </div>
 
           </div>
-
         </div>
       )}
 
+    </div>
+  )
+}
+
+// ── MATERI CARD ───────────────────────────────────────────────
+function MateriCard({
+  item, onEdit, onDelete
+}: {
+  item: Materi
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const tipeStyle     = TIPE_STYLE[item.tipe]     ?? "bg-slate-100 text-slate-600"
+  const kategoriStyle = KATEGORI_STYLE[item.kategori] ?? "bg-slate-100 text-slate-600"
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 hover:shadow-md transition-all duration-200 group">
+
+      {/* Gambar */}
+      <div className="relative h-44 bg-slate-100 overflow-hidden">
+        <img
+          src={item.gambar || "https://via.placeholder.com/400x200"}
+          alt={item.judul}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        />
+
+        {/* Tipe badge */}
+        <span className={`absolute top-3 right-3 text-[10px] font-semibold px-2.5 py-1 rounded-full ${tipeStyle}`}>
+          {item.tipe}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+
+        {/* Kategori */}
+        <span className={`inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full mb-2 ${kategoriStyle}`}>
+          {item.kategori}
+        </span>
+
+        {/* Judul */}
+        <h2 className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2 mb-4">
+          {item.judul}
+        </h2>
+
+        {/* Aksi */}
+        <div className="flex gap-2">
+          <button
+            onClick={onEdit}
+            className="flex-1 h-8 rounded-lg bg-amber-50 text-amber-700 text-xs font-medium hover:bg-amber-100 transition"
+          >
+            Edit
+          </button>
+          <button
+            onClick={onDelete}
+            className="flex-1 h-8 rounded-lg bg-rose-50 text-rose-600 text-xs font-medium hover:bg-rose-100 transition"
+          >
+            Hapus
+          </button>
+        </div>
+
+      </div>
     </div>
   )
 }
