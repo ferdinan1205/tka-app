@@ -12,11 +12,11 @@ type Hasil = {
   kategori: string
   tanggal: string
   paket?: string | null
-  package_id?: number | null
+  package_id?: string | null  // ← FIX: was number, now string
 }
 
 type PaketSummary = {
-  package_id: number | null
+  package_id: string | null   // ← FIX: was number, now string
   paket: string
   total_ujian: number
   total_nilai: number
@@ -103,7 +103,6 @@ function PDFContent({
               Grade {gradeGlobal.label} · Rata-rata {rataRata}
             </div>
           </div>
-          {/* Score Ring */}
           <svg width="80" height="80">
             <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
             <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="6" strokeLinecap="round"
@@ -131,10 +130,8 @@ function PDFContent({
         ))}
       </div>
 
-      {/* Semua paket tampil berurutan */}
       {paketSummary.map((p) => {
         const st = getPaketStyle(p.paket)
-        // Ambil warna dari class grad — fallback inline style
         const gradMap: Record<string, string> = {
           "from-[#059669] to-[#0D9488]": "linear-gradient(135deg,#059669,#0D9488)",
           "from-[#EA580C] to-[#D97706]": "linear-gradient(135deg,#EA580C,#D97706)",
@@ -146,7 +143,6 @@ function PDFContent({
 
         return (
           <div key={p.paket} style={{ background: "#0D1220", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 18, overflow: "hidden", marginBottom: 20 }}>
-            {/* Panel header */}
             <div style={{ background: headerBg, padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <p style={{ fontSize: 9, letterSpacing: 3, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", margin: "0 0 2px" }}>Paket</p>
@@ -167,7 +163,6 @@ function PDFContent({
               </div>
             </div>
 
-            {/* Table */}
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
@@ -186,7 +181,6 @@ function PDFContent({
                       <td style={{ padding: "14px 20px", fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 700 }}>{i + 1}</td>
                       <td style={{ padding: "14px 20px", fontSize: 13, fontWeight: 600, color: "#fff" }}>{item.kategori}</td>
                       <td style={{ padding: "14px 20px" }}>
-                        {/* Inline SVG score ring */}
                         <svg width="48" height="48">
                           <circle cx="24" cy="24" r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
                           <circle cx="24" cy="24" r={r} fill="none" stroke={col} strokeWidth="4" strokeLinecap="round"
@@ -212,7 +206,6 @@ function PDFContent({
         )
       })}
 
-      {/* Footer */}
       <div style={{ textAlign: "center", paddingTop: 8 }}>
         <p style={{ fontSize: 10, color: "rgba(255,255,255,0.15)", margin: 0 }}>
           Dicetak dari Lampung Cerdas · {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
@@ -252,12 +245,13 @@ export default function RekapPage() {
     const finalHasil = (hasilData as Hasil[]) || []
     setHasil(finalHasil)
 
+    // FIX: grouping pakai string key, cocok dengan tipe data Supabase
     const grouped: Record<string, PaketSummary> = {}
     finalHasil.forEach((item) => {
       const key = item.package_id ? String(item.package_id) : "umum"
       if (!grouped[key]) {
         grouped[key] = {
-          package_id: item.package_id || null,
+          package_id: item.package_id ? String(item.package_id) : null,
           paket: item.paket || "Ujian Umum",
           total_ujian: 0, total_nilai: 0, rata_rata: 0,
           tertinggi: 0, terendah: 100, data: [],
@@ -289,15 +283,11 @@ export default function RekapPage() {
     if (!printRef.current) return
     try {
       setPdfLoading(true)
-
       const node = printRef.current
-
-      // Pastikan seluruh konten ter-render penuh (bukan terpotong scroll)
       const dataUrl = await toPng(node, {
         cacheBust: true,
         pixelRatio: 2,
         backgroundColor: "#06080F",
-        // Paksa ambil ukuran scroll penuh
         width: node.scrollWidth,
         height: node.scrollHeight,
         style: {
@@ -318,18 +308,14 @@ export default function RekapPage() {
 
       const imgW = img.naturalWidth
       const imgH = img.naturalHeight
-      const ratio = pdfW / (imgW / 2) // pixelRatio = 2
-
+      const ratio = pdfW / (imgW / 2)
       const totalPdfH = (imgH / 2) * ratio
 
       let y = 0
       let isFirst = true
-
       while (y < totalPdfH) {
         if (!isFirst) pdf.addPage()
         isFirst = false
-
-        // Gambar posisi sedemikian sehingga setiap halaman "window" sejajar
         pdf.addImage(dataUrl, "PNG", 0, -y, pdfW, totalPdfH)
         y += pdfH
       }
@@ -357,7 +343,7 @@ export default function RekapPage() {
   return (
     <div className="min-h-screen bg-[#06080F] text-white">
 
-      {/* ── TOPBAR ── */}
+      {/* TOPBAR */}
       <header className="sticky top-0 z-40 bg-[#06080F]/95 backdrop-blur-xl border-b border-white/[0.06]">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
           <button onClick={() => router.push("/dashboard")}
@@ -377,14 +363,13 @@ export default function RekapPage() {
         </div>
       </header>
 
-      {/* ── TAMPILAN WEB/HP NORMAL ── */}
+      {/* MAIN */}
       <div className="max-w-5xl mx-auto px-3 py-5 md:px-8 md:py-8 space-y-5 md:space-y-7">
 
-        {/* ── PROFILE CARD ── */}
+        {/* PROFILE CARD */}
         <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-[#0D1220] border border-white/[0.06] p-4 md:p-8">
           <div className="absolute -top-10 -right-10 w-52 h-52 bg-[#6366F1]/15 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-10 left-0 w-40 h-40 bg-[#8B5CF6]/10 rounded-full blur-3xl pointer-events-none" />
-
           <div className="relative z-10 flex items-center gap-3 md:gap-6">
             {foto ? (
               <img src={foto} alt="foto" className="w-14 h-14 md:w-20 md:h-20 rounded-2xl object-cover border border-white/10 shrink-0" />
@@ -407,7 +392,7 @@ export default function RekapPage() {
           </div>
         </div>
 
-        {/* ── GLOBAL STATS ── */}
+        {/* GLOBAL STATS */}
         <div className="grid grid-cols-4 gap-2 md:gap-4">
           {[
             { label: "Total Ujian", value: hasil.length, icon: "📝" },
@@ -423,7 +408,7 @@ export default function RekapPage() {
           ))}
         </div>
 
-        {/* ── PAKET TABS ── */}
+        {/* PAKET TABS */}
         {paketSummary.length > 0 && (
           <div>
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide mb-4">
@@ -541,17 +526,8 @@ export default function RekapPage() {
         )}
       </div>
 
-      {/* ── HIDDEN PDF CANVAS (off-screen, full content) ── */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: "-9999px",
-          zIndex: -1,
-          pointerEvents: "none",
-          opacity: 0,
-        }}
-      >
+      {/* HIDDEN PDF CANVAS */}
+      <div style={{ position: "fixed", top: 0, left: "-9999px", zIndex: -1, pointerEvents: "none", opacity: 0 }}>
         <div ref={printRef}>
           <PDFContent
             nama={nama} email={email} foto={foto} inisial={inisial}
