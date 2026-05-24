@@ -219,16 +219,19 @@ export default function AdminRekapPage() {
     }
   }
 
-  async function exportPDF() {
-    if (!printRef.current) return
-    const canvas  = await html2canvas(printRef.current, { scale: 2 })
-    const imgData = canvas.toDataURL("image/png")
-    const pdf     = new jsPDF("p", "mm", "a4")
-    const width   = pdf.internal.pageSize.getWidth()
-    const height  = (canvas.height * width) / canvas.width
-    pdf.addImage(imgData, "PNG", 0, 0, width, height)
-    pdf.save("rekap_admin.pdf")
-  }
+async function exportPDF() {
+  if (!printRef.current) return
+  const canvas  = await html2canvas(printRef.current, { scale: 2 })
+  const imgData = canvas.toDataURL("image/png")
+
+  // Hitung tinggi PDF sesuai konten — 1 halaman tidak terpotong
+  const pdfW = 210
+  const pdfH = Math.ceil((canvas.height / canvas.width) * pdfW)
+
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [pdfW, pdfH] })
+  pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH)
+  pdf.save("rekap_admin.pdf")
+}
 
   // ── loading ───────────────────────────────────────────────────
   if (loading) {
