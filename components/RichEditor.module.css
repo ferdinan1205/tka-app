@@ -1,0 +1,161 @@
+.wrap {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 14px;
+}
+
+/* ── Editor box ─────────────────────────────────────── */
+.editorBox {
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* ── Main toolbar ───────────────────────────────────── */
+.mainToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f9f9f9;
+  align-items: center;
+}
+
+.select {
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+
+.sep {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: #ddd;
+  margin: 0 3px;
+  vertical-align: middle;
+}
+
+.tbBtn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 7px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  transition: background 0.12s, border-color 0.12s;
+}
+.tbBtn:hover {
+  background: #fff;
+  border-color: #ccc;
+}
+
+/* ── Equation bar ───────────────────────────────────── */
+.eqBar {
+  border-bottom: 1px solid #e0e0e0;
+  background: #f9f9f9;
+}
+
+.eqTabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid #e0e0e0;
+  scrollbar-width: none;
+}
+.eqTabs::-webkit-scrollbar { display: none; }
+
+.eqTab {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #777;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.eqTab:hover {
+  color: #333;
+  background: #fff;
+}
+.eqTabOn {
+  color: #1a56db;
+  border-bottom-color: #1a56db;
+  background: #fff;
+}
+
+.eqSymbols {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 4px 6px;
+  gap: 2px;
+  min-height: 44px;
+}
+
+.sym {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #222;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  padding: 0;
+  position: relative;
+}
+.sym:hover {
+  background: #e8f0fe;
+  border-color: #a4c0f4;
+  color: #1a56db;
+}
+.symWide {
+  width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+/* ── Editable area ──────────────────────────────────── */
+.editorArea {
+  min-height: 140px;
+  padding: 12px 14px;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.9;
+  color: #111;
+}
+.editorArea:empty::before {
+  content: attr(data-placeholder);
+  color: #aaa;
+  pointer-events: none;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .editorBox { border-color: #333; background: #1a1a1a; }
+  .mainToolbar, .eqBar, .eqTabs { background: #222; border-color: #333; }
+  .tbBtn { color: #ddd; }
+  .tbBtn:hover { background: #2a2a2a; border-color: #444; }
+  .select { background: #222; border-color: #444; color: #aaa; }
+  .sep { background: #444; }
+  .eqTab { color: #888; }
+  .eqTab:hover, .eqTabOn { background: #1a1a1a; }
+  .eqTabOn { color: #6b9dfc; border-bottom-color: #6b9dfc; }
+  .sym { background: #1a1a1a; border-color: #333; color: #ddd; }
+  .sym:hover { background: #1c2d54; border-color: #3b5ac6; color: #93b4ff; }
+  .editorArea { color: #e0e0e0; }
+  .editorArea:empty::before { color: #555; }
+}

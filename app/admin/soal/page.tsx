@@ -10,19 +10,26 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd"
 import type { DropResult } from "@hello-pangea/dnd"
 import "react-quill-new/dist/quill.snow.css"
 
-// Override tinggi editor Quill secara global
+// Override tinggi editor Quill + perbaikan keterbacaan teks
 const quillStyle = `
-  .ql-container { min-height: 120px; font-size: 14px; }
-  .ql-editor { min-height: 120px; max-height: 320px; overflow-y: auto; line-height: 1.7; }
-  .ql-editor.ql-blank::before { color: #B4B2A9; font-style: normal; }
-  .ql-toolbar { border-bottom: 1px solid #E5E3DC !important; background: #FAFAFA; }
+  .ql-container { min-height: 120px; font-size: 15px; }
+  .ql-editor { min-height: 120px; max-height: 320px; overflow-y: auto; line-height: 1.8; color: #111110 !important; font-size: 15px; }
+  .ql-editor p { color: #111110 !important; }
+  .ql-editor.ql-blank::before { color: #999894; font-style: normal; font-size: 14px; }
+  .ql-toolbar { border-bottom: 1px solid #D3D1C7 !important; background: #F5F4F0; }
   .ql-container.ql-snow { border: none !important; }
-  .ql-toolbar.ql-snow { border: none !important; border-bottom: 1px solid #E5E3DC !important; }
+  .ql-toolbar.ql-snow { border: none !important; border-bottom: 1px solid #D3D1C7 !important; }
+  .ql-toolbar .ql-stroke { stroke: #444441 !important; }
+  .ql-toolbar .ql-fill { fill: #444441 !important; }
+  .ql-toolbar .ql-picker { color: #444441 !important; }
+  .ql-toolbar button:hover .ql-stroke { stroke: #26215C !important; }
+  .ql-toolbar button:hover .ql-fill { fill: #26215C !important; }
+  .ql-toolbar .ql-active .ql-stroke { stroke: #534AB7 !important; }
+  .ql-toolbar .ql-active .ql-fill { fill: #534AB7 !important; }
 `
 
 const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false })
 
-// ── Tipe ──────────────────────────────────────────────────────────────
 type Soal = {
   id?: number
   pertanyaan: string
@@ -41,7 +48,6 @@ type Soal = {
   bacaan?: string
 }
 
-// ── Konstanta ─────────────────────────────────────────────────────────
 const mathJaxConfig = {
   loader: { load: ["input/tex", "output/chtml"] },
   tex: {
@@ -58,7 +64,6 @@ const mathJaxConfig = {
   },
   startup: {
     typeset: false,
-    // Langsung ready begitu MathJax loaded — tidak typeset seluruh halaman
     ready() {
       // @ts-ignore
       MathJax.startup.defaultReady()
@@ -85,7 +90,6 @@ const PAKET_BADGE: Record<string, string> = {
   bahasa: "bg-[#FBEAF0] text-[#72243E]",
 }
 
-// ── Helper ────────────────────────────────────────────────────────────
 function hasMath(text = "") {
   return (
     text.includes("$") || text.includes("\\(") || text.includes("\\[") ||
@@ -111,8 +115,6 @@ function normalizeContent(content = "") {
   return content.split("\n").map((l) => l.trim()).join("<br/>")
 }
 
-// ── Komponen MathContent yang dioptimalkan ────────────────────────────
-// Pakai ref + MathJax.typesetPromise langsung agar TIDAK re-render lambat
 function MathContent({ html, className = "" }: { html: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const normalized = useMemo(() => normalizeContent(html), [html])
@@ -120,10 +122,7 @@ function MathContent({ html, className = "" }: { html: string; className?: strin
 
   useEffect(() => {
     if (!isMath || !ref.current) return
-
     ref.current.innerHTML = normalized
-
-    // typesetPromise hanya pada elemen ini — bukan seluruh halaman
     const win = window as any
     if (win.MathJax?.typesetPromise) {
       win.MathJax.typesetPromise([ref.current]).catch(() => {})
@@ -139,7 +138,6 @@ function MathContent({ html, className = "" }: { html: string; className?: strin
     )
   }
 
-  // Langsung render isi, MathJax akan typeset via effect di atas
   return (
     <div
       ref={ref}
@@ -149,7 +147,6 @@ function MathContent({ html, className = "" }: { html: string; className?: strin
   )
 }
 
-// ── Preview di modal: debounce 400 ms agar tidak typeset tiap keystroke
 function MathPreview({ html }: { html: string }) {
   const [debouncedHtml, setDebouncedHtml] = useState(html)
 
@@ -163,13 +160,12 @@ function MathPreview({ html }: { html: string }) {
 
   return (
     <div className="mt-2 p-3 bg-[#EEEDFE] border border-[#AFA9EC] rounded-xl text-sm">
-      <div className="text-xs text-[#534AB7] mb-1 font-semibold">Preview:</div>
+      <div className="text-xs text-[#534AB7] mb-1 font-bold">Preview:</div>
       <MathContent html={debouncedHtml} />
     </div>
   )
 }
 
-// ── Komponen utama ────────────────────────────────────────────────────
 export default function AdminSoal() {
   const router = useRouter()
 
@@ -354,9 +350,9 @@ export default function AdminSoal() {
 
   const editorFields = [
     { label: "Pengantar", key: "pengantar" }, { label: "Bacaan", key: "bacaan" },
-    { label: "Pertanyaan", key: "pertanyaan" }, { label: "Opsi A", key: "opsi_a" },
-    { label: "Opsi B", key: "opsi_b" }, { label: "Opsi C", key: "opsi_c" },
-    { label: "Opsi D", key: "opsi_d" }, { label: "Opsi E", key: "opsi_e" },
+    { label: "Pertanyaan *", key: "pertanyaan" }, { label: "Opsi A *", key: "opsi_a" },
+    { label: "Opsi B *", key: "opsi_b" }, { label: "Opsi C *", key: "opsi_c" },
+    { label: "Opsi D *", key: "opsi_d" }, { label: "Opsi E", key: "opsi_e" },
     { label: "Pembahasan", key: "pembahasan" },
   ]
 
@@ -539,18 +535,14 @@ export default function AdminSoal() {
                             className="bg-white border border-[#D3D1C7] rounded-2xl p-4 hover:border-[#888780] transition"
                           >
                             <div className="flex gap-3">
-                              {/* Drag handle */}
                               <div
                                 {...provided.dragHandleProps}
                                 className="cursor-grab text-[#B4B2A9] select-none mt-0.5 text-lg"
                               >
                                 ☰
                               </div>
-
-                              {/* Content */}
                               <div className="flex-1 min-w-0">
                                 <MathContent html={item.pertanyaan} />
-
                                 {item.gambar && (
                                   <img
                                     src={item.gambar}
@@ -558,8 +550,6 @@ export default function AdminSoal() {
                                     className="mt-3 rounded-xl w-40 border border-[#D3D1C7]"
                                   />
                                 )}
-
-                                {/* Opsi */}
                                 <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1">
                                   {([
                                     { label: "A", value: item.opsi_a },
@@ -588,8 +578,6 @@ export default function AdminSoal() {
                                       )
                                     })}
                                 </div>
-
-                                {/* Tags */}
                                 <div className="flex gap-2 mt-3 flex-wrap">
                                   <span className="text-[10px] font-semibold bg-[#EEEDFE] text-[#3C3489] px-2.5 py-0.5 rounded-full">
                                     {item.kategori}
@@ -604,8 +592,6 @@ export default function AdminSoal() {
                                   </span>
                                 </div>
                               </div>
-
-                              {/* Actions */}
                               <div className="flex flex-col gap-2 shrink-0">
                                 <button
                                   type="button"
@@ -654,12 +640,12 @@ export default function AdminSoal() {
                 </button>
               </div>
 
-              {/* Modal body */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[#FAFAFA]">
+              {/* Modal body — bg putih bersih, semua label hitam tebal */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-white">
 
                 {/* Upload gambar */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#5F5E5A] uppercase tracking-wider mb-2">
+                  <label className="block text-sm font-bold text-[#1A1917] uppercase tracking-wider mb-2">
                     Gambar Soal
                   </label>
                   <input
@@ -669,9 +655,9 @@ export default function AdminSoal() {
                       const f = e.target.files?.[0]
                       if (f) await uploadGambar(f)
                     }}
-                    className="w-full border border-[#B4B2A9] p-2.5 rounded-xl text-sm bg-white"
+                    className="w-full border-2 border-[#B4B2A9] p-2.5 rounded-xl text-sm bg-[#FAFAF9] text-[#111110] file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#EEEDFE] file:text-[#3C3489] hover:file:bg-[#D5D1F8] cursor-pointer"
                   />
-                  {uploading && <p className="mt-1 text-xs text-[#534AB7]">Mengupload...</p>}
+                  {uploading && <p className="mt-1 text-xs text-[#534AB7] font-medium">Mengupload...</p>}
                   {form.gambar && (
                     <img
                       src={form.gambar}
@@ -684,25 +670,25 @@ export default function AdminSoal() {
                 {/* Kategori + Paket */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-[#5F5E5A] uppercase tracking-wider mb-2">
+                    <label className="block text-sm font-bold text-[#1A1917] uppercase tracking-wider mb-2">
                       Kategori
                     </label>
                     <select
                       value={form.kategori}
                       onChange={(e) => setForm((p) => ({ ...p, kategori: e.target.value }))}
-                      className="w-full border border-[#B4B2A9] p-2.5 rounded-xl text-sm bg-white outline-none focus:border-[#7F77DD] transition"
+                      className="w-full border-2 border-[#B4B2A9] p-2.5 rounded-xl text-sm font-medium bg-[#FAFAF9] text-[#111110] outline-none focus:border-[#534AB7] focus:ring-2 focus:ring-[#EEEDFE] transition"
                     >
                       {kategoriList.map((k) => <option key={k} value={k}>{k}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-[#5F5E5A] uppercase tracking-wider mb-2">
+                    <label className="block text-sm font-bold text-[#1A1917] uppercase tracking-wider mb-2">
                       Paket
                     </label>
                     <select
                       value={form.paket}
                       onChange={(e) => setForm((p) => ({ ...p, paket: e.target.value }))}
-                      className="w-full border border-[#B4B2A9] p-2.5 rounded-xl text-sm bg-white outline-none focus:border-[#7F77DD] transition"
+                      className="w-full border-2 border-[#B4B2A9] p-2.5 rounded-xl text-sm font-medium bg-[#FAFAF9] text-[#111110] outline-none focus:border-[#534AB7] focus:ring-2 focus:ring-[#EEEDFE] transition"
                     >
                       <option value="">Pilih Paket</option>
                       {paketList.map((p) => <option key={p} value={p}>{p.toUpperCase()}</option>)}
@@ -713,7 +699,7 @@ export default function AdminSoal() {
                 {/* Divider */}
                 <div className="flex items-center gap-2">
                   <div className="h-px flex-1 bg-[#EEEDFE]" />
-                  <span className="text-[10px] font-semibold text-[#7F77DD] tracking-widest uppercase">
+                  <span className="text-[10px] font-bold text-[#7F77DD] tracking-widest uppercase">
                     Konten Soal
                   </span>
                   <div className="h-px flex-1 bg-[#EEEDFE]" />
@@ -722,8 +708,8 @@ export default function AdminSoal() {
                 {/* Editor fields */}
                 {editorFields.map((field) => (
                   <div key={field.key}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-[#5F5E5A] uppercase tracking-wider">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-bold text-[#1A1917] uppercase tracking-wider">
                         {field.label}
                       </label>
                       <button
@@ -731,12 +717,13 @@ export default function AdminSoal() {
                         onClick={() =>
                           setShowPreview((p) => ({ ...p, [field.key]: !p[field.key] }))
                         }
-                        className="text-[11px] text-[#534AB7] hover:text-[#3C3489] underline transition"
+                        className="text-xs font-semibold text-[#534AB7] hover:text-[#3C3489] underline transition"
                       >
                         {showPreview[field.key] ? "Sembunyikan preview" : "Lihat preview"}
                       </button>
                     </div>
-                    <div className="border border-[#B4B2A9] rounded-xl overflow-hidden bg-white focus-within:border-[#7F77DD] focus-within:ring-2 focus-within:ring-[#EEEDFE] transition">
+                    {/* border tebal + bg putih agar teks editor jelas terbaca */}
+                    <div className="border-2 border-[#B4B2A9] rounded-xl overflow-hidden bg-white focus-within:border-[#534AB7] focus-within:ring-2 focus-within:ring-[#EEEDFE] transition">
                       <ReactQuill
                         theme="snow"
                         modules={quillModules}
@@ -755,13 +742,13 @@ export default function AdminSoal() {
 
                 {/* Jawaban benar */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#5F5E5A] uppercase tracking-wider mb-2">
+                  <label className="block text-sm font-bold text-[#1A1917] uppercase tracking-wider mb-2">
                     Jawaban Benar
                   </label>
                   <select
                     value={form.jawaban_benar}
                     onChange={(e) => setForm((p) => ({ ...p, jawaban_benar: e.target.value }))}
-                    className="w-full border border-[#B4B2A9] p-2.5 rounded-xl text-sm bg-white outline-none focus:border-[#7F77DD] transition"
+                    className="w-full border-2 border-[#B4B2A9] p-2.5 rounded-xl text-sm font-medium bg-[#FAFAF9] text-[#111110] outline-none focus:border-[#534AB7] focus:ring-2 focus:ring-[#EEEDFE] transition"
                   >
                     {["a", "b", "c", "d", "e"].map((x) => (
                       <option key={x} value={x}>{x.toUpperCase()}</option>
@@ -771,11 +758,11 @@ export default function AdminSoal() {
               </div>
 
               {/* Modal footer */}
-              <div className="border-t border-[#EEEDFE] bg-white px-6 py-4 flex justify-end gap-3 shrink-0">
+              <div className="border-t-2 border-[#E5E3DC] bg-white px-6 py-4 flex justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="h-9 px-5 rounded-xl border border-[#B4B2A9] text-sm text-[#5F5E5A] hover:bg-[#F1EFE8] transition"
+                  className="h-10 px-5 rounded-xl border-2 border-[#B4B2A9] text-sm font-semibold text-[#444441] hover:bg-[#F1EFE8] transition"
                 >
                   Batal
                 </button>
@@ -783,7 +770,7 @@ export default function AdminSoal() {
                   type="button"
                   disabled={saving}
                   onClick={handleSubmit}
-                  className="h-9 px-6 rounded-xl bg-[#534AB7] text-[#EEEDFE] text-sm font-semibold hover:bg-[#3C3489] disabled:opacity-50 transition"
+                  className="h-10 px-6 rounded-xl bg-[#534AB7] text-white text-sm font-bold hover:bg-[#3C3489] disabled:opacity-50 transition"
                 >
                   {saving ? "Menyimpan..." : "Simpan Soal"}
                 </button>
