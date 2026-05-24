@@ -862,11 +862,12 @@ export default function UjianPage() {
                     >
                       <OptionBadge label={opsiLabels[opsi.key]} selected={selected} answered={currentAnswered} />
                       <div className="flex-1 min-w-0 overflow-hidden flex items-center">
-                        <MathRenderer
-                          text={opsi.value}
-                          className={`text-[14px] md:text-[15px] leading-[1.8] font-medium ${selected ? "text-white" : "text-slate-700"}`}
-                        />
-                      </div>
+  <MathRenderer
+    key={`${opsi.key}-${selected}`} 
+    text={opsi.value}
+    className={`text-[14px] md:text-[15px] leading-[1.8] font-medium ${selected ? "text-white" : "text-slate-700"}`}
+  />
+</div>
                     </button>
                   )
                 })}
