@@ -1,590 +1,352 @@
 "use client"
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
-
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
-import * as XLSX from "xlsx"
 import jsPDF from "jspdf"
-import html2canvas from "html2canvas"
+import { toPng } from "html-to-image"
 
-// ── types ─────────────────────────────────────────────────────
-
-type Rekap = {
+type Hasil = {
   id: number
   skor: number
   kategori: string
   tanggal: string
-  user_id: string
-  paket?: string
-  package_id?: string  // ← FIX: was number, now string
-  profiles: {
-    nama: string
-    email: string
-    foto?: string
-  }
+  paket?: string | null
+  package_id?: string | null
 }
 
 type PaketSummary = {
+  package_id: string | null
   paket: string
-  package_id?: string  // ← FIX: was number, now string
-  mapel: { kategori: string; skor: number }[]
-  total: number
-  rata: number
-  tanggal: string
-  user_id: string
-  nama: string
-  email: string
-  foto?: string
+  total_ujian: number
+  total_nilai: number
+  rata_rata: number
+  tertinggi: number
+  terendah: number
+  data: Hasil[]
 }
 
-type ViewMode = "table" | "paket"
-
-// ── avatar color ──────────────────────────────────────────────
-
-const AVATAR_COLORS = [
-  { bg: "bg-violet-100", text: "text-violet-700" },
-  { bg: "bg-sky-100",    text: "text-sky-700"    },
-  { bg: "bg-emerald-100",text: "text-emerald-700"},
-  { bg: "bg-rose-100",   text: "text-rose-700"   },
-  { bg: "bg-amber-100",  text: "text-amber-700"  },
-  { bg: "bg-teal-100",   text: "text-teal-700"   },
-  { bg: "bg-fuchsia-100",text: "text-fuchsia-700"},
-  { bg: "bg-orange-100", text: "text-orange-700" },
-]
-
-function getAvatarColor(name: string) {
-  const idx = (name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length
-  return AVATAR_COLORS[idx]
+const PAKET_STYLE: Record<string, { grad: string; accent: string }> = {
+  default: { grad: "from-[#6366F1] to-[#8B5CF6]", accent: "#818CF8" },
+  ipa:     { grad: "from-[#059669] to-[#0D9488]", accent: "#34D399" },
+  ips:     { grad: "from-[#EA580C] to-[#D97706]", accent: "#FB923C" },
+  smk:     { grad: "from-[#2563EB] to-[#0891B2]", accent: "#60A5FA" },
+  bahasa:  { grad: "from-[#9333EA] to-[#DB2777]", accent: "#C084FC" },
 }
 
-// ── page ──────────────────────────────────────────────────────
+function getPaketStyle(paket: string) {
+  const key = paket.toLowerCase().replace(/paket\s*/i, "").trim()
+  return PAKET_STYLE[key] || PAKET_STYLE.default
+}
 
-export default function AdminRekapPage() {
-  const router   = useRouter()
+function grade(nilai: number) {
+  if (nilai >= 90) return { label: "A", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" }
+  if (nilai >= 80) return { label: "B", color: "text-blue-400",    bg: "bg-blue-500/10 border-blue-500/20" }
+  if (nilai >= 70) return { label: "C", color: "text-yellow-400",  bg: "bg-yellow-500/10 border-yellow-500/20" }
+  if (nilai >= 60) return { label: "D", color: "text-orange-400",  bg: "bg-orange-500/10 border-orange-500/20" }
+  return              { label: "E", color: "text-red-400",      bg: "bg-red-500/10 border-red-500/20" }
+}
+
+function gradeColor(nilai: number) {
+  if (nilai >= 90) return "#34D399"
+  if (nilai >= 80) return "#60A5FA"
+  if (nilai >= 70) return "#FACC15"
+  if (nilai >= 60) return "#FB923C"
+  return "#F87171"
+}
+
+function ScoreRing({ value }: { value: number }) {
+  const r = 28; const c = 2 * Math.PI * r
+  const col = gradeColor(value)
+  return (
+    <svg width="72" height="72" className="shrink-0">
+      <circle cx="36" cy="36" r={r} fill="none" stroke="#ffffff08" strokeWidth="5" />
+      <circle cx="36" cy="36" r={r} fill="none" stroke={col} strokeWidth="5" strokeLinecap="round"
+        strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(value, 100) / 100)}
+        transform="rotate(-90 36 36)" />
+      <text x="36" y="40" textAnchor="middle" fontSize="14" fontWeight="800" fill={col}>{value}</text>
+    </svg>
+  )
+}
+
+export default function RekapPage() {
+  const router = useRouter()
   const printRef = useRef<HTMLDivElement>(null)
-
-  const [data,          setData         ] = useState<Rekap[]>([])
-  const [loading,       setLoading      ] = useState(true)
-  const [search,        setSearch       ] = useState("")
-  const [filterMapel,   setFilterMapel  ] = useState("Semua")
-  const [filterPaket,   setFilterPaket  ] = useState("Semua")
-  const [viewMode,      setViewMode     ] = useState<ViewMode>("table")
-  const [expandedPaket, setExpandedPaket] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [nama, setNama] = useState("Siswa")
+  const [email, setEmail] = useState("")
+  const [foto, setFoto] = useState("")
+  const [hasil, setHasil] = useState<Hasil[]>([])
+  const [paketSummary, setPaketSummary] = useState<PaketSummary[]>([])
+  const [activeTab, setActiveTab] = useState(0)
 
   useEffect(() => { init() }, [])
 
   async function init() {
-    const { data: authData } = await supabase.auth.getUser()
-    if (!authData?.user) { router.push("/login"); return }
+    const { data } = await supabase.auth.getUser()
+    if (!data.user) { router.push("/login"); return }
+    const userId = data.user.id
+    setEmail(data.user.email || "")
 
-    const { data: profile } = await supabase
-      .from("profiles").select("*").eq("id", authData.user.id).single()
+    const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single()
+    setNama(profile?.nama || "Siswa")
+    setFoto(profile?.foto || "")
 
-    if (!profile || profile.role !== "admin") {
-      alert("Akses ditolak")
-      router.push("/dashboard")
-      return
-    }
+    // Hanya ambil data milik user yang login
+    const { data: hasilData } = await supabase
+      .from("hasil").select("*").eq("user_id", userId).order("tanggal", { ascending: false })
 
-    await getData()
-  }
+    const finalHasil = (hasilData as Hasil[]) || []
+    setHasil(finalHasil)
 
-  async function getData() {
-    setLoading(true)
-
-    const { data: hasilData, error } = await supabase
-      .from("hasil").select("*").order("id", { ascending: false })
-
-    if (error) { console.error(error); setLoading(false); return }
-
-    const { data: profiles } = await supabase.from("profiles").select("*")
-
-    const finalData = (hasilData || []).map((item: any) => {
-      const user = profiles?.find((p: any) => p.id === item.user_id)
-      return {
-        ...item,
-        // FIX: pastikan package_id selalu string atau undefined
-        package_id: item.package_id ? String(item.package_id) : undefined,
-        profiles: {
-          nama:  user?.nama  || "Tanpa Nama",
-          email: user?.email || "-",
-          foto:  user?.foto  || "",
-        },
+    const grouped: Record<string, PaketSummary> = {}
+    finalHasil.forEach((item) => {
+      const key = item.package_id ? String(item.package_id) : "umum"
+      if (!grouped[key]) {
+        grouped[key] = {
+          package_id: item.package_id ? String(item.package_id) : null,
+          paket: item.paket || "Ujian Umum",
+          total_ujian: 0, total_nilai: 0, rata_rata: 0,
+          tertinggi: 0, terendah: 100, data: [],
+        }
       }
+      grouped[key].data.push(item)
+      grouped[key].total_ujian += 1
+      grouped[key].total_nilai += item.skor
     })
 
-    setData(finalData)
+    Object.values(grouped).forEach((g) => {
+      const nilai = g.data.map((x) => x.skor)
+      g.rata_rata = Math.round(g.total_nilai / g.total_ujian)
+      g.tertinggi = Math.max(...nilai)
+      g.terendah  = Math.min(...nilai)
+    })
+
+    setPaketSummary(Object.values(grouped))
     setLoading(false)
   }
 
-  const mapelList = useMemo(() => {
-    return ["Semua", ...Array.from(new Set(data.map((x) => x.kategori)))]
-  }, [data])
+  const rataRata    = hasil.length ? Math.round(hasil.reduce((a, b) => a + b.skor, 0) / hasil.length) : 0
+  const tertinggi   = hasil.length ? Math.max(...hasil.map((x) => x.skor)) : 0
+  const terendah    = hasil.length ? Math.min(...hasil.map((x) => x.skor)) : 0
+  const gradeGlobal = grade(rataRata)
+  const inisial     = nama.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()
 
-  const paketList = useMemo(() => {
-    return ["Semua", ...Array.from(new Set(data.map((x) => x.paket).filter(Boolean)))]
-  }, [data])
-
-  const filtered = useMemo(() => {
-    return data.filter((item) => {
-      const key = search.toLowerCase()
-      return (
-        (item.profiles.nama.toLowerCase().includes(key) ||
-          item.profiles.email.toLowerCase().includes(key)) &&
-        (filterMapel === "Semua" || item.kategori === filterMapel) &&
-        (filterPaket === "Semua" || item.paket    === filterPaket)
-      )
-    })
-  }, [data, search, filterMapel, filterPaket])
-
-  const paketSummaries = useMemo((): PaketSummary[] => {
-    const map = new Map<string, PaketSummary>()
-
-    const source = data.filter((item) => {
-      const key = search.toLowerCase()
-      return (
-        (item.profiles.nama.toLowerCase().includes(key) ||
-          item.profiles.email.toLowerCase().includes(key)) &&
-        (filterPaket === "Semua" || item.paket === filterPaket)
-      )
-    })
-
-    source.forEach((item) => {
-      // FIX: package_id sudah string, tidak perlu konversi
-      const key = `${item.user_id}__${item.paket}__${item.package_id ?? ""}`
-      if (!map.has(key)) {
-        map.set(key, {
-          paket: item.paket || "-",
-          package_id: item.package_id,
-          mapel: [], total: 0, rata: 0,
-          tanggal: item.tanggal,
-          user_id: item.user_id,
-          nama:  item.profiles.nama,
-          email: item.profiles.email,
-          foto:  item.profiles.foto,
-        })
-      }
-      const entry = map.get(key)!
-      entry.mapel.push({ kategori: item.kategori, skor: item.skor })
-      entry.total += item.skor
-    })
-
-    map.forEach((entry) => {
-      entry.rata = entry.mapel.length > 0
-        ? Math.round(entry.total / entry.mapel.length) : 0
-    })
-
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime()
-    )
-  }, [data, search, filterPaket])
-
-  const totalUjian      = filtered.length
-  const totalSiswa      = new Set(filtered.map((x) => x.user_id)).size
-  const rataNilai       = filtered.length === 0 ? 0 : Math.round(filtered.reduce((a, b) => a + b.skor, 0) / filtered.length)
-  const nilaiTertinggi  = filtered.length === 0 ? 0 : Math.max(...filtered.map((x) => x.skor))
-
-  function exportExcel() {
-    if (viewMode === "table") {
-      const rows = filtered.map((item, i) => ({
-        No: i + 1,
-        Nama: item.profiles.nama,
-        Email: item.profiles.email,
-        Paket: item.paket || "-",
-        Mapel: item.kategori,
-        Nilai: item.skor,
-        Tanggal: new Date(item.tanggal).toLocaleString("id-ID"),
-      }))
-      const ws = XLSX.utils.json_to_sheet(rows)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, "Rekap")
-      XLSX.writeFile(wb, "rekap_nilai.xlsx")
-    } else {
-      const rows: any[] = []
-      paketSummaries.forEach((p, i) => {
-        const mapelObj: any = {}
-        p.mapel.forEach((m) => { mapelObj[m.kategori] = m.skor })
-        rows.push({ No: i + 1, Nama: p.nama, Email: p.email, Paket: p.paket, ...mapelObj, "Total Skor": p.total, "Rata-rata": p.rata, Tanggal: new Date(p.tanggal).toLocaleString("id-ID") })
+  async function downloadPDF() {
+    if (!printRef.current) return
+    try {
+      setPdfLoading(true)
+      const node = printRef.current
+      const dataUrl = await toPng(node, {
+        cacheBust: true, pixelRatio: 2, backgroundColor: "#06080F",
+        width: node.scrollWidth, height: node.scrollHeight,
+        style: { transform: "scale(1)", transformOrigin: "top left", width: `${node.scrollWidth}px`, height: `${node.scrollHeight}px` },
       })
-      const ws = XLSX.utils.json_to_sheet(rows)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, "Rekap Per Paket")
-      XLSX.writeFile(wb, "rekap_per_paket.xlsx")
+      const img = new Image()
+      img.src = dataUrl
+      await new Promise((res) => { img.onload = res })
+      const pdfW = 210
+      const pdfH = Math.ceil((img.naturalHeight / img.naturalWidth) * pdfW)
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [pdfW, pdfH] })
+      pdf.addImage(dataUrl, "PNG", 0, 0, pdfW, pdfH)
+      pdf.save(`rapor_${nama}.pdf`)
+    } catch (err) {
+      console.error(err); alert("Gagal download PDF")
+    } finally {
+      setPdfLoading(false)
     }
   }
 
-async function exportPDF() {
-  if (!printRef.current) return
-  const canvas  = await html2canvas(printRef.current, { scale: 2 })
-  const imgData = canvas.toDataURL("image/png")
-
-  // Hitung tinggi PDF sesuai konten — 1 halaman tidak terpotong
-  const pdfW = 210
-  const pdfH = Math.ceil((canvas.height / canvas.width) * pdfW)
-
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [pdfW, pdfH] })
-  pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH)
-  pdf.save("rekap_admin.pdf")
-}
-
-  // ── loading ───────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
-          <p className="text-sm text-slate-400">Memuat data rekap...</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#06080F]">
+      <div className="flex flex-col items-center gap-2">
+        <div className="w-7 h-7 rounded-full border-2 border-[#60A5FA]/20 border-t-[#60A5FA] animate-spin" />
+        <p className="text-[#60A5FA]/50 text-xs">Memuat rekap...</p>
       </div>
-    )
-  }
+    </div>
+  )
+
+  const activePaket = paketSummary[activeTab]
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#06080F] text-white">
 
-      {/* HEADER */}
-      <div className="sticky top-0 z-50 bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[3px] text-indigo-500 uppercase leading-none mb-0.5">
-              Admin
-            </p>
-            <h1 className="text-[15px] font-semibold text-slate-800 leading-none">
-              Rekap Nilai
-            </h1>
+      {/* TOPBAR */}
+      <header className="sticky top-0 z-40 bg-[#06080F]/95 backdrop-blur-xl border-b border-white/[0.06]">
+        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center gap-3">
+          <button onClick={() => router.push("/dashboard")}
+            className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/50 flex items-center justify-center text-sm hover:bg-white/10 transition shrink-0">
+            ←
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[8px] tracking-[3px] text-white/20 uppercase font-bold leading-none">Lampung Cerdas</p>
+            <p className="text-sm font-extrabold text-white leading-tight">Rekap Akademik</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push("/admin")}
-              className="h-8 px-4 rounded-lg border border-slate-200 text-[13px] text-slate-600 hover:bg-slate-50 transition"
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={exportExcel}
-              className="h-8 px-4 rounded-lg bg-emerald-50 text-emerald-700 text-[13px] font-medium hover:bg-emerald-100 transition border border-emerald-200"
-            >
-              ↓ Excel
-            </button>
-            <button
-              onClick={exportPDF}
-              className="h-8 px-4 rounded-lg bg-rose-50 text-rose-600 text-[13px] font-medium hover:bg-rose-100 transition border border-rose-200"
-            >
-              ↓ PDF
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 py-5 space-y-4">
-
-        {/* STAT CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Total ujian"     value={totalUjian}     color="indigo"  />
-          <StatCard label="Total siswa"     value={totalSiswa}     color="violet"  />
-          <StatCard label="Rata-rata nilai" value={rataNilai}      color="amber"   />
-          <StatCard label="Nilai tertinggi" value={nilaiTertinggi} color="emerald" />
-        </div>
-
-        {/* FILTER ROW */}
-        <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 flex flex-col lg:flex-row gap-3">
-          <div className="relative flex-1">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nama atau email siswa..."
-              className="w-full h-10 rounded-xl border border-slate-200 px-4 pr-10 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-          </div>
-
-          <select
-            value={filterPaket}
-            onChange={(e) => setFilterPaket(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition bg-white"
-          >
-            {paketList.map((item) => <option key={item}>{item}</option>)}
-          </select>
-
-          {viewMode === "table" && (
-            <select
-              value={filterMapel}
-              onChange={(e) => setFilterMapel(e.target.value)}
-              className="h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition bg-white"
-            >
-              {mapelList.map((item) => <option key={item}>{item}</option>)}
-            </select>
-          )}
-
-          <button
-            onClick={getData}
-            className="h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition"
-          >
-            ↻ Refresh
+          <button onClick={downloadPDF} disabled={pdfLoading}
+            className="shrink-0 h-8 px-3 md:px-4 rounded-lg bg-[#6366F1] hover:bg-[#4F46E5] disabled:opacity-50 text-white text-[11px] md:text-xs font-bold transition flex items-center gap-1.5">
+            {pdfLoading
+              ? <><span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />Membuat...</>
+              : <>⬇ PDF</>}
           </button>
         </div>
+      </header>
 
-        {/* VIEW TOGGLE */}
-        <div className="flex gap-1.5">
-          {(["table", "paket"] as ViewMode[]).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={`h-8 px-4 rounded-lg text-xs font-medium transition ${
-                viewMode === mode
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white border border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
-              }`}
-            >
-              {mode === "table" ? "Tabel nilai" : "Per paket"}
-            </button>
-          ))}
-          <span className="ml-auto text-[11px] text-slate-400 bg-slate-100 rounded-full px-2.5 py-1 self-center">
-            {viewMode === "table" ? `${filtered.length} baris` : `${paketSummaries.length} paket`}
-          </span>
-        </div>
+      <div ref={printRef} className="max-w-3xl mx-auto px-3 py-5 md:px-8 md:py-8 space-y-5">
 
-        {/* ── TABLE VIEW ── */}
-        {viewMode === "table" && (
-          <div ref={printRef} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[780px]">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    {["No", "Siswa", "Paket", "Mapel", "Nilai", "Tanggal"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-14 text-center">
-                        <p className="text-3xl mb-2">📭</p>
-                        <p className="text-sm text-slate-500">Tidak ada data</p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {data.length === 0 ? "Belum ada hasil ujian" : `${data.length} data tersedia, coba ubah filter`}
-                        </p>
-                      </td>
-                    </tr>
-                  ) : (
-                    filtered.map((item, i) => {
-                      const color = getAvatarColor(item.profiles.nama)
-                      return (
-                        <tr key={item.id} className="hover:bg-slate-50 transition">
-                          <td className="px-4 py-3 text-xs text-slate-400 font-medium">#{i + 1}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2.5">
-                              {item.profiles.foto ? (
-                                <img src={item.profiles.foto} className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0" />
-                              ) : (
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 ${color.bg} ${color.text}`}>
-                                  {item.profiles.nama.slice(0, 2).toUpperCase()}
-                                </div>
-                              )}
-                              <div>
-                                <p className="text-sm font-medium text-slate-800">{item.profiles.nama}</p>
-                                <p className="text-[11px] text-slate-400">{item.profiles.email}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3"><PaketBadge paket={item.paket} /></td>
-                          <td className="px-4 py-3"><span className="text-sm text-slate-600">{item.kategori}</span></td>
-                          <td className="px-4 py-3"><NilaiBadge skor={item.skor} /></td>
-                          <td className="px-4 py-3 text-[11px] text-slate-400 whitespace-nowrap">
-                            {new Date(item.tanggal).toLocaleString("id-ID", {
-                              day: "numeric", month: "short", year: "numeric",
-                              hour: "2-digit", minute: "2-digit",
-                            })}
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── PER PAKET VIEW ── */}
-        {viewMode === "paket" && (
-          <div ref={printRef} className="space-y-3">
-            {paketSummaries.length === 0 && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-14 text-center">
-                <p className="text-3xl mb-2">📭</p>
-                <p className="text-sm text-slate-500">Tidak ada data</p>
-                <p className="text-xs text-slate-400 mt-1">Coba ubah filter pencarian</p>
+        {/* PROFILE CARD */}
+        <div className="relative overflow-hidden rounded-2xl bg-[#0D1220] border border-white/[0.06] p-4 md:p-8">
+          <div className="absolute -top-10 -right-10 w-52 h-52 bg-[#6366F1]/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-3 md:gap-6">
+            {foto ? (
+              <img src={foto} alt="foto" className="w-14 h-14 md:w-20 md:h-20 rounded-2xl object-cover border border-white/10 shrink-0" />
+            ) : (
+              <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-[#6366F1] to-[#8B5CF6] flex items-center justify-center text-lg md:text-2xl font-extrabold shrink-0">
+                {inisial}
               </div>
             )}
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] tracking-[3px] text-white/25 uppercase font-bold mb-0.5">Laporan Siswa</p>
+              <h1 className="text-base md:text-2xl font-extrabold text-white truncate">{nama}</h1>
+              <p className="text-[10px] md:text-xs text-white/30 truncate mt-0.5">{email}</p>
+              <div className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] md:text-xs font-bold ${gradeGlobal.bg} ${gradeGlobal.color}`}>
+                Grade {gradeGlobal.label} · Rata-rata {rataRata}
+              </div>
+            </div>
+            <div className="hidden md:block shrink-0">
+              <ScoreRing value={rataRata} />
+            </div>
+          </div>
+        </div>
 
-            {paketSummaries.map((summary, i) => {
-              const key        = `${summary.user_id}-${summary.paket}-${i}`
-              const isExpanded = expandedPaket === key
-              const color      = getAvatarColor(summary.nama)
+        {/* STATS */}
+        <div className="grid grid-cols-4 gap-2 md:gap-4">
+          {[
+            { label: "Total Ujian", value: hasil.length, icon: "📝" },
+            { label: "Rata-rata",   value: rataRata,     icon: "⭐" },
+            { label: "Tertinggi",   value: tertinggi,    icon: "🏆" },
+            { label: "Terendah",    value: terendah,     icon: "📉" },
+          ].map((s) => (
+            <div key={s.label} className="bg-[#0D1220] border border-white/[0.06] rounded-xl md:rounded-2xl p-3 md:p-5 flex flex-col items-center text-center">
+              <span className="text-xl md:text-3xl mb-1">{s.icon}</span>
+              <p className="text-lg md:text-3xl font-extrabold text-white">{s.value}</p>
+              <p className="text-[9px] md:text-[10px] text-white/25 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
 
+        {/* PAKET TABS */}
+        {paketSummary.length > 0 && (
+          <div>
+            <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+              {paketSummary.map((p, i) => {
+                const st = getPaketStyle(p.paket)
+                return (
+                  <button key={i} onClick={() => setActiveTab(i)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] md:text-xs font-bold border transition-all
+                      ${i === activeTab
+                        ? `bg-gradient-to-r ${st.grad} text-white border-transparent shadow-lg`
+                        : "bg-white/[0.04] text-white/40 border-white/[0.07] hover:text-white/60"
+                      }`}>
+                    {p.paket}
+                  </button>
+                )
+              })}
+            </div>
+
+            {activePaket && (() => {
+              const st = getPaketStyle(activePaket.paket)
               return (
-                <div key={key} className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition">
-                  <div
-                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition"
-                    onClick={() => setExpandedPaket(isExpanded ? null : key)}
-                  >
-                    {summary.foto ? (
-                      <img src={summary.foto} className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0" />
-                    ) : (
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${color.bg} ${color.text}`}>
-                        {summary.nama.slice(0, 2).toUpperCase()}
+                <div className="bg-[#0D1220] border border-white/[0.06] rounded-2xl overflow-hidden">
+                  <div className={`bg-gradient-to-r ${st.grad} p-4 md:p-6`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[9px] tracking-[3px] text-white/50 uppercase font-bold">Paket</p>
+                        <h2 className="text-lg md:text-2xl font-extrabold text-white">{activePaket.paket}</h2>
                       </div>
-                    )}
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium text-slate-800">{summary.nama}</p>
-                        <PaketBadge paket={summary.paket} />
+                      <div className="flex gap-2 shrink-0">
+                        {[
+                          { label: "Ujian",     value: activePaket.total_ujian },
+                          { label: "Rata-rata", value: activePaket.rata_rata   },
+                          { label: "Tertinggi", value: activePaket.tertinggi   },
+                          { label: "Terendah",  value: activePaket.terendah    },
+                        ].map((ms) => (
+                          <div key={ms.label} className="bg-black/20 rounded-xl px-2.5 py-2 text-center border border-white/10">
+                            <p className="text-sm md:text-xl font-extrabold text-white">{ms.value}</p>
+                            <p className="text-[8px] md:text-[10px] text-white/50 mt-0.5">{ms.label}</p>
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{summary.email}</p>
-                    </div>
-
-                    <div className="hidden md:flex gap-1.5 flex-wrap justify-end">
-                      {summary.mapel.map((m) => (
-                        <div key={m.kategori} className="flex items-center gap-1 bg-slate-100 rounded-lg px-2.5 py-1">
-                          <span className="text-[10px] text-slate-500">{m.kategori}</span>
-                          <span className="text-[10px] font-semibold text-indigo-600">{m.skor}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="shrink-0 text-right ml-2">
-                      <p className="text-lg font-bold text-indigo-600">{summary.rata}</p>
-                      <p className="text-[10px] text-slate-400">rata-rata</p>
-                    </div>
-
-                    <div className={`shrink-0 w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs transition-transform ${isExpanded ? "rotate-180" : ""}`}>
-                      ▾
                     </div>
                   </div>
 
-                  {isExpanded && (
-                    <div className="border-t border-slate-100 px-4 pb-4 pt-3">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
-                        Detail per mapel
-                      </p>
+                  {/* MOBILE LIST */}
+                  <div className="md:hidden divide-y divide-white/[0.05]">
+                    {activePaket.data.map((item, i) => {
+                      const g = grade(item.skor)
+                      const col = gradeColor(item.skor)
+                      return (
+                        <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+                          <span className="text-[10px] text-white/20 font-bold w-4 shrink-0">{i + 1}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-white truncate">{item.kategori}</p>
+                            <p className="text-[10px] text-white/30 mt-0.5">
+                              {new Date(item.tanggal).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-2">
+                            <span className="text-base font-extrabold" style={{ color: col }}>{item.skor}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${g.bg} ${g.color}`}>{g.label}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {summary.mapel.map((m) => {
-                          const pct   = Math.min(100, Math.round((m.skor / 40) * 100))
-                          const bar   =
-                            m.skor >= 30 ? "bg-emerald-500"
-                            : m.skor >= 20 ? "bg-indigo-500"
-                            : m.skor >= 10 ? "bg-amber-500"
-                            : "bg-rose-500"
-                          const score =
-                            m.skor >= 30 ? "text-emerald-600"
-                            : m.skor >= 20 ? "text-indigo-600"
-                            : m.skor >= 10 ? "text-amber-600"
-                            : "text-rose-500"
-
+                  {/* DESKTOP TABLE */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-white/[0.06]">
+                          {["No", "Mata Pelajaran", "Nilai", "Grade", "Tanggal"].map((h) => (
+                            <th key={h} className="px-6 py-3 text-left text-[10px] font-bold tracking-widest text-white/25 uppercase">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.04]">
+                        {activePaket.data.map((item, i) => {
+                          const g = grade(item.skor)
                           return (
-                            <div key={m.kategori} className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                              <p className="text-[11px] font-medium text-slate-500 mb-1 truncate">{m.kategori}</p>
-                              <p className={`text-2xl font-bold mb-2 ${score}`}>{m.skor}</p>
-                              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${bar} transition-all`} style={{ width: `${pct}%` }} />
-                              </div>
-                            </div>
+                            <tr key={item.id} className="hover:bg-white/[0.02] transition">
+                              <td className="px-6 py-4 text-sm text-white/25 font-bold">{i + 1}</td>
+                              <td className="px-6 py-4 text-sm font-semibold text-white">{item.kategori}</td>
+                              <td className="px-6 py-4"><ScoreRing value={item.skor} /></td>
+                              <td className="px-6 py-4">
+                                <span className={`inline-flex px-3 py-1 rounded-lg border text-xs font-bold ${g.bg} ${g.color}`}>{g.label}</span>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-white/35">
+                                {new Date(item.tanggal).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                              </td>
+                            </tr>
                           )
                         })}
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-                        <div className="flex gap-5">
-                          {[
-                            { label: "Total skor",   val: summary.total        },
-                            { label: "Rata-rata",     val: summary.rata         },
-                            { label: "Jumlah mapel",  val: summary.mapel.length },
-                          ].map((s) => (
-                            <div key={s.label}>
-                              <p className="text-[10px] text-indigo-400 font-medium">{s.label}</p>
-                              <p className="text-lg font-bold text-indigo-700">{s.val}</p>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-[11px] text-indigo-400">
-                          {new Date(summary.tanggal).toLocaleDateString("id-ID", {
-                            day: "numeric", month: "long", year: "numeric",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )
-            })}
+            })()}
           </div>
         )}
 
+        {hasil.length === 0 && (
+          <div className="text-center py-16 bg-[#0D1220] border border-white/[0.06] rounded-2xl">
+            <div className="text-4xl mb-3">📚</div>
+            <p className="text-white font-bold text-sm">Belum Ada Nilai</p>
+            <p className="text-white/30 text-xs mt-1">Ikuti ujian untuk melihat rekap nilaimu</p>
+          </div>
+        )}
       </div>
     </div>
-  )
-}
-
-// ── STAT CARD ─────────────────────────────────────────────────
-
-const STAT_STYLES: Record<string, { bg: string; num: string; label: string }> = {
-  indigo:  { bg: "bg-indigo-50  border-indigo-100",  num: "text-indigo-700",  label: "text-indigo-400"  },
-  violet:  { bg: "bg-violet-50  border-violet-100",  num: "text-violet-700",  label: "text-violet-400"  },
-  amber:   { bg: "bg-amber-50   border-amber-100",   num: "text-amber-700",   label: "text-amber-400"   },
-  emerald: { bg: "bg-emerald-50 border-emerald-100", num: "text-emerald-700", label: "text-emerald-400" },
-}
-
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  const s = STAT_STYLES[color] ?? STAT_STYLES.indigo
-  return (
-    <div className={`border rounded-xl px-4 py-3 ${s.bg}`}>
-      <p className={`text-[11px] font-medium mb-1 ${s.label}`}>{label}</p>
-      <p className={`text-2xl font-bold ${s.num}`}>{value}</p>
-    </div>
-  )
-}
-
-// ── PAKET BADGE ───────────────────────────────────────────────
-
-const PAKET_COLORS: Record<string, string> = {
-  "Paket ipa":    "bg-sky-100    text-sky-700",
-  "Paket ips":    "bg-emerald-100 text-emerald-700",
-  "Paket bahasa": "bg-violet-100 text-violet-700",
-  "Paket smk":    "bg-orange-100 text-orange-700",
-}
-
-function PaketBadge({ paket }: { paket?: string }) {
-  const cls = PAKET_COLORS[paket || ""] || "bg-slate-100 text-slate-500"
-  return (
-    <span className={`inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${cls}`}>
-      {paket || "-"}
-    </span>
-  )
-}
-
-// ── NILAI BADGE ───────────────────────────────────────────────
-
-function NilaiBadge({ skor }: { skor: number }) {
-  const color =
-    skor >= 30 ? "bg-emerald-100 text-emerald-700"
-    : skor >= 20 ? "bg-indigo-100 text-indigo-700"
-    : skor >= 10 ? "bg-amber-100  text-amber-700"
-    : "bg-rose-100 text-rose-600"
-
-  return (
-    <span className={`inline-flex items-center justify-center h-8 min-w-[48px] px-3 rounded-lg text-sm font-bold ${color}`}>
-      {skor}
-    </span>
   )
 }
