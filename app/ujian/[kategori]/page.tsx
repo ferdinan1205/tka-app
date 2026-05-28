@@ -23,15 +23,7 @@ import {
   MathJaxContext,
 } from "better-react-mathjax"
 
-// ======================
-// CACHE VERSION
-// ======================
-
 const CACHE_VERSION = "v5"
-
-// ======================
-// TYPES
-// ======================
 
 type Soal = {
   id: number
@@ -52,12 +44,8 @@ type SavedState = {
   answers: Record<number, string>
   currentSoal: number
   timeLeft: number
-  deadline?: number // ← TAMBAH INI (Unix timestamp ms)
+  deadline?: number
 }
-
-// ======================
-// MATH CONFIG
-// ======================
 
 const mathJaxConfig = {
   loader: { load: ["input/tex", "output/chtml"] },
@@ -126,57 +114,18 @@ const MathRenderer = memo(({ text, className = "" }: { text: string; className?:
 })
 MathRenderer.displayName = "MathRenderer"
 
-// ======================
-// HASIL MODAL
-// ======================
 function HasilModal({ skor, total, onClose }: { skor: number; total: number; onClose: () => void }) {
   const pct = Math.round((skor / total) * 100)
 
   type Tier = { emoji: string; title: string; sub: string; bg: string; ring: string; btnBg: string; confetti: string[]; particleAnim: string }
 
   const tier: Tier = pct === 100
-    ? {
-        emoji: "🏆",
-        title: "SEMPURNA!",
-        sub: "Luar biasa! Kamu menjawab semua soal dengan benar!",
-        bg: "from-yellow-50 to-amber-50",
-        ring: "#F59E0B",
-        btnBg: "from-amber-500 to-yellow-500 shadow-amber-200",
-        confetti: ["#F59E0B", "#FCD34D", "#FDE68A", "#FBBF24", "#fff"],
-        particleAnim: "bounce",
-      }
+    ? { emoji: "🏆", title: "SEMPURNA!", sub: "Luar biasa! Kamu menjawab semua soal dengan benar!", bg: "from-yellow-50 to-amber-50", ring: "#F59E0B", btnBg: "from-amber-500 to-yellow-500 shadow-amber-200", confetti: ["#F59E0B", "#FCD34D", "#FDE68A", "#FBBF24", "#fff"], particleAnim: "bounce" }
     : pct >= 80
-    ? {
-        emoji: "🎉",
-        title: "Hebat!",
-        sub: "Hasil yang sangat baik! Terus pertahankan prestasimu.",
-        bg: "from-indigo-50 to-blue-50",
-        ring: "#6366F1",
-        btnBg: "from-indigo-600 to-blue-600 shadow-indigo-200",
-        confetti: ["#6366F1", "#818CF8", "#A5B4FC", "#60A5FA", "#fff"],
-        particleAnim: "float",
-      }
+    ? { emoji: "🎉", title: "Hebat!", sub: "Hasil yang sangat baik! Terus pertahankan prestasimu.", bg: "from-indigo-50 to-blue-50", ring: "#6366F1", btnBg: "from-indigo-600 to-blue-600 shadow-indigo-200", confetti: ["#6366F1", "#818CF8", "#A5B4FC", "#60A5FA", "#fff"], particleAnim: "float" }
     : pct >= 50
-    ? {
-        emoji: "💪",
-        title: "Lumayan!",
-        sub: "Nilaimu sudah cukup, tapi masih bisa lebih baik lagi.",
-        bg: "from-orange-50 to-yellow-50",
-        ring: "#F97316",
-        btnBg: "from-orange-500 to-yellow-500 shadow-orange-200",
-        confetti: ["#F97316", "#FB923C", "#FCD34D", "#FBBF24", "#fff"],
-        particleAnim: "wiggle",
-      }
-    : {
-        emoji: "📚",
-        title: "Harus Belajar Lagi",
-        sub: "Jangan menyerah! Pelajari materi lebih giat dan coba lagi.",
-        bg: "from-red-50 to-rose-50",
-        ring: "#EF4444",
-        btnBg: "from-red-500 to-rose-500 shadow-red-200",
-        confetti: ["#EF4444", "#F87171", "#FCA5A5", "#FDA4AF", "#fff"],
-        particleAnim: "pulse",
-      }
+    ? { emoji: "💪", title: "Lumayan!", sub: "Nilaimu sudah cukup, tapi masih bisa lebih baik lagi.", bg: "from-orange-50 to-yellow-50", ring: "#F97316", btnBg: "from-orange-500 to-yellow-500 shadow-orange-200", confetti: ["#F97316", "#FB923C", "#FCD34D", "#FBBF24", "#fff"], particleAnim: "wiggle" }
+    : { emoji: "📚", title: "Harus Belajar Lagi", sub: "Jangan menyerah! Pelajari materi lebih giat dan coba lagi.", bg: "from-red-50 to-rose-50", ring: "#EF4444", btnBg: "from-red-500 to-rose-500 shadow-red-200", confetti: ["#EF4444", "#F87171", "#FCA5A5", "#FDA4AF", "#fff"], particleAnim: "pulse" }
 
   const particles = Array.from({ length: 28 }, (_, i) => ({
     id: i,
@@ -205,56 +154,27 @@ function HasilModal({ skor, total, onClose }: { skor: number; total: number; onC
 
       {particles.map((p) => (
         <div key={p.id} className="absolute top-0 pointer-events-none"
-          style={{
-            left: p.left, width: p.size, height: p.size,
-            backgroundColor: p.color, borderRadius: "2px",
-            animation: `fall ${p.duration} ${p.delay} ease-in both`,
-            transform: `rotate(${p.rotate})`,
-          }} />
+          style={{ left: p.left, width: p.size, height: p.size, backgroundColor: p.color, borderRadius: "2px", animation: `fall ${p.duration} ${p.delay} ease-in both`, transform: `rotate(${p.rotate})` }} />
       ))}
 
-      <div
-        className={`relative w-full max-w-sm bg-gradient-to-br ${tier.bg} rounded-3xl shadow-2xl border border-white overflow-hidden`}
-        style={{ animation: "modalIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both" }}
-      >
+      <div className={`relative w-full max-w-sm bg-gradient-to-br ${tier.bg} rounded-3xl shadow-2xl border border-white overflow-hidden`}
+        style={{ animation: "modalIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both" }}>
         <div className="h-1.5 w-full" style={{ background: tier.ring }} />
-
         <div className="p-7 flex flex-col items-center text-center gap-4">
-          <div className="text-6xl" style={{ animation: "emojiPop 0.6s 0.2s cubic-bezier(0.34,1.56,0.64,1) both" }}>
-            {tier.emoji}
-          </div>
-
+          <div className="text-6xl" style={{ animation: "emojiPop 0.6s 0.2s cubic-bezier(0.34,1.56,0.64,1) both" }}>{tier.emoji}</div>
           <div className="relative">
             <svg width="140" height="140">
               <circle cx="70" cy="70" r={r} fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth="10" />
-              <circle cx="70" cy="70" r={r} fill="none"
-                stroke={tier.ring} strokeWidth="10" strokeLinecap="round"
-                strokeDasharray={c}
-                strokeDashoffset={c * (1 - pct / 100)}
-                transform="rotate(-90 70 70)"
-                style={{ animation: `ringDraw 1.2s 0.3s cubic-bezier(0.4,0,0.2,1) both` }}
-              />
-              <text x="70" y="62" textAnchor="middle" fontSize="26" fontWeight="900" fill={tier.ring}
-                style={{ animation: "scoreCount 0.5s 0.8s both" }}>
-                {skor}
-              </text>
-              <text x="70" y="80" textAnchor="middle" fontSize="11" fontWeight="700" fill="#94A3B8">
-                dari {total}
-              </text>
-              <text x="70" y="98" textAnchor="middle" fontSize="13" fontWeight="900" fill={tier.ring}>
-                {pct}%
-              </text>
+              <circle cx="70" cy="70" r={r} fill="none" stroke={tier.ring} strokeWidth="10" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform="rotate(-90 70 70)" style={{ animation: `ringDraw 1.2s 0.3s cubic-bezier(0.4,0,0.2,1) both` }} />
+              <text x="70" y="62" textAnchor="middle" fontSize="26" fontWeight="900" fill={tier.ring} style={{ animation: "scoreCount 0.5s 0.8s both" }}>{skor}</text>
+              <text x="70" y="80" textAnchor="middle" fontSize="11" fontWeight="700" fill="#94A3B8">dari {total}</text>
+              <text x="70" y="98" textAnchor="middle" fontSize="13" fontWeight="900" fill={tier.ring}>{pct}%</text>
             </svg>
           </div>
-
           <div>
-            <h2 className="text-2xl font-black text-slate-900 mb-1"
-              style={{ animation: "shimmer 2s 1s ease-in-out infinite", color: tier.ring }}>
-              {tier.title}
-            </h2>
+            <h2 className="text-2xl font-black text-slate-900 mb-1" style={{ animation: "shimmer 2s 1s ease-in-out infinite", color: tier.ring }}>{tier.title}</h2>
             <p className="text-sm text-slate-500 leading-relaxed">{tier.sub}</p>
           </div>
-
           <div className="w-full grid grid-cols-3 gap-2">
             {[
               { label: "Benar", value: skor / 4, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100" },
@@ -267,9 +187,7 @@ function HasilModal({ skor, total, onClose }: { skor: number; total: number; onC
               </div>
             ))}
           </div>
-
-          <button onClick={onClose}
-            className={`w-full h-12 rounded-2xl bg-gradient-to-r ${tier.btnBg} text-white font-black text-sm shadow-lg transition hover:opacity-90 active:scale-[0.98]`}>
+          <button onClick={onClose} className={`w-full h-12 rounded-2xl bg-gradient-to-r ${tier.btnBg} text-white font-black text-sm shadow-lg transition hover:opacity-90 active:scale-[0.98]`}>
             Lihat Review →
           </button>
         </div>
@@ -278,22 +196,8 @@ function HasilModal({ skor, total, onClose }: { skor: number; total: number; onC
   )
 }
 
-// ======================
-// COLLAPSIBLE BOX
-// ======================
-function CollapsibleBox({
-  label,
-  colorScheme,
-  children,
-  defaultOpen = false,
-}: {
-  label: string
-  colorScheme: "blue" | "amber" | "slate"
-  children: React.ReactNode
-  defaultOpen?: boolean
-}) {
+function CollapsibleBox({ label, colorScheme, children, defaultOpen = false }: { label: string; colorScheme: "blue" | "amber" | "slate"; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
-
   const scheme = {
     blue:  { bg: "bg-blue-50",  border: "border-blue-100",  badge: "bg-blue-100 text-blue-500",  icon: "text-blue-400",  label: "text-blue-500"  },
     amber: { bg: "bg-amber-50", border: "border-amber-100", badge: "bg-amber-100 text-amber-600", icon: "text-amber-400", label: "text-amber-600" },
@@ -303,33 +207,17 @@ function CollapsibleBox({
   return (
     <>
       <div className={`md:hidden rounded-2xl border ${scheme.border} overflow-hidden`}>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className={`w-full flex items-center justify-between px-3.5 py-2.5 ${scheme.bg} transition`}
-        >
+        <button onClick={() => setOpen((v) => !v)} className={`w-full flex items-center justify-between px-3.5 py-2.5 ${scheme.bg} transition`}>
           <div className="flex items-center gap-2">
             <span className={`text-[9px] font-black uppercase tracking-widest ${scheme.label}`}>{label}</span>
-            {!open && (
-              <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full ${scheme.badge}`}>
-                Tap untuk baca
-              </span>
-            )}
+            {!open && <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full ${scheme.badge}`}>Tap untuk baca</span>}
           </div>
-          <svg
-            width="14" height="14" fill="none" viewBox="0 0 24 24"
-            stroke="currentColor" strokeWidth="2.5"
-            className={`transition-transform duration-200 shrink-0 ${scheme.icon} ${open ? "rotate-180" : ""}`}
-          >
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" className={`transition-transform duration-200 shrink-0 ${scheme.icon} ${open ? "rotate-180" : ""}`}>
             <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        {open && (
-          <div className={`px-3.5 pb-3.5 pt-2 ${scheme.bg}`}>
-            {children}
-          </div>
-        )}
+        {open && <div className={`px-3.5 pb-3.5 pt-2 ${scheme.bg}`}>{children}</div>}
       </div>
-
       <div className={`hidden md:block ${scheme.bg} border ${scheme.border} rounded-2xl p-4`}>
         <p className={`text-[9px] font-black uppercase tracking-widest ${scheme.label} mb-2`}>{label}</p>
         {children}
@@ -338,29 +226,14 @@ function CollapsibleBox({
   )
 }
 
-// ======================
-// OPTION BADGE
-// ======================
 function OptionBadge({ label, selected, answered }: { label: string; selected: boolean; answered: boolean }) {
   return (
-    <div className={`
-      w-8 h-8 min-w-[32px] rounded-lg flex items-center justify-center
-      text-[13px] font-black transition-all duration-200 shrink-0
-      ${selected
-        ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
-        : answered
-        ? "bg-indigo-50 text-indigo-400 border border-indigo-200"
-        : "bg-slate-100 text-slate-500 border border-slate-200"
-      }
-    `}>
+    <div className={`w-8 h-8 min-w-[32px] rounded-lg flex items-center justify-center text-[13px] font-black transition-all duration-200 shrink-0 ${selected ? "bg-indigo-600 text-white shadow-md shadow-indigo-200" : answered ? "bg-indigo-50 text-indigo-400 border border-indigo-200" : "bg-slate-100 text-slate-500 border border-slate-200"}`}>
       {label}
     </div>
   )
 }
 
-// ======================
-// TIMER RING
-// ======================
 function TimerRing({ timeLeft, totalTime, urgent }: { timeLeft: number; totalTime: number; urgent: boolean }) {
   const r = 22
   const c = 2 * Math.PI * r
@@ -373,28 +246,14 @@ function TimerRing({ timeLeft, totalTime, urgent }: { timeLeft: number; totalTim
     <div className="flex flex-col items-center">
       <svg width="60" height="60">
         <circle cx="30" cy="30" r={r} fill="none" stroke={urgent ? "#FEE2E2" : "#EEF2FF"} strokeWidth="4" />
-        <circle cx="30" cy="30" r={r} fill="none"
-          stroke={urgent ? "#EF4444" : "#6366F1"}
-          strokeWidth="4" strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={c * (1 - pct)}
-          transform="rotate(-90 30 30)"
-          style={{ transition: "stroke-dashoffset 1s linear" }}
-        />
-        <text x="30" y="34" textAnchor="middle" fontSize="11" fontWeight="900"
-          fill={urgent ? "#EF4444" : "#6366F1"}>
-          {timeStr}
-        </text>
+        <circle cx="30" cy="30" r={r} fill="none" stroke={urgent ? "#EF4444" : "#6366F1"} strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)} transform="rotate(-90 30 30)" style={{ transition: "stroke-dashoffset 1s linear" }} />
+        <text x="30" y="34" textAnchor="middle" fontSize="11" fontWeight="900" fill={urgent ? "#EF4444" : "#6366F1"}>{timeStr}</text>
       </svg>
-      <p className={`text-[9px] font-bold tracking-widest uppercase mt-0.5 ${urgent ? "text-red-400" : "text-indigo-300"}`}>
-        Waktu
-      </p>
+      <p className={`text-[9px] font-bold tracking-widest uppercase mt-0.5 ${urgent ? "text-red-400" : "text-indigo-300"}`}>Waktu</p>
     </div>
   )
 }
 
-// ======================
-// MAIN PAGE
-// ======================
 export default function UjianPage() {
   const router = useRouter()
   const params = useParams()
@@ -422,51 +281,44 @@ export default function UjianPage() {
 
   useEffect(() => { init() }, [])
 
-const deadlineRef = useRef<number>(0)
+  const deadlineRef = useRef<number>(0)
 
-// SESUDAH:
-useEffect(() => {
-  if (!storageKey || timeLeft <= 0) return
+  useEffect(() => {
+    if (!storageKey || timeLeft <= 0) return
 
-  // Set deadline ref hanya sekali (saat pertama kali timeLeft > 0)
-  if (deadlineRef.current === 0) {
-    try {
-      const saved = localStorage.getItem(storageKey)
-      if (saved) {
-        const parsed: SavedState = JSON.parse(saved)
-        deadlineRef.current = parsed.deadline ?? (Date.now() + timeLeft * 1000)
-      } else {
+    if (deadlineRef.current === 0) {
+      try {
+        const saved = localStorage.getItem(storageKey)
+        if (saved) {
+          const parsed: SavedState = JSON.parse(saved)
+          deadlineRef.current = parsed.deadline ?? (Date.now() + timeLeft * 1000)
+        } else {
+          deadlineRef.current = Date.now() + timeLeft * 1000
+        }
+      } catch {
         deadlineRef.current = Date.now() + timeLeft * 1000
       }
-    } catch {
-      deadlineRef.current = Date.now() + timeLeft * 1000
     }
-  }
 
-  const deadline = deadlineRef.current
+    const deadline = deadlineRef.current
 
-  const interval = setInterval(() => {
-    const sisaMs = deadline - Date.now()
-    const newTime = Math.max(0, Math.floor(sisaMs / 1000))
+    const interval = setInterval(() => {
+      const sisaMs = deadline - Date.now()
+      const newTime = Math.max(0, Math.floor(sisaMs / 1000))
 
-    setTimeLeft(newTime)
+      setTimeLeft(newTime)
 
-    const { jawabanUser, currentSoal } = stateRef.current
-    localStorage.setItem(storageKey, JSON.stringify({
-      answers: jawabanUser,
-      currentSoal,
-      timeLeft: newTime,
-      deadline,
-    }))
+      const { jawabanUser, currentSoal } = stateRef.current
+      localStorage.setItem(storageKey, JSON.stringify({ answers: jawabanUser, currentSoal, timeLeft: newTime, deadline }))
 
-    if (newTime <= 0) {
-      clearInterval(interval)
-      handleAutoSubmit()
-    }
-  }, 1000)
+      if (newTime <= 0) {
+        clearInterval(interval)
+        handleAutoSubmit()
+      }
+    }, 1000)
 
-  return () => clearInterval(interval)
-}, [storageKey, timeLeft])
+    return () => clearInterval(interval)
+  }, [storageKey, timeLeft])
 
   async function init() {
     try {
@@ -487,49 +339,35 @@ useEffect(() => {
 
       await getSoal(userId)
 
-// SESUDAH:
-const saved = localStorage.getItem(key)
-const dur = jadwal.durasi * 60
+      const saved = localStorage.getItem(key)
+      const dur = jadwal.durasi * 60
 
-if (saved) {
-  const parsed: SavedState = JSON.parse(saved)
-  setJawabanUser(parsed.answers || {})
-  setCurrentSoal(parsed.currentSoal || 0)
+      if (saved) {
+        const parsed: SavedState = JSON.parse(saved)
+        setJawabanUser(parsed.answers || {})
+        setCurrentSoal(parsed.currentSoal || 0)
 
-  if (parsed.deadline) {
-    // Hitung sisa waktu dari deadline absolut
-    const sisaMs = parsed.deadline - Date.now()
-    const sisa = Math.max(0, Math.floor(sisaMs / 1000))
-    setTimeLeft(sisa)
-    if (sisa <= 0) {
-      // Waktu sudah habis saat user kembali
-      setLoading(false)
-      await submitUjian(true)
-      return
-    }
-  } else {
-    // Saved lama belum ada deadline, pakai timeLeft + set deadline baru
-    const sisa = parsed.timeLeft || dur
-    setTimeLeft(sisa)
-    // Langsung simpan deadline baru
-    const newDeadline = Date.now() + sisa * 1000
-    localStorage.setItem(key, JSON.stringify({
-      ...parsed,
-      deadline: newDeadline,
-    }))
-  }
-} else {
-  // Fresh start — buat deadline baru
-  const deadline = Date.now() + dur * 1000
-  setTimeLeft(dur)
-  localStorage.setItem(key, JSON.stringify({
-    answers: {},
-    currentSoal: 0,
-    timeLeft: dur,
-    deadline,
-  }))
-}
-setTotalTime(dur)
+        if (parsed.deadline) {
+          const sisaMs = parsed.deadline - Date.now()
+          const sisa = Math.max(0, Math.floor(sisaMs / 1000))
+          setTimeLeft(sisa)
+          if (sisa <= 0) {
+            setLoading(false)
+            await submitUjian(true)
+            return
+          }
+        } else {
+          const sisa = parsed.timeLeft || dur
+          setTimeLeft(sisa)
+          const newDeadline = Date.now() + sisa * 1000
+          localStorage.setItem(key, JSON.stringify({ ...parsed, deadline: newDeadline }))
+        }
+      } else {
+        const deadline = Date.now() + dur * 1000
+        setTimeLeft(dur)
+        localStorage.setItem(key, JSON.stringify({ answers: {}, currentSoal: 0, timeLeft: dur, deadline }))
+      }
+      setTotalTime(dur)
 
       setLoading(false)
     } catch (err) {
@@ -540,12 +378,8 @@ setTotalTime(dur)
   async function getSoal(userId: string) {
     const soalKey = `soal_${kategori}_${packageId}_${userId}_${CACHE_VERSION}`
 
-    // HAPUS CACHE LAMA JIKA VERSI BERBEDA
     Object.keys(localStorage).forEach((key) => {
-      if (
-        key.startsWith(`soal_${kategori}_${packageId}_${userId}`) &&
-        key !== soalKey
-      ) {
+      if (key.startsWith(`soal_${kategori}_${packageId}_${userId}`) && key !== soalKey) {
         localStorage.removeItem(key)
       }
     })
@@ -560,55 +394,19 @@ setTotalTime(dur)
     let finalData: any[] = []
 
     if (packageId) {
-      console.log("=== DEBUG GET SOAL ===")
-      console.log("PACKAGE ID:", packageId)
-      console.log("KATEGORI:", kategori)
-
       const { data, error } = await supabase
         .from("package_soal")
-        .select(`
-          soal (
-            id,
-            pertanyaan,
-            pengantar,
-            bacaan,
-            opsi_a,
-            opsi_b,
-            opsi_c,
-            opsi_d,
-            opsi_e,
-            jawaban_benar,
-            kategori,
-            gambar
-          )
-        `)
+        .select(`soal ( id, pertanyaan, pengantar, bacaan, opsi_a, opsi_b, opsi_c, opsi_d, opsi_e, jawaban_benar, kategori, gambar )`)
         .eq("package_id", Number(packageId))
 
-      console.log("DATA PACKAGE:", data)
-
-      if (error) {
-        console.log("ERROR:", error)
-        alert("Gagal mengambil soal")
-        return
-      }
+      if (error) { console.log("ERROR:", error); alert("Gagal mengambil soal"); return }
 
       finalData = (data || [])
         .map((item: any) => item.soal)
-        .filter(
-          (item: any) =>
-            item !== null &&
-            item.kategori?.toLowerCase() === kategori.toLowerCase()
-        )
-
-      console.log("FINAL DATA:", finalData)
-      console.log("JUMLAH SOAL:", finalData.length)
+        .filter((item: any) => item !== null && item.kategori?.toLowerCase() === kategori.toLowerCase())
     }
 
-    if (finalData.length === 0) {
-      alert("Belum ada soal pada paket ini")
-      setSoal([])
-      return
-    }
+    if (finalData.length === 0) { alert("Belum ada soal pada paket ini"); setSoal([]); return }
 
     function shuffleArray(array: any[]) {
       const arr = [...array]
@@ -625,8 +423,6 @@ setTotalTime(dur)
     const shuffledTG = shuffleArray(soalTanpaGambar)
     const selected = [...shuffledDG, ...shuffledTG].slice(0, 25).sort(() => Math.random() - 0.5)
 
-    console.log("SELECTED:", selected)
-
     localStorage.setItem(soalKey, JSON.stringify(selected))
     setSoal(selected as Soal[])
   }
@@ -634,7 +430,7 @@ setTotalTime(dur)
   function pilihJawaban(id: number, jawaban: string) {
     const updated = { ...jawabanUser, [id]: jawaban }
     setJawabanUser(updated)
-    localStorage.setItem(storageKey, JSON.stringify({ answers: updated, currentSoal, timeLeft ,deadline: deadlineRef.current }))
+    localStorage.setItem(storageKey, JSON.stringify({ answers: updated, currentSoal, timeLeft, deadline: deadlineRef.current }))
   }
 
   function goToSoal(index: number) {
@@ -676,6 +472,7 @@ setTotalTime(dur)
 
         return {
           soal: soalLengkap,
+          gambar: item.gambar || null,   // ← PATCH: simpan URL gambar
           jawaban_user: jawaban || "-",
           jawaban_benar: item.jawaban_benar,
           benar,
@@ -711,9 +508,6 @@ setTotalTime(dur)
     }
   }
 
-  // ======================
-  // LOADING
-  // ======================
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-blue-50">
@@ -728,9 +522,6 @@ setTotalTime(dur)
     )
   }
 
-  // ======================
-  // EMPTY
-  // ======================
   if (!soal.length) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-2">
@@ -768,13 +559,11 @@ setTotalTime(dur)
           />
         )}
 
-        {/* HEADER */}
         <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-sm shadow-slate-100">
           <div className="max-w-5xl mx-auto px-3 md:px-8">
             <div className="flex items-center gap-3 py-3 md:py-4">
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                <button onClick={() => router.back()}
-                  className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition shrink-0 md:flex hidden">
+                <button onClick={() => router.back()} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition shrink-0 md:flex hidden">
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -791,14 +580,12 @@ setTotalTime(dur)
                   <span>{totalAnswered} dijawab</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-500"
-                    style={{ width: `${progress}%` }} />
+                  <div className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
                 </div>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => setShowNav(true)}
-                  className="md:hidden flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold transition hover:bg-slate-200">
+                <button onClick={() => setShowNav(true)} className="md:hidden flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold transition hover:bg-slate-200">
                   <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
                     <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
@@ -808,25 +595,20 @@ setTotalTime(dur)
 
                 <TimerRing timeLeft={timeLeft} totalTime={totalTime || 5400} urgent={timerUrgent} />
 
-                <button onClick={() => submitUjian()} disabled={submitting}
-                  className="hidden md:flex items-center gap-2 h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm shadow-md shadow-indigo-200 transition disabled:opacity-50">
-                  {submitting ? (
-                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Mengirim...</>
-                  ) : "Kumpulkan"}
+                <button onClick={() => submitUjian()} disabled={submitting} className="hidden md:flex items-center gap-2 h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm shadow-md shadow-indigo-200 transition disabled:opacity-50">
+                  {submitting ? (<><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Mengirim...</>) : "Kumpulkan"}
                 </button>
               </div>
             </div>
 
             <div className="md:hidden pb-3 -mt-1">
               <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-500"
-                  style={{ width: `${progress}%` }} />
+                <div className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
               </div>
             </div>
           </div>
         </header>
 
-        {/* MAIN CONTENT */}
         <div className="max-w-5xl mx-auto px-3 md:px-8 py-4 md:py-6 md:grid md:grid-cols-[1fr_280px] md:gap-6 md:items-start">
 
           <div key={animKey} style={{ animation: "fadeSlideIn 0.25s ease" }}>
@@ -855,15 +637,13 @@ setTotalTime(dur)
               <div className="px-5 py-4 space-y-4">
                 {hasContent(soalAktif.pengantar) && (
                   <CollapsibleBox label="Pengantar" colorScheme="blue">
-                    <MathRenderer text={soalAktif.pengantar!}
-                      className="text-[13px] md:text-[15px] leading-[1.9] text-slate-700" />
+                    <MathRenderer text={soalAktif.pengantar!} className="text-[13px] md:text-[15px] leading-[1.9] text-slate-700" />
                   </CollapsibleBox>
                 )}
 
                 {hasContent(soalAktif.bacaan) && (
                   <CollapsibleBox label="Bacaan" colorScheme="amber">
-                    <MathRenderer text={soalAktif.bacaan!}
-                      className="text-[13px] md:text-[15px] leading-[1.9] text-slate-700" />
+                    <MathRenderer text={soalAktif.bacaan!} className="text-[13px] md:text-[15px] leading-[1.9] text-slate-700" />
                   </CollapsibleBox>
                 )}
 
@@ -890,8 +670,7 @@ setTotalTime(dur)
                 )}
 
                 <div className="bg-slate-50 rounded-2xl px-4 py-4 border border-slate-100">
-                  <MathRenderer text={soalAktif.pertanyaan}
-                    className="text-[15px] md:text-[16px] leading-[2] text-slate-800 font-semibold" />
+                  <MathRenderer text={soalAktif.pertanyaan} className="text-[15px] md:text-[16px] leading-[2] text-slate-800 font-semibold" />
                 </div>
               </div>
 
@@ -903,13 +682,7 @@ setTotalTime(dur)
                       key={opsi.key}
                       onClick={() => pilihJawaban(soalAktif.id, opsi.key)}
                       style={{ animationDelay: `${i * 40}ms`, animation: "fadeSlideIn 0.3s ease both" }}
-                      className={`
-                        w-full rounded-2xl border-2 p-3.5 flex gap-3 text-left transition-all duration-200
-                        ${selected
-                          ? "bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-200"
-                          : "bg-white border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/50 active:scale-[0.99]"
-                        }
-                      `}
+                      className={`w-full rounded-2xl border-2 p-3.5 flex gap-3 text-left transition-all duration-200 ${selected ? "bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-200" : "bg-white border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/50 active:scale-[0.99]"}`}
                     >
                       <OptionBadge label={opsiLabels[opsi.key]} selected={selected} answered={currentAnswered} />
                       <div className="flex-1 min-w-0 overflow-hidden flex items-center">
@@ -925,31 +698,18 @@ setTotalTime(dur)
               </div>
 
               <div className="hidden md:flex gap-2 px-5 pb-5 border-t border-slate-50 pt-4">
-                <button
-                  onClick={() => goToSoal(Math.max(currentSoal - 1, 0))}
-                  disabled={currentSoal === 0}
-                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm disabled:opacity-30 transition flex items-center justify-center gap-2"
-                >
-                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                <button onClick={() => goToSoal(Math.max(currentSoal - 1, 0))} disabled={currentSoal === 0} className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm disabled:opacity-30 transition flex items-center justify-center gap-2">
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   Sebelumnya
                 </button>
-                <button
-                  onClick={() => goToSoal(Math.min(currentSoal + 1, soal.length - 1))}
-                  disabled={currentSoal === soal.length - 1}
-                  className="flex-1 h-11 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm disabled:opacity-30 transition flex items-center justify-center gap-2"
-                >
+                <button onClick={() => goToSoal(Math.min(currentSoal + 1, soal.length - 1))} disabled={currentSoal === soal.length - 1} className="flex-1 h-11 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm disabled:opacity-30 transition flex items-center justify-center gap-2">
                   Selanjutnya
-                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* RIGHT: Navigator (desktop) */}
           <div className="hidden md:block sticky top-24 space-y-4">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
               <div className="grid grid-cols-2 gap-2">
@@ -969,8 +729,7 @@ setTotalTime(dur)
                   <span>{Math.round((totalAnswered / soal.length) * 100)}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
-                    style={{ width: `${(totalAnswered / soal.length) * 100}%` }} />
+                  <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(totalAnswered / soal.length) * 100}%` }} />
                 </div>
               </div>
             </div>
@@ -983,28 +742,13 @@ setTotalTime(dur)
                   const isCurrent = index === currentSoal
                   const hasImg = !!(s.gambar && s.gambar.trim() !== "")
                   return (
-                    <button
-                      key={s.id}
-                      onClick={() => goToSoal(index)}
-                      className={`
-                        w-9 h-9 rounded-xl text-[11px] font-black transition-all duration-150 relative
-                        ${isCurrent
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-110"
-                          : answered
-                          ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                        }
-                      `}
-                    >
+                    <button key={s.id} onClick={() => goToSoal(index)} className={`w-9 h-9 rounded-xl text-[11px] font-black transition-all duration-150 relative ${isCurrent ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-110" : answered ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
                       {index + 1}
-                      {hasImg && (
-                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full border border-white" />
-                      )}
+                      {hasImg && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full border border-white" />}
                     </button>
                   )
                 })}
               </div>
-
               <div className="mt-3 flex flex-col gap-1.5 text-[10px] text-slate-400 font-semibold">
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-600 inline-block" />Sedang dikerjakan</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" />Sudah dijawab</span>
@@ -1013,60 +757,44 @@ setTotalTime(dur)
               </div>
             </div>
 
-            <button onClick={() => submitUjian()} disabled={submitting}
-              className="w-full h-12 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:shadow-xl hover:from-indigo-700 hover:to-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-              {submitting
-                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Mengirim...</>
-                : <>Kumpulkan Ujian <span className="text-indigo-200">→</span></>}
+            <button onClick={() => submitUjian()} disabled={submitting} className="w-full h-12 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:shadow-xl hover:from-indigo-700 hover:to-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+              {submitting ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Mengirim...</> : <>Kumpulkan Ujian <span className="text-indigo-200">→</span></>}
             </button>
           </div>
         </div>
 
-        {/* BOTTOM NAV (mobile) */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
           <div className="bg-white/95 backdrop-blur-xl border-t border-slate-100 px-3 py-3 shadow-2xl shadow-slate-200">
             <div className="flex gap-2">
-              <button
-                onClick={() => goToSoal(Math.max(currentSoal - 1, 0))}
-                disabled={currentSoal === 0}
-                className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 font-bold disabled:opacity-30 transition flex items-center justify-center shrink-0">
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+              <button onClick={() => goToSoal(Math.max(currentSoal - 1, 0))} disabled={currentSoal === 0} className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 font-bold disabled:opacity-30 transition flex items-center justify-center shrink-0">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
-              <button
-                onClick={() => submitUjian()}
-                disabled={submitting}
-                className="flex-1 h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-sm shadow-md shadow-indigo-200 disabled:opacity-50 transition flex items-center justify-center gap-2">
-                {submitting
-                  ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Mengirim...</>
-                  : "Kumpulkan Ujian"}
-              </button>
-              <button
-                onClick={() => goToSoal(Math.min(currentSoal + 1, soal.length - 1))}
-                disabled={currentSoal === soal.length - 1}
-                className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-700 font-bold disabled:opacity-30 transition flex items-center justify-center shrink-0">
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              {currentSoal === soal.length - 1 ? (
+                <button onClick={() => submitUjian()} disabled={submitting} className="flex-1 h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-sm shadow-md shadow-indigo-200 disabled:opacity-50 transition flex items-center justify-center gap-2">
+                  {submitting ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Mengirim...</> : "Kumpulkan Ujian ✓"}
+                </button>
+              ) : (
+                <button onClick={() => goToSoal(Math.min(currentSoal + 1, soal.length - 1))} className="flex-1 h-12 rounded-xl bg-indigo-50 text-indigo-700 font-black text-sm transition flex items-center justify-center gap-2">
+                  Selanjutnya
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+              )}
+              <button onClick={() => setShowNav(true)} className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 font-bold transition flex items-center justify-center shrink-0">
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
                 </svg>
               </button>
             </div>
           </div>
         </div>
 
-        {/* NAV DRAWER (mobile) */}
         {showNav && (
           <div className="fixed inset-0 z-[60] md:hidden" onClick={() => setShowNav(false)}>
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
-            <div
-              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl p-5 pb-8 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-              style={{ animation: "slideUp 0.25s ease" }}
-            >
+            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl p-5 pb-8 shadow-2xl" onClick={(e) => e.stopPropagation()} style={{ animation: "slideUp 0.25s ease" }}>
               <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
-
               <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
-
               <div className="grid grid-cols-3 gap-2 mb-4">
                 {[
                   { label: "Total", value: soal.length, color: "text-slate-700" },
@@ -1079,7 +807,6 @@ setTotalTime(dur)
                   </div>
                 ))}
               </div>
-
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Pilih Soal</p>
               <div className="flex flex-wrap gap-2 max-h-[240px] overflow-y-auto">
                 {soal.map((s, index) => {
@@ -1087,23 +814,9 @@ setTotalTime(dur)
                   const isCurrent = index === currentSoal
                   const hasImg = !!(s.gambar && s.gambar.trim() !== "")
                   return (
-                    <button
-                      key={s.id}
-                      onClick={() => goToSoal(index)}
-                      className={`
-                        w-11 h-11 rounded-xl text-xs font-black transition-all relative
-                        ${isCurrent
-                          ? "bg-indigo-600 text-white ring-2 ring-indigo-300"
-                          : answered
-                          ? "bg-emerald-500 text-white"
-                          : "bg-slate-100 text-slate-600"
-                        }
-                      `}
-                    >
+                    <button key={s.id} onClick={() => goToSoal(index)} className={`w-11 h-11 rounded-xl text-xs font-black transition-all relative ${isCurrent ? "bg-indigo-600 text-white ring-2 ring-indigo-300" : answered ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-600"}`}>
                       {index + 1}
-                      {hasImg && (
-                        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-400 rounded-full border border-white" />
-                      )}
+                      {hasImg && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-400 rounded-full border border-white" />}
                     </button>
                   )
                 })}
