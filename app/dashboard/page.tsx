@@ -12,54 +12,103 @@ type Hasil = {
   kategori: string
 }
 
-const paketList = [
-  {
-    id: 1,
-    fullNama: "Paket IPA",
-    desc: "Kimia · Fisika · Biologi",
-    icon: "🧪",
+type Paket = {
+  id: number
+  nama_paket: string
+  token: string
+}
+
+// Rename paket: "Paket ipa" → "IPA 1", "Paket ipa 2" → "IPA 2", dst
+function formatNamaPaket(nama: string): string {
+  const n = nama.toLowerCase().trim()
+  const map: { match: string; label: string }[] = [
+    { match: "paket ipa 2",    label: "IPA 2"     },
+    { match: "paket ipa 3",    label: "IPA 3"     },
+    { match: "paket ipa",      label: "IPA 1"     },
+    { match: "paket ips 2",    label: "IPS 2"     },
+    { match: "paket ips 3",    label: "IPS 3"     },
+    { match: "paket ips",      label: "IPS 1"     },
+    { match: "paket smk 2",    label: "SMK 2"     },
+    { match: "paket smk",      label: "SMK 1"     },
+    { match: "paket bahasa 2", label: "Bahasa 2"  },
+    { match: "paket bahasa 3", label: "Bahasa 3"  },
+    { match: "paket bahasa",   label: "Bahasa 1"  },
+  ]
+  const found = map.find((m) => n === m.match || n.startsWith(m.match))
+  return found ? found.label : nama
+}
+
+type PaketTheme = {
+  bg: string
+  card: string
+  badge: string
+  icon: string
+  tag: string
+  desc: string
+  img: string
+  accent: string
+}
+
+function getPaketTheme(nama: string): PaketTheme {
+  const n = nama.toLowerCase()
+  if (n.includes("ipa")) return {
+    bg:    "from-emerald-900/80 to-teal-900/60",
+    card:  "border-emerald-500/20 hover:border-emerald-400/40",
+    badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+    icon:  "🧪",
+    tag:   "Sains",
+    desc:  "Kimia · Fisika · Biologi",
+    img:   "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=600&auto=format&fit=crop",
     accent: "#10B981",
-    image: "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=900&auto=format&fit=crop",
-    gradientOverlay: "from-emerald-950/90 via-emerald-900/50 to-transparent",
-    bar: "from-emerald-500 to-teal-500",
-  },
-  {
-    id: 2,
-    fullNama: "Paket IPS",
-    desc: "Ekonomi · Geografi · Sosiologi",
-    icon: "📊",
+  }
+  if (n.includes("ips")) return {
+    bg:    "from-orange-900/80 to-amber-900/60",
+    card:  "border-orange-500/20 hover:border-orange-400/40",
+    badge: "bg-orange-500/20 text-orange-300 border-orange-500/30",
+    icon:  "📊",
+    tag:   "Sosial",
+    desc:  "Ekonomi · Geografi · Sosiologi",
+    img:   "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=600&auto=format&fit=crop",
     accent: "#F97316",
-    image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=900&auto=format&fit=crop",
-    gradientOverlay: "from-orange-950/90 via-orange-900/50 to-transparent",
-    bar: "from-orange-500 to-amber-500",
-  },
-  {
-    id: 3,
-    fullNama: "Paket SMK",
-    desc: "Produktif · Kejuruan",
-    icon: "🛠️",
+  }
+  if (n.includes("smk")) return {
+    bg:    "from-blue-900/80 to-indigo-900/60",
+    card:  "border-blue-500/20 hover:border-blue-400/40",
+    badge: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+    icon:  "🛠️",
+    tag:   "Kejuruan",
+    desc:  "Produktif · Teknik",
+    img:   "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=600&auto=format&fit=crop",
     accent: "#60A5FA",
-    image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=900&auto=format&fit=crop",
-    gradientOverlay: "from-blue-950/90 via-blue-900/50 to-transparent",
-    bar: "from-blue-500 to-indigo-500",
-  },
-  {
-    id: 5,
-    fullNama: "Paket Bahasa",
-    desc: "Jerman · Jepang · Arab",
-    icon: "🌍",
+  }
+  if (n.includes("bahasa")) return {
+    bg:    "from-purple-900/80 to-fuchsia-900/60",
+    card:  "border-purple-500/20 hover:border-purple-400/40",
+    badge: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+    icon:  "🌍",
+    tag:   "Bahasa",
+    desc:  "Jerman · Jepang · Arab",
+    img:   "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?q=80&w=600&auto=format&fit=crop",
     accent: "#C084FC",
-    image: "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?q=80&w=900&auto=format&fit=crop",
-    gradientOverlay: "from-purple-950/90 via-purple-900/50 to-transparent",
-    bar: "from-purple-500 to-fuchsia-500",
-  },
-]
+  }
+  return {
+    bg:    "from-slate-800/80 to-slate-900/60",
+    card:  "border-slate-500/20 hover:border-slate-400/40",
+    badge: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+    icon:  "📚",
+    tag:   "Umum",
+    desc:  "Mata Pelajaran Umum",
+    img:   "https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=600&auto=format&fit=crop",
+    accent: "#94A3B8",
+  }
+}
 
 export default function Dashboard() {
   const router = useRouter()
-  const [hasil, setHasil] = useState<Hasil[]>([])
-  const [nama, setNama] = useState("")
-  const [loading, setLoading] = useState(true)
+  const [hasil, setHasil]       = useState<Hasil[]>([])
+  const [nama, setNama]         = useState("")
+  const [paketList, setPaketList] = useState<Paket[]>([])
+  const [loading, setLoading]   = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => { init() }, [])
@@ -67,8 +116,11 @@ export default function Dashboard() {
   async function init() {
     const { data } = await supabase.auth.getUser()
     if (!data.user) { router.push("/login"); return }
-    await getProfile(data.user.id)
-    await getHasil(data.user.id)
+    await Promise.all([
+      getProfile(data.user.id),
+      getHasil(data.user.id),
+      getPaket(),
+    ])
     setLoading(false)
   }
 
@@ -80,6 +132,11 @@ export default function Dashboard() {
   async function getHasil(userId: string) {
     const { data } = await supabase.from("hasil").select("*").eq("user_id", userId)
     setHasil((data as Hasil[]) || [])
+  }
+
+  async function getPaket() {
+    const { data } = await supabase.from("packages").select("*").order("id", { ascending: true })
+    setPaketList((data as Paket[]) || [])
   }
 
   async function logout() {
@@ -108,13 +165,11 @@ export default function Dashboard() {
 
       {/* OVERLAY */}
       {sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden"
-        />
+        <div onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden" />
       )}
 
-      {/* ── SIDEBAR ── */}
+      {/* SIDEBAR */}
       <aside className={`
         fixed top-0 left-0 z-50 h-screen w-60
         bg-[#0B0F1A] border-r border-white/[0.06]
@@ -133,7 +188,7 @@ export default function Dashboard() {
             </button>
           </div>
           <button onClick={() => router.push("/profile")}
-            className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.06] transition group">
+            className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.06] transition">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#6366F1] to-[#8B5CF6] flex items-center justify-center text-xs font-bold shrink-0">
               {inisial}
             </div>
@@ -148,8 +203,8 @@ export default function Dashboard() {
           <NavLabel>Menu</NavLabel>
           <NavBtn icon="⊞" label="Dashboard" active onClick={() => {}} />
           <NavLabel>Belajar</NavLabel>
-          <NavBtn icon="◈" label="Materi" onClick={() => router.push("/materi")} />
-          <NavBtn icon="◉" label="Ranking" onClick={() => router.push("/ranking")} />
+          <NavBtn icon="◈" label="Materi"   onClick={() => router.push("/materi")} />
+          <NavBtn icon="◉" label="Ranking"  onClick={() => router.push("/ranking")} />
           <NavBtn icon="◎" label="Progress" onClick={() => router.push("/progress")} />
           <NavLabel>Laporan</NavLabel>
           <NavBtn icon="◳" label="Rekap Nilai" onClick={() => router.push("/rekap")} />
@@ -163,7 +218,7 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* ── CONTENT AREA ── */}
+      {/* CONTENT */}
       <div className="lg:ml-60 flex flex-col min-h-screen">
 
         {/* TOPBAR MOBILE */}
@@ -178,137 +233,138 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* MAIN */}
-        <main className="flex-1 px-3 py-4 md:px-8 md:py-8 space-y-5 md:space-y-8 w-full max-w-5xl mx-auto">
+        <main className="flex-1 px-3 py-4 md:px-8 md:py-8 space-y-5 md:space-y-7 w-full max-w-5xl mx-auto">
 
-          {/* ── HERO ── */}
-          <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-[#0F1729] border border-white/[0.06] p-4 md:p-10">
+          {/* HERO */}
+          <div className="relative overflow-hidden rounded-2xl bg-[#0F1729] border border-white/[0.06] p-4 md:p-8">
             <div className="absolute top-0 right-0 w-64 h-40 bg-[#6366F1]/15 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-40 h-32 bg-[#06B6D4]/10 rounded-full blur-3xl pointer-events-none" />
-            {/* Grid bg */}
-            <div className="absolute inset-0 opacity-[0.025]"
-              style={{ backgroundImage: "linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)", backgroundSize: "32px 32px" }} />
-
+            <div className="absolute inset-0 opacity-[0.02]"
+              style={{ backgroundImage: "linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)", backgroundSize: "28px 28px" }} />
             <div className="relative z-10 flex items-center justify-between gap-3">
-              {/* Text */}
               <div className="min-w-0">
-                <div className="inline-flex items-center gap-1.5 bg-[#6366F1]/15 border border-[#6366F1]/20 rounded-full px-2.5 py-0.5 mb-2 md:mb-3">
-                  <span className="w-1 h-1 rounded-full bg-[#818CF8] animate-pulse" />
-                  <span className="text-[9px] md:text-[10px] font-bold tracking-widest text-[#818CF8] uppercase">Selamat Datang</span>
+                <div className="inline-flex items-center gap-1.5 bg-[#6366F1]/15 border border-[#6366F1]/20 rounded-full px-2.5 py-0.5 mb-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#818CF8] animate-pulse" />
+                  <span className="text-[9px] font-bold tracking-widest text-[#818CF8] uppercase">Selamat Datang</span>
                 </div>
-                <h1 className="text-xl md:text-4xl font-extrabold text-white leading-tight">
+                <h1 className="text-xl md:text-3xl font-extrabold text-white leading-tight">
                   Halo, <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#818CF8] to-[#C084FC]">{nama.split(" ")[0]}</span>! 👋
                 </h1>
-                <p className="mt-1 text-white/35 text-xs md:text-sm">
-                  Siap belajar hari ini? 🚀
-                </p>
+                <p className="mt-1 text-white/35 text-xs">Siap belajar hari ini? 🚀</p>
               </div>
-
-              {/* Stats — simpel di mobile */}
-              <div className="flex gap-2 md:gap-3 shrink-0">
+              <div className="flex gap-2 shrink-0">
                 {[
                   { label: "Ujian", value: hasil.length },
-                  { label: "Skor", value: rataRata },
+                  { label: "Skor",  value: rataRata },
                 ].map((s) => (
                   <div key={s.label}
-                    className="flex flex-col items-center bg-white/[0.05] border border-white/[0.07] rounded-xl px-3 py-2 md:px-5 md:py-3">
-                    <span className="text-base md:text-2xl font-extrabold text-white">{s.value}</span>
-                    <span className="text-[9px] md:text-[10px] text-white/30 mt-0.5">{s.label}</span>
+                    className="flex flex-col items-center bg-white/[0.05] border border-white/[0.07] rounded-xl px-3 py-2">
+                    <span className="text-base md:text-xl font-extrabold text-white">{s.value}</span>
+                    <span className="text-[9px] text-white/30 mt-0.5">{s.label}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* ── SECTION TITLE ── */}
+          {/* PAKET SECTION */}
           <div>
-            <h2 className="text-base md:text-xl font-extrabold text-white">Paket Belajar</h2>
-            <p className="text-white/30 text-xs mt-0.5">Pilih paket dan mulai latihan soal ✨</p>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm md:text-base font-extrabold text-white">Paket Belajar</h2>
+                <p className="text-white/30 text-[10px] mt-0.5">{paketList.length} paket tersedia ✨</p>
+              </div>
+            </div>
+
+            {paketList.length === 0 ? (
+              <div className="text-center py-10 bg-[#0B0F1A] border border-white/[0.06] rounded-2xl">
+                <div className="text-3xl mb-2">📭</div>
+                <p className="text-white/50 text-sm">Belum ada paket tersedia</p>
+              </div>
+            ) : (
+              // 3 kolom di mobile, 4 kolom di desktop
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
+                {paketList.map((item) => {
+                  const theme      = getPaketTheme(item.nama_paket)
+                  const labelNama  = formatNamaPaket(item.nama_paket)
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => router.push(`/ujian/package/${item.id}`)}
+                      className={`group relative overflow-hidden rounded-xl md:rounded-2xl text-left border transition-all duration-300 active:scale-[0.96] ${theme.card}`}
+                      style={{ background: "#0D1220" }}
+                    >
+                      {/* Gambar */}
+                      <div className="relative w-full overflow-hidden" style={{ aspectRatio: "4/3" }}>
+                        <img
+                          src={theme.img}
+                          alt={labelNama}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          loading="lazy"
+                        />
+                        {/* Overlay gradient */}
+                        <div className={`absolute inset-0 bg-gradient-to-t ${theme.bg}`} />
+
+                        {/* Icon */}
+                        <div className="absolute top-1.5 left-1.5 md:top-2.5 md:left-2.5 w-6 h-6 md:w-8 md:h-8 rounded-lg flex items-center justify-center text-sm md:text-base backdrop-blur-sm border border-white/20"
+                          style={{ background: theme.accent + "30" }}>
+                          {theme.icon}
+                        </div>
+
+                        {/* Tag */}
+                        <div className={`absolute top-1.5 right-1.5 md:top-2.5 md:right-2.5 text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 rounded-md border backdrop-blur-sm ${theme.badge}`}>
+                          {theme.tag}
+                        </div>
+                      </div>
+
+                      {/* Info */}
+                      <div className="p-2 md:p-3">
+                        <p className="text-white font-extrabold text-xs md:text-sm leading-tight">{labelNama}</p>
+                        <p className="text-white/40 text-[9px] md:text-[10px] mt-0.5 truncate">{theme.desc}</p>
+
+                        {/* CTA */}
+                        <div
+                          className="mt-1.5 w-full py-1 md:py-1.5 rounded-lg text-center text-[9px] md:text-[10px] font-bold text-white transition-all duration-200"
+                          style={{ background: `linear-gradient(135deg, ${theme.accent}99, ${theme.accent}60)`, border: `1px solid ${theme.accent}40` }}
+                        >
+                          Masuk →
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          {/* ── PAKET CARDS ──
-              Mobile : 2 kolom, kartu compact (tinggi 150px)
-              Desktop: 2 kolom, kartu besar  (tinggi 260px)
-          ── */}
-          <div className="grid grid-cols-2 gap-3 md:gap-5">
-            {paketList.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => router.push(`/ujian/package/${item.id}`)}
-                className="group relative overflow-hidden rounded-2xl md:rounded-3xl text-left border border-white/10 hover:border-white/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {/* Image */}
-                <div className="relative h-[150px] md:h-[260px] w-full overflow-hidden">
-                  <img
-                    src={item.image}
-                    alt={item.fullNama}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    loading="lazy"
-                  />
-                  {/* gradient from bottom */}
-                  <div className={`absolute inset-0 bg-gradient-to-t ${item.gradientOverlay}`} />
-                  {/* dark top vignette */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-transparent" />
-
-                  {/* Icon — top left */}
-                  <div
-                    className="absolute top-2.5 left-2.5 md:top-4 md:left-4 w-8 h-8 md:w-11 md:h-11 rounded-xl md:rounded-2xl flex items-center justify-center text-base md:text-2xl border border-white/20 backdrop-blur-sm"
-                    style={{ background: item.accent + "30" }}
-                  >
-                    {item.icon}
-                  </div>
-                </div>
-
-                {/* Bottom info — absolute over image */}
-                <div className="absolute bottom-0 left-0 right-0 p-2.5 md:p-5">
-                  <p className="text-xs md:text-lg font-extrabold text-white leading-tight drop-shadow">
-                    {item.fullNama}
-                  </p>
-                  {/* desc hanya tampil di desktop */}
-                  <p className="hidden md:block text-white/50 text-xs mt-0.5 mb-3">{item.desc}</p>
-                  {/* desc mobile — 1 baris ringkas */}
-                  <p className="md:hidden text-white/40 text-[10px] mt-0.5 mb-2 truncate">{item.desc}</p>
-
-                  {/* CTA */}
-                  <div className={`
-                    w-full py-1.5 md:py-2.5 rounded-xl text-center font-bold
-                    text-[10px] md:text-sm
-                    bg-gradient-to-r ${item.bar} text-white
-                    flex items-center justify-center gap-1
-                    transition-all duration-300 group-hover:gap-2
-                  `}>
-                    Masuk Paket <span className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* ── RIWAYAT ── */}
-          {hasil.length > 0 ? (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h2 className="text-base md:text-xl font-extrabold text-white">Riwayat Ujian</h2>
-                  <p className="text-white/30 text-[10px] mt-0.5">3 ujian terakhir</p>
-                </div>
+          {/* RIWAYAT */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm md:text-base font-extrabold text-white">Riwayat Ujian</h2>
+                <p className="text-white/30 text-[10px] mt-0.5">3 ujian terakhir</p>
+              </div>
+              {hasil.length > 0 && (
                 <button onClick={() => router.push("/rekap")}
                   className="text-[11px] text-[#818CF8] hover:text-[#A5B4FC] font-semibold transition">
                   Lihat semua →
                 </button>
-              </div>
+              )}
+            </div>
+
+            {hasil.length > 0 ? (
               <div className="space-y-2">
                 {hasil.slice(-3).reverse().map((h) => {
-                  const sc = h.skor >= 70 ? "#10B981" : h.skor >= 50 ? "#F97316" : "#EF4444"
+                  const sc  = h.skor >= 70 ? "#10B981" : h.skor >= 50 ? "#F97316" : "#EF4444"
                   const sbg = h.skor >= 70
                     ? "bg-emerald-500/10 border-emerald-500/20"
                     : h.skor >= 50
-                      ? "bg-orange-500/10 border-orange-500/20"
-                      : "bg-red-500/10 border-red-500/20"
+                    ? "bg-orange-500/10 border-orange-500/20"
+                    : "bg-red-500/10 border-red-500/20"
                   return (
                     <div key={h.id}
                       className="flex items-center gap-3 bg-[#0B0F1A] border border-white/[0.06] rounded-xl p-3 hover:border-white/10 transition">
-                      <div className="w-9 h-9 rounded-xl bg-[#6366F1]/10 border border-[#6366F1]/20 flex items-center justify-center text-sm shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-[#6366F1]/10 border border-[#6366F1]/20 flex items-center justify-center text-sm shrink-0">
                         📝
                       </div>
                       <div className="flex-1 min-w-0">
@@ -325,14 +381,14 @@ export default function Dashboard() {
                   )
                 })}
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-8 md:py-12 bg-[#0B0F1A] border border-white/[0.06] rounded-2xl">
-              <div className="text-3xl md:text-5xl mb-3">🎯</div>
-              <p className="text-white font-bold text-sm md:text-base">Belum ada riwayat ujian</p>
-              <p className="text-white/30 text-xs mt-1">Pilih paket di atas dan mulai!</p>
-            </div>
-          )}
+            ) : (
+              <div className="text-center py-8 bg-[#0B0F1A] border border-white/[0.06] rounded-2xl">
+                <div className="text-3xl mb-2">🎯</div>
+                <p className="text-white font-bold text-sm">Belum ada riwayat ujian</p>
+                <p className="text-white/30 text-xs mt-1">Pilih paket di atas dan mulai!</p>
+              </div>
+            )}
+          </div>
 
         </main>
       </div>

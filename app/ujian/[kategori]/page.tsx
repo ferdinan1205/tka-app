@@ -27,7 +27,7 @@ import {
 // CACHE VERSION
 // ======================
 
-const CACHE_VERSION = "v4"
+const CACHE_VERSION = "v5"
 
 // ======================
 // TYPES
@@ -52,6 +52,7 @@ type SavedState = {
   answers: Record<number, string>
   currentSoal: number
   timeLeft: number
+  deadline?: number // ← TAMBAH INI (Unix timestamp ms)
 }
 
 // ======================
@@ -404,8 +405,6 @@ export default function UjianPage() {
   const packageId = searchParams.get("package_id") || null
 
   const [loading, setLoading] = useState(true)
-  const [allowed, setAllowed] = useState(false)
-  const [tokenInput, setTokenInput] = useState("")
   const [soal, setSoal] = useState<Soal[]>([])
   const [jawabanUser, setJawabanUser] = useState<Record<number, string>>({})
   const [currentSoal, setCurrentSoal] = useState(0)
@@ -413,7 +412,6 @@ export default function UjianPage() {
   const [totalTime, setTotalTime] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [storageKey, setStorageKey] = useState("")
-  const [tokenKey, setTokenKey] = useState("")
   const [imgError, setImgError] = useState<Record<number, boolean>>({})
   const [showNav, setShowNav] = useState(false)
   const [animKey, setAnimKey] = useState(0)
@@ -424,19 +422,51 @@ export default function UjianPage() {
 
   useEffect(() => { init() }, [])
 
-  useEffect(() => {
-    if (!allowed || !storageKey || timeLeft <= 0) return
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        const newTime = prev - 1
-        const { jawabanUser, currentSoal } = stateRef.current
-        localStorage.setItem(storageKey, JSON.stringify({ answers: jawabanUser, currentSoal, timeLeft: newTime }))
-        if (newTime <= 0) { clearInterval(interval); handleAutoSubmit(); return 0 }
-        return newTime
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [allowed, storageKey, timeLeft])
+const deadlineRef = useRef<number>(0)
+
+// SESUDAH:
+useEffect(() => {
+  if (!storageKey || timeLeft <= 0) return
+
+  // Set deadline ref hanya sekali (saat pertama kali timeLeft > 0)
+  if (deadlineRef.current === 0) {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const parsed: SavedState = JSON.parse(saved)
+        deadlineRef.current = parsed.deadline ?? (Date.now() + timeLeft * 1000)
+      } else {
+        deadlineRef.current = Date.now() + timeLeft * 1000
+      }
+    } catch {
+      deadlineRef.current = Date.now() + timeLeft * 1000
+    }
+  }
+
+  const deadline = deadlineRef.current
+
+  const interval = setInterval(() => {
+    const sisaMs = deadline - Date.now()
+    const newTime = Math.max(0, Math.floor(sisaMs / 1000))
+
+    setTimeLeft(newTime)
+
+    const { jawabanUser, currentSoal } = stateRef.current
+    localStorage.setItem(storageKey, JSON.stringify({
+      answers: jawabanUser,
+      currentSoal,
+      timeLeft: newTime,
+      deadline,
+    }))
+
+    if (newTime <= 0) {
+      clearInterval(interval)
+      handleAutoSubmit()
+    }
+  }, 1000)
+
+  return () => clearInterval(interval)
+}, [storageKey, timeLeft])
 
   async function init() {
     try {
@@ -445,9 +475,7 @@ export default function UjianPage() {
       if (!user) { router.push("/login"); return }
       const userId = user.id
       const key = `ujian_${kategori}_${packageId}_${userId}`
-      const tokenStorage = `token_${kategori}_${packageId}_${userId}`
       setStorageKey(key)
-      setTokenKey(tokenStorage)
 
       let tokenQuery = supabase.from("token_used").select("*").eq("user_id", userId).eq("kategori", kategori)
       if (packageId) tokenQuery = tokenQuery.eq("package_id", packageId)
@@ -459,20 +487,50 @@ export default function UjianPage() {
 
       await getSoal(userId)
 
-      const saved = localStorage.getItem(key)
-      const dur = jadwal.durasi * 60
-      if (saved) {
-        const parsed: SavedState = JSON.parse(saved)
-        setJawabanUser(parsed.answers || {})
-        setCurrentSoal(parsed.currentSoal || 0)
-        setTimeLeft(parsed.timeLeft || dur)
-      } else {
-        setTimeLeft(dur)
-      }
-      setTotalTime(dur)
+// SESUDAH:
+const saved = localStorage.getItem(key)
+const dur = jadwal.durasi * 60
 
-      const savedToken = localStorage.getItem(tokenStorage)
-      if (savedToken === "true") setAllowed(true)
+if (saved) {
+  const parsed: SavedState = JSON.parse(saved)
+  setJawabanUser(parsed.answers || {})
+  setCurrentSoal(parsed.currentSoal || 0)
+
+  if (parsed.deadline) {
+    // Hitung sisa waktu dari deadline absolut
+    const sisaMs = parsed.deadline - Date.now()
+    const sisa = Math.max(0, Math.floor(sisaMs / 1000))
+    setTimeLeft(sisa)
+    if (sisa <= 0) {
+      // Waktu sudah habis saat user kembali
+      setLoading(false)
+      await submitUjian(true)
+      return
+    }
+  } else {
+    // Saved lama belum ada deadline, pakai timeLeft + set deadline baru
+    const sisa = parsed.timeLeft || dur
+    setTimeLeft(sisa)
+    // Langsung simpan deadline baru
+    const newDeadline = Date.now() + sisa * 1000
+    localStorage.setItem(key, JSON.stringify({
+      ...parsed,
+      deadline: newDeadline,
+    }))
+  }
+} else {
+  // Fresh start — buat deadline baru
+  const deadline = Date.now() + dur * 1000
+  setTimeLeft(dur)
+  localStorage.setItem(key, JSON.stringify({
+    answers: {},
+    currentSoal: 0,
+    timeLeft: dur,
+    deadline,
+  }))
+}
+setTotalTime(dur)
+
       setLoading(false)
     } catch (err) {
       console.log(err); alert("Terjadi kesalahan"); setLoading(false)
@@ -481,29 +539,93 @@ export default function UjianPage() {
 
   async function getSoal(userId: string) {
     const soalKey = `soal_${kategori}_${packageId}_${userId}_${CACHE_VERSION}`
-    const oldKeys = [
-      `soal_${kategori}_${packageId}_${userId}`,
-      `soal_${kategori}_${packageId}_${userId}_v1`,
-      `soal_${kategori}_${packageId}_${userId}_v2`,
-      `soal_${kategori}_${packageId}_${userId}_v3`,
-    ]
-    oldKeys.forEach((k) => { if (localStorage.getItem(k)) localStorage.removeItem(k) })
+
+    // HAPUS CACHE LAMA JIKA VERSI BERBEDA
+    Object.keys(localStorage).forEach((key) => {
+      if (
+        key.startsWith(`soal_${kategori}_${packageId}_${userId}`) &&
+        key !== soalKey
+      ) {
+        localStorage.removeItem(key)
+      }
+    })
 
     const saved = localStorage.getItem(soalKey)
-    if (saved) { setSoal(JSON.parse(saved)); return }
+    if (saved) {
+      console.log("PAKAI CACHE SOAL")
+      setSoal(JSON.parse(saved))
+      return
+    }
 
-    const normalizedPaket = paket.replace(/^paket\s*/i, "").toLowerCase().trim()
-    let query = supabase.from("soal").select("*").eq("kategori", kategori)
-    if (normalizedPaket) query = query.ilike("paket", normalizedPaket)
-    const { data, error } = await query
+    let finalData: any[] = []
 
-    if (error || !data || data.length === 0) { alert(`Soal tidak ditemukan`); return }
+    if (packageId) {
+      console.log("=== DEBUG GET SOAL ===")
+      console.log("PACKAGE ID:", packageId)
+      console.log("KATEGORI:", kategori)
 
-    const soalDenganGambar = data.filter((s) => s.gambar && s.gambar.trim() !== "")
-    const soalTanpaGambar = data.filter((s) => !s.gambar || s.gambar.trim() === "")
-    const shuffledDG = [...soalDenganGambar].sort(() => Math.random() - 0.5)
-    const shuffledTG = [...soalTanpaGambar].sort(() => Math.random() - 0.5)
+      const { data, error } = await supabase
+        .from("package_soal")
+        .select(`
+          soal (
+            id,
+            pertanyaan,
+            pengantar,
+            bacaan,
+            opsi_a,
+            opsi_b,
+            opsi_c,
+            opsi_d,
+            opsi_e,
+            jawaban_benar,
+            kategori,
+            gambar
+          )
+        `)
+        .eq("package_id", Number(packageId))
+
+      console.log("DATA PACKAGE:", data)
+
+      if (error) {
+        console.log("ERROR:", error)
+        alert("Gagal mengambil soal")
+        return
+      }
+
+      finalData = (data || [])
+        .map((item: any) => item.soal)
+        .filter(
+          (item: any) =>
+            item !== null &&
+            item.kategori?.toLowerCase() === kategori.toLowerCase()
+        )
+
+      console.log("FINAL DATA:", finalData)
+      console.log("JUMLAH SOAL:", finalData.length)
+    }
+
+    if (finalData.length === 0) {
+      alert("Belum ada soal pada paket ini")
+      setSoal([])
+      return
+    }
+
+    function shuffleArray(array: any[]) {
+      const arr = [...array]
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[arr[i], arr[j]] = [arr[j], arr[i]]
+      }
+      return arr
+    }
+
+    const soalDenganGambar = finalData.filter((s) => s.gambar && s.gambar.trim() !== "")
+    const soalTanpaGambar = finalData.filter((s) => !s.gambar || s.gambar.trim() === "")
+    const shuffledDG = shuffleArray(soalDenganGambar)
+    const shuffledTG = shuffleArray(soalTanpaGambar)
     const selected = [...shuffledDG, ...shuffledTG].slice(0, 25).sort(() => Math.random() - 0.5)
+
+    console.log("SELECTED:", selected)
 
     localStorage.setItem(soalKey, JSON.stringify(selected))
     setSoal(selected as Soal[])
@@ -512,20 +634,13 @@ export default function UjianPage() {
   function pilihJawaban(id: number, jawaban: string) {
     const updated = { ...jawabanUser, [id]: jawaban }
     setJawabanUser(updated)
-    localStorage.setItem(storageKey, JSON.stringify({ answers: updated, currentSoal, timeLeft }))
+    localStorage.setItem(storageKey, JSON.stringify({ answers: updated, currentSoal, timeLeft ,deadline: deadlineRef.current }))
   }
 
   function goToSoal(index: number) {
     setCurrentSoal(index)
     setAnimKey((k) => k + 1)
     setShowNav(false)
-  }
-
-  async function verifyToken() {
-    const { data } = await supabase.from("jadwal_ujian").select("*").eq("kategori", kategori).eq("token", tokenInput).eq("status", true).single()
-    if (!data) { alert("Token salah"); return }
-    localStorage.setItem(tokenKey, "true")
-    setAllowed(true)
   }
 
   async function handleAutoSubmit() {
@@ -548,7 +663,6 @@ export default function UjianPage() {
 
       let total = 0
 
-      // ✅ FIX: simpan soal lengkap termasuk pengantar + bacaan
       const detail = soal.map((item) => {
         const jawaban = jawabanUser[item.id]
         const benar = jawaban === item.jawaban_benar
@@ -587,7 +701,6 @@ export default function UjianPage() {
       }
 
       localStorage.removeItem(storageKey)
-      localStorage.removeItem(tokenKey)
       localStorage.removeItem(`soal_${kategori}_${packageId}_${userId}_${CACHE_VERSION}`)
 
       setHasilModal({ skor: total, total: soal.length * 4 })
@@ -611,68 +724,6 @@ export default function UjianPage() {
           </div>
         </div>
         <p className="text-indigo-400 text-sm font-semibold tracking-widest uppercase">Memuat Soal...</p>
-      </div>
-    )
-  }
-
-  // ======================
-  // TOKEN PAGE
-  // ======================
-  if (!allowed) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-blue-50 flex items-center justify-center px-4">
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          <div className="absolute top-[-80px] right-[-80px] w-[400px] h-[400px] bg-indigo-100 rounded-full opacity-50 blur-3xl" />
-          <div className="absolute bottom-[-80px] left-[-80px] w-[300px] h-[300px] bg-blue-100 rounded-full opacity-40 blur-3xl" />
-        </div>
-
-        <div className="relative w-full max-w-sm">
-          <div className="bg-white rounded-3xl shadow-2xl shadow-indigo-100 border border-indigo-50 overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-600" />
-
-            <div className="p-8">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-blue-100 flex items-center justify-center mx-auto mb-5">
-                <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-                  <rect x="3" y="11" width="18" height="11" rx="3" stroke="#6366F1" strokeWidth="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#6366F1" strokeWidth="2" strokeLinecap="round" />
-                  <circle cx="12" cy="16" r="1.5" fill="#6366F1" />
-                </svg>
-              </div>
-
-              <h1 className="text-2xl font-black text-slate-900 text-center mb-1">Token Ujian</h1>
-              <p className="text-slate-400 text-sm text-center mb-1 font-medium">{kategori}</p>
-              {paket && (
-                <div className="flex justify-center mb-6">
-                  <span className="inline-block bg-indigo-50 text-indigo-600 text-[11px] font-bold px-3 py-1 rounded-full border border-indigo-100">
-                    {paket}
-                  </span>
-                </div>
-              )}
-              {!paket && <div className="mb-6" />}
-
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-                Masukkan Token
-              </label>
-              <input
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && verifyToken()}
-                placeholder="Token dari pengawas"
-                className="w-full h-12 border-2 border-slate-200 focus:border-indigo-400 rounded-2xl px-4 mb-4 outline-none text-slate-800 text-sm font-semibold placeholder:text-slate-300 transition-colors bg-slate-50 focus:bg-white"
-              />
-              <button
-                onClick={verifyToken}
-                className="w-full h-12 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:shadow-xl hover:shadow-indigo-200 active:scale-[0.98] transition-all"
-              >
-                Mulai Ujian →
-              </button>
-
-              <p className="text-center text-xs text-slate-400 mt-4">
-                Hubungi pengawas jika belum mendapat token
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     )
   }
@@ -862,12 +913,12 @@ export default function UjianPage() {
                     >
                       <OptionBadge label={opsiLabels[opsi.key]} selected={selected} answered={currentAnswered} />
                       <div className="flex-1 min-w-0 overflow-hidden flex items-center">
-  <MathRenderer
-    key={`${opsi.key}-${selected}`} 
-    text={opsi.value}
-    className={`text-[14px] md:text-[15px] leading-[1.8] font-medium ${selected ? "text-white" : "text-slate-700"}`}
-  />
-</div>
+                        <MathRenderer
+                          key={`${opsi.key}-${selected}`}
+                          text={opsi.value}
+                          className={`text-[14px] md:text-[15px] leading-[1.8] font-medium ${selected ? "text-white" : "text-slate-700"}`}
+                        />
+                      </div>
                     </button>
                   )
                 })}

@@ -5,57 +5,63 @@ import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, GraduationCap } from "lucide-react"
 
-export default function Login() {
+export default function Register() {
 
   const router = useRouter()
 
+  const [nama, setNama] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  async function handleLogin() {
+  async function handleRegister() {
 
-    if (!email || !password) {
-      alert("Email dan password wajib diisi")
+    if (!nama || !email || !password) {
+      alert("Nama, email dan password wajib diisi")
       return
     }
 
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
     })
 
     if (error) {
       setLoading(false)
-      alert("Login gagal: " + error.message)
+      alert("Register gagal: " + error.message)
       return
     }
 
-    const { data: userData } = await supabase.auth.getUser()
-    const user = userData.user
+    const user = data.user
 
-    if (!user) {
-      setLoading(false)
-      alert("User tidak ditemukan")
-      return
+    if (user) {
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert([
+          {
+            id: user.id,
+            nama: nama,
+            email: email,
+            role: "siswa",
+          },
+        ])
+
+      if (profileError) {
+        setLoading(false)
+        alert("Gagal simpan profile: " + profileError.message)
+        return
+      }
+
     }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
 
     setLoading(false)
+    alert("Akun berhasil dibuat, silakan login")
 
-    if (profile?.role === "admin") {
-      router.push("/admin")
-    } else {
-      router.push("/dashboard")
-    }
+    router.push("/login")
 
   }
 
@@ -115,8 +121,36 @@ export default function Login() {
         </h1>
 
         <p className="text-center text-gray-600 mb-8 text-sm">
-          Platform Tryout & Pembelajaran Pintar
+          Buat Akun Baru
         </p>
+
+        {/* NAMA */}
+
+        <div className="mb-4">
+          <label className="text-gray-700 font-semibold text-sm mb-2 block">
+            Nama Lengkap
+          </label>
+          <input
+            type="text"
+            placeholder="Masukkan nama lengkap"
+            className="
+            w-full
+            bg-gray-100
+            border
+            border-gray-200
+            rounded-2xl
+            p-4
+            text-gray-900
+            placeholder:text-gray-500
+            focus:outline-none
+            focus:ring-2
+            focus:ring-green-500
+            transition
+            "
+            value={nama}
+            onChange={(e) => setNama(e.target.value)}
+          />
+        </div>
 
         {/* EMAIL */}
 
@@ -138,7 +172,7 @@ export default function Login() {
             placeholder:text-gray-500
             focus:outline-none
             focus:ring-2
-            focus:ring-blue-500
+            focus:ring-green-500
             transition
             "
             value={email}
@@ -168,7 +202,7 @@ export default function Login() {
               placeholder:text-gray-500
               focus:outline-none
               focus:ring-2
-              focus:ring-blue-500
+              focus:ring-green-500
               transition
               "
               value={password}
@@ -183,7 +217,7 @@ export default function Login() {
               top-1/2
               -translate-y-1/2
               text-gray-500
-              hover:text-blue-600
+              hover:text-green-600
               transition
               "
             >
@@ -192,15 +226,15 @@ export default function Login() {
           </div>
         </div>
 
-        {/* LOGIN BUTTON */}
+        {/* REGISTER BUTTON */}
 
         <button
-          onClick={handleLogin}
+          onClick={handleRegister}
           disabled={loading}
           className="
           w-full
-          bg-blue-600
-          hover:bg-blue-700
+          bg-green-500
+          hover:bg-green-600
           text-white
           p-4
           rounded-2xl
@@ -213,18 +247,18 @@ export default function Login() {
           mb-4
           "
         >
-          {loading ? "Loading..." : "Login"}
+          {loading ? "Loading..." : "Register"}
         </button>
 
-        {/* LINK KE REGISTER */}
+        {/* LINK KE LOGIN */}
 
         <p className="text-center text-gray-600 text-sm">
-          Belum punya akun?{" "}
+          Sudah punya akun?{" "}
           <a
-            href="/register"
-            className="text-green-600 font-semibold hover:underline"
+            href="/login"
+            className="text-blue-600 font-semibold hover:underline"
           >
-            Daftar di sini
+            Login di sini
           </a>
         </p>
 
