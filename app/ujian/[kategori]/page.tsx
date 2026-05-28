@@ -115,7 +115,7 @@ const MathRenderer = memo(({ text, className = "" }: { text: string; className?:
 MathRenderer.displayName = "MathRenderer"
 
 function HasilModal({ skor, total, onClose }: { skor: number; total: number; onClose: () => void }) {
-  const pct = Math.round((skor / total) * 100)
+  const pct = total > 0 ? Math.round((skor / total) * 100) : 0
 
   type Tier = { emoji: string; title: string; sub: string; bg: string; ring: string; btnBg: string; confetti: string[]; particleAnim: string }
 
@@ -145,7 +145,7 @@ function HasilModal({ skor, total, onClose }: { skor: number; total: number; onC
         @keyframes modalIn { from { opacity:0; transform:scale(0.85) translateY(24px); } to { opacity:1; transform:scale(1) translateY(0); } }
         @keyframes fall { 0% { opacity:1; transform:translateY(-20px) rotate(0deg); } 100% { opacity:0; transform:translateY(340px) rotate(720deg); } }
         @keyframes scoreCount { from { opacity:0; transform:scale(0.5); } to { opacity:1; transform:scale(1); } }
-        @keyframes ringDraw { from { stroke-dashoffset: ${c}; } to { stroke-dashoffset: ${c * (1 - pct / 100)}; } }
+        @keyframes ringDraw { from { stroke-dashoffset: ${c}; } to { stroke-dashoffset: ${isNaN(c * (1 - pct / 100)) ? 0 : c * (1 - pct / 100)}; } }
         @keyframes emojiPop { 0%{transform:scale(0) rotate(-30deg);} 60%{transform:scale(1.3) rotate(10deg);} 100%{transform:scale(1) rotate(0deg);} }
         @keyframes shimmer { 0%,100%{opacity:1} 50%{opacity:0.6} }
       `}</style>
@@ -165,7 +165,7 @@ function HasilModal({ skor, total, onClose }: { skor: number; total: number; onC
           <div className="relative">
             <svg width="140" height="140">
               <circle cx="70" cy="70" r={r} fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth="10" />
-              <circle cx="70" cy="70" r={r} fill="none" stroke={tier.ring} strokeWidth="10" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform="rotate(-90 70 70)" style={{ animation: `ringDraw 1.2s 0.3s cubic-bezier(0.4,0,0.2,1) both` }} />
+              <circle cx="70" cy="70" r={r} fill="none" stroke={tier.ring} strokeWidth="10" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={isNaN(c * (1 - pct / 100)) ? "0" : c * (1 - pct / 100)} transform="rotate(-90 70 70)" style={{ animation: `ringDraw 1.2s 0.3s cubic-bezier(0.4,0,0.2,1) both` }} />
               <text x="70" y="62" textAnchor="middle" fontSize="26" fontWeight="900" fill={tier.ring} style={{ animation: "scoreCount 0.5s 0.8s both" }}>{skor}</text>
               <text x="70" y="80" textAnchor="middle" fontSize="11" fontWeight="700" fill="#94A3B8">dari {total}</text>
               <text x="70" y="98" textAnchor="middle" fontSize="13" fontWeight="900" fill={tier.ring}>{pct}%</text>

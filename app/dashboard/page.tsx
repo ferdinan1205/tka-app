@@ -16,6 +16,7 @@ type Paket = {
   id: number
   nama_paket: string
   token: string
+  image_url?: string
 }
 
 function formatNamaPaket(nama: string): string {
@@ -325,7 +326,7 @@ export default function Dashboard() {
                       {/* Gambar */}
                       <div className="relative w-full overflow-hidden" style={{ aspectRatio: "4/3" }}>
                         <img
-                          src={theme.img}
+                          src={item.image_url || theme.img}
                           alt={labelNama}
                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                           loading="lazy"

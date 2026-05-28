@@ -9,6 +9,7 @@ type PackageType = {
   nama_paket: string
   token: string
   is_custom: boolean
+  image_url?: string
 }
 
 type SubjectType = {
@@ -31,6 +32,51 @@ function generateToken() {
   return Array.from({ length: 6 }, () =>
     chars.charAt(Math.floor(Math.random() * chars.length))
   ).join("")
+}
+
+// ── Komponen input URL manual ──
+function ImageUrlInput({
+  defaultValue,
+  onSave,
+}: {
+  defaultValue: string
+  onSave: (url: string) => void
+}) {
+  const [val, setVal] = useState(defaultValue)
+  const [editing, setEditing] = useState(false)
+
+  return editing ? (
+    <div className="space-y-1.5">
+      <input
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        placeholder="https://..."
+        className="w-full h-8 border border-indigo-300 rounded-lg px-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-100 bg-white"
+      />
+      <div className="flex gap-1.5">
+        <button
+          onClick={() => { onSave(val); setEditing(false) }}
+          className="flex-1 h-7 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition"
+        >
+          ✓ Simpan URL
+        </button>
+        <button
+          onClick={() => setEditing(false)}
+          className="h-7 px-2.5 rounded-lg border border-slate-200 text-slate-500 text-xs hover:bg-slate-50 transition"
+        >
+          Batal
+        </button>
+      </div>
+    </div>
+  ) : (
+    <button
+      onClick={() => setEditing(true)}
+      className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium transition"
+    >
+      {defaultValue ? "✎ Ganti URL gambar" : "+ Atau pakai URL"}
+    </button>
+  )
 }
 
 export default function AdminManajemenPaket() {
@@ -59,6 +105,9 @@ export default function AdminManajemenPaket() {
   const [editingPendampingId, setEditingPendampingId] = useState<number | null>(null)
   const [newSubject, setNewSubject] = useState("")
   const [savingSubject, setSavingSubject] = useState(false)
+
+  // Upload gambar
+  const [uploadingImageId, setUploadingImageId] = useState<number | null>(null)
 
   useEffect(() => { init() }, [])
 
@@ -151,6 +200,43 @@ export default function AdminManajemenPaket() {
   async function hapusPendamping(id: number) {
     if (!confirm("Hapus mata pelajaran ini dari paket?")) return
     await supabase.from("package_subjects").delete().eq("id", id)
+    await getData()
+  }
+
+  // ── Upload gambar ke Supabase Storage ──
+  async function uploadGambar(packageId: number, file: File) {
+    setUploadingImageId(packageId)
+    const ext = file.name.split(".").pop()
+    const path = `package-images/${packageId}-${Date.now()}.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("images")
+      .upload(path, file, { upsert: true })
+
+    if (uploadError) {
+      alert("Gagal upload: " + uploadError.message)
+      setUploadingImageId(null)
+      return
+    }
+
+    const { data: urlData } = supabase.storage.from("images").getPublicUrl(path)
+    const { error: updateError } = await supabase
+      .from("packages")
+      .update({ image_url: urlData.publicUrl })
+      .eq("id", packageId)
+
+    setUploadingImageId(null)
+    if (updateError) { alert("Gagal simpan URL: " + updateError.message); return }
+    await getData()
+  }
+
+  // ── Simpan URL gambar manual ──
+  async function simpanImageUrl(packageId: number, url: string) {
+    const { error } = await supabase
+      .from("packages")
+      .update({ image_url: url || null })
+      .eq("id", packageId)
+    if (error) { alert("Gagal: " + error.message); return }
     await getData()
   }
 
@@ -267,6 +353,7 @@ export default function AdminManajemenPaket() {
               const isEditingNama = editingNamaId === item.id
               const isEditingPendamping = editingPendampingId === item.id
               const isSavingToken = savingTokenId === item.id
+              const isUploadingImage = uploadingImageId === item.id
               const paketSubjects = subjects.filter((s) => s.package_id === item.id)
               const usedSubjects = paketSubjects.map((s) => s.subject)
               const availableSubjects = ALL_SUBJECTS.filter((s) => !usedSubjects.includes(s))
@@ -337,7 +424,6 @@ export default function AdminManajemenPaket() {
                       </button>
                     </div>
 
-                    {/* List pendamping */}
                     <div className="flex flex-wrap gap-1.5 mb-1.5">
                       {paketSubjects.length === 0 && (
                         <span className="text-[11px] text-slate-400 italic">Belum ada pendamping</span>
@@ -354,7 +440,6 @@ export default function AdminManajemenPaket() {
                       ))}
                     </div>
 
-                    {/* Form tambah pendamping */}
                     {isEditingPendamping && (
                       <div className="flex gap-1.5 mt-2">
                         <select
@@ -444,6 +529,60 @@ export default function AdminManajemenPaket() {
                         </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* ── GAMBAR ── */}
+                  <div className="border-t border-slate-100 pt-3 space-y-2">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Foto Paket</p>
+
+                    {/* Preview */}
+                    {item.image_url && (
+                      <div className="relative w-full h-24 rounded-lg overflow-hidden border border-slate-200">
+                        <img
+                          src={item.image_url}
+                          alt="preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          onClick={() => simpanImageUrl(item.id, "")}
+                          className="absolute top-1 right-1 w-5 h-5 bg-white/80 rounded text-slate-500 text-xs hover:bg-white hover:text-red-500 transition"
+                          title="Hapus gambar"
+                        >×</button>
+                      </div>
+                    )}
+
+                    {/* Upload file */}
+                    <div>
+                      <label className="block text-[11px] text-slate-500 mb-1">Upload gambar</label>
+                      <label className={`flex items-center justify-center gap-1.5 h-8 w-full rounded-lg border border-dashed cursor-pointer transition text-xs font-medium
+                        ${isUploadingImage
+                          ? "border-indigo-300 text-indigo-400 bg-indigo-50/50"
+                          : "border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30"
+                        }`}>
+                        {isUploadingImage ? (
+                          <><span className="animate-spin inline-block">⏳</span> Mengupload...</>
+                        ) : (
+                          <><span>📁</span> Pilih file (JPG/PNG)</>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={isUploadingImage}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) uploadGambar(item.id, file)
+                            e.target.value = ""
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {/* Atau URL manual */}
+                    <ImageUrlInput
+                      defaultValue={item.image_url || ""}
+                      onSave={(url) => simpanImageUrl(item.id, url)}
+                    />
                   </div>
 
                 </div>

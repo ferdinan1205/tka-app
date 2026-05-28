@@ -366,38 +366,74 @@ const MAPEL_STYLE: Record<string, { from: string; to: string; icon: string }> = 
 const DEFAULT_PENDAMPING = { from: "#7c3aed", to: "#d946ef", icon: "🎯" }
 
 function ExamCard({
-  nama, icon, colorFrom, colorTo, index, onStart,
+  nama, icon, colorFrom, colorTo, index, onStart, isCompleted, skor,
 }: {
-  nama: string; icon: string; colorFrom: string; colorTo: string; index: number; onStart: () => void
+  nama: string; icon: string; colorFrom: string; colorTo: string; index: number; onStart: () => void; isCompleted: boolean; skor?: number
 }) {
   return (
-    <div className="pk-fadeUp pk-card-hover relative overflow-hidden bg-white rounded-3xl border-2 border-white shadow-md"
-      style={{ animationDelay: `${index * 60}ms` }}>
+    <div
+      className={`pk-fadeUp pk-card-hover relative overflow-hidden rounded-3xl border-2 shadow-md ${
+        isCompleted ? "bg-slate-50 border-slate-200" : "bg-white border-white"
+      }`}
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
       <span className="absolute top-3 right-4 font-black text-6xl md:text-7xl select-none pointer-events-none"
         style={{ color: "rgba(0,0,0,.04)" }}>
         {String(index + 1).padStart(2, "0")}
       </span>
       <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1.5 rounded-l-3xl"
-        style={{ background: `linear-gradient(180deg,${colorFrom},${colorTo})` }} />
+        style={{
+          background: isCompleted
+            ? "linear-gradient(180deg,#94a3b8,#cbd5e1)"
+            : `linear-gradient(180deg,${colorFrom},${colorTo})`,
+        }} />
       <div className="md:hidden h-1.5 w-full rounded-t-3xl"
-        style={{ background: `linear-gradient(90deg,${colorFrom},${colorTo})` }} />
+        style={{
+          background: isCompleted
+            ? "linear-gradient(90deg,#94a3b8,#cbd5e1)"
+            : `linear-gradient(90deg,${colorFrom},${colorTo})`,
+        }} />
       <div className="p-4 md:p-6 md:pl-8 flex items-center gap-4 md:block">
         <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-xl md:text-3xl shadow-lg shrink-0 md:mb-5"
-          style={{ background: `linear-gradient(135deg,${colorFrom},${colorTo})` }}>
-          {icon}
+          style={{
+            background: isCompleted
+              ? "linear-gradient(135deg,#94a3b8,#cbd5e1)"
+              : `linear-gradient(135deg,${colorFrom},${colorTo})`,
+          }}>
+          {isCompleted ? "✅" : icon}
         </div>
         <div className="flex-1 min-w-0 md:flex-none md:mb-5">
           <p className="text-[9px] font-black tracking-[3px] uppercase text-slate-400 mb-0.5 hidden md:block">
             Mata Pelajaran
           </p>
           <h2 className="font-black text-slate-800 text-base md:text-xl truncate leading-tight">{nama}</h2>
+          {isCompleted && (
+            <span className="pk-badge-pop inline-block mt-1 text-xs font-black px-3 py-1 rounded-full bg-emerald-100 text-emerald-600">
+              ✅ Selesai Dikerjakan
+            </span>
+          )}
         </div>
-        <button onClick={onStart}
-          className="pk-btn-press shrink-0 md:w-full h-10 md:h-12 px-4 md:px-0 rounded-2xl text-white font-black text-xs md:text-sm shadow-md"
-          style={{ background: `linear-gradient(135deg,${colorFrom},${colorTo})` }}>
-          <span className="hidden md:inline">Mulai Ujian →</span>
-          <span className="md:hidden">Mulai →</span>
-        </button>
+       {isCompleted ? (
+          <div className="shrink-0 md:w-full flex flex-col gap-1.5">
+            <div className="h-10 md:h-11 rounded-2xl bg-slate-200 text-slate-400 font-black text-xs md:text-sm flex items-center justify-center cursor-not-allowed select-none">
+              <span className="hidden md:inline">Sudah Dikerjakan</span>
+              <span className="md:hidden">Selesai</span>
+            </div>
+            {skor !== undefined && (
+              <div className="h-9 md:h-10 rounded-2xl flex items-center justify-center gap-1.5 font-black text-xs md:text-sm"
+                style={{ background: `${colorFrom}18`, color: colorFrom }}>
+                🏆 Skor: {skor}
+              </div>
+            )}
+          </div>
+        ) : (
+          <button onClick={onStart}
+            className="pk-btn-press shrink-0 md:w-full h-10 md:h-12 px-4 md:px-0 rounded-2xl text-white font-black text-xs md:text-sm shadow-md"
+            style={{ background: `linear-gradient(135deg,${colorFrom},${colorTo})` }}>
+            <span className="hidden md:inline">Mulai Ujian →</span>
+            <span className="md:hidden">Mulai →</span>
+          </button>
+        )}
       </div>
     </div>
   )
@@ -407,11 +443,13 @@ function ExamCard({
    MAIN EXAM PAGE
 ───────────────────────────────────── */
 function MainExamPage({
-  paket, mapel, finalSelectedSubject, onStart,
+  paket, mapel, finalSelectedSubject, completedMapel, completedScores, onStart,
 }: {
   paket: PackageType
   mapel: { nama: string; kategori: string; icon: string; color: { from: string; to: string } }[]
   finalSelectedSubject: string
+  completedMapel: string[]
+  completedScores: Record<string, number>
   onStart: (k: string) => void
 }) {
   return (
@@ -450,11 +488,13 @@ function MainExamPage({
         </p>
 
         <div className={`grid gap-3 md:gap-5 grid-cols-1 ${mapel.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2 xl:grid-cols-4"}`}>
-          {mapel.map((item, index) => (
+         {mapel.map((item, index) => (
             <ExamCard
               key={item.nama} nama={item.nama} icon={item.icon}
               colorFrom={item.color.from} colorTo={item.color.to}
               index={index} onStart={() => onStart(item.kategori)}
+              isCompleted={completedMapel.includes(item.kategori)}
+              skor={completedScores[item.kategori]}
             />
           ))}
         </div>
@@ -486,6 +526,8 @@ export default function PackagePage() {
   const [selectedSubject, setSelectedSubject] = useState("")
   const [savedPendamping, setSavedPendamping] = useState("")
   const [subjectLoading,  setSubjectLoading ] = useState(false)
+    const [completedMapel,  setCompletedMapel ] = useState<string[]>([])
+const [completedScores, setCompletedScores] = useState<Record<string, number>>({})
 
   // Pendamping berdasarkan kategori dasar paket
   const PENDAMPING_MAP: Record<string, string[]> = {
@@ -545,6 +587,24 @@ export default function PackagePage() {
           .from("pilihan_pendamping").select("*")
           .eq("user_id", user.id).eq("package_id", packageId).maybeSingle()
         if (pilihanData) setSavedPendamping(pilihanData.pilihan)
+
+        // ← TAMBAH INI: fetch ujian yang sudah dikerjakan
+        const { data: usedData } = await supabase
+          .from("token_used")
+          .select("kategori")
+          .eq("user_id", user.id)
+          .eq("package_id", packageId)
+        if (usedData) setCompletedMapel(usedData.map((d: any) => d.kategori))
+           const { data: hasilData } = await supabase
+          .from("hasil")
+          .select("kategori, skor")
+          .eq("user_id", user.id)
+          .eq("package_id", packageId)
+        if (hasilData) {
+          const scoresMap: Record<string, number> = {}
+          hasilData.forEach((h: any) => { scoresMap[h.kategori] = h.skor })
+          setCompletedScores(scoresMap)
+        }
       }
 
       setLoading(false)
@@ -732,6 +792,8 @@ return (
     paket={paket}
     mapel={allMapel}
     finalSelectedSubject={finalSelectedSubject}
+    completedMapel={completedMapel}
+    completedScores={completedScores}
     onStart={handleStartExam}
   />
 )
