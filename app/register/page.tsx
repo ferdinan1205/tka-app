@@ -27,8 +27,8 @@ function RegisterForm() {
 
     if (kodeDariUrl && kodeDariUrl === KODE_VALID) {
       sessionStorage.setItem("register_access", "true")
-      router.replace("/register")
       setAksesDiizinkan(true)
+      window.history.replaceState({}, "", "/register")
     } else {
       const sudahAda = sessionStorage.getItem("register_access")
       if (sudahAda === "true") {
