@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, memo, useMemo } from "react"
+import { Suspense, useEffect, useState, memo, useMemo } from "react"
 import { supabase } from "../../lib/supabase"
 import { useRouter, useSearchParams } from "next/navigation"
 import { MathJax, MathJaxContext } from "better-react-mathjax"
@@ -206,229 +206,206 @@ function StatCard({ label, value, icon, gradient, textColor, delay }: { label: s
   )
 }
 
-export default function Review() {
+function ReviewContent() {
   const router = useRouter()
-  const searchParams = useSearchParams() // ← TAMBAHKAN
+  const searchParams = useSearchParams()
   const [data,      setData]      = useState<HasilType | null>(null)
   const [loading,   setLoading]   = useState(true)
   const [aiLoading, setAiLoading] = useState<number | null>(null)
   const [expanded,  setExpanded]  = useState<number[]>([])
 
-  // Ambil parameter dari URL
-  const kategoriParam = searchParams.get('kategori')     // ← TAMBAHKAN
-  const packageIdParam = searchParams.get('package_id')  // ← TAMBAHKAN
+  // Ambil parameter dari URL dengan default value
+  const kategoriParam = searchParams?.get('kategori') || null
+  const packageIdParam = searchParams?.get('package_id') || null
 
   useEffect(() => { 
     getLastResult() 
-  }, [kategoriParam, packageIdParam]) // ← UBAH dependency
+  }, [kategoriParam, packageIdParam])
 
-async function getLastResult() {
-  try {
-    setLoading(true)
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) { 
-      router.push("/login")
-      return 
-    }
-    
-    let query = supabase
-      .from("hasil")
-      .select("*")
-      .eq("user_id", userData.user.id)
-    
-    // Filter berdasarkan kategori jika ada
-    if (kategoriParam) {
-      query = query.eq("kategori", kategoriParam)
-    }
-    
-    // Filter berdasarkan package_id jika ada
-    if (packageIdParam) {
-      query = query.eq("package_id", parseInt(packageIdParam))
-    }
-    
-    const { data, error } = await query.order("id", { ascending: false }).limit(1).maybeSingle()
-    
-    if (error || !data) {
-      // Fallback: ambil hasil terakhir tanpa filter
-      const { data: fallbackData } = await supabase
+  async function getLastResult() {
+    try {
+      setLoading(true)
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !userData?.user) { 
+        router.push("/login")
+        return 
+      }
+      
+      let query = supabase
         .from("hasil")
         .select("*")
         .eq("user_id", userData.user.id)
         .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle()
       
-      if (fallbackData) {
-        setData(fallbackData)
+      // Filter berdasarkan kategori jika ada
+      if (kategoriParam && kategoriParam !== "") {
+        query = query.eq("kategori", kategoriParam)
       }
-      return
+      
+      // Filter berdasarkan package_id jika ada
+      if (packageIdParam && packageIdParam !== "") {
+        query = query.eq("package_id", parseInt(packageIdParam))
+      }
+      
+      const { data: resultData, error } = await query.limit(1).maybeSingle()
+      
+      if (error || !resultData) {
+        // Fallback: ambil hasil terakhir tanpa filter
+        const { data: fallbackData } = await supabase
+          .from("hasil")
+          .select("*")
+          .eq("user_id", userData.user.id)
+          .order("id", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        
+        if (fallbackData) {
+          setData(fallbackData)
+          return
+        }
+        
+        setData(null)
+        return
+      }
+      
+      setData(resultData)
+    } catch (err) {
+      console.error("Error in getLastResult:", err)
+      setData(null)
+    } finally {
+      setLoading(false)
     }
-    
-    setData(data)
-  } catch (err) {
-    console.error(err)
-  } finally {
-    setLoading(false)
   }
-}
 
-async function generateAI(index: number, item: DetailItem) {
-  try {
-    setAiLoading(index)
-    const images = extractImages(item.soal)
-    const gambarUrl = item.gambar && item.gambar.trim() !== "" ? item.gambar : null
+  async function generateAI(index: number, item: DetailItem) {
+    try {
+      setAiLoading(index)
+      const images = extractImages(item.soal)
+      const gambarUrl = item.gambar && item.gambar.trim() !== "" ? item.gambar : null
 
-    // Bersihkan HTML dari soal untuk pencarian
-const soalBersih = item.soal
-  .replace(/<[^>]*>/g, "")
-  .replace(/&nbsp;/g, " ")
-  .replace(/\s+/g, " ")
-  .trim()
+      // Bersihkan HTML dari soal untuk pencarian
+      const soalBersih = item.soal
+        .replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
 
-const kataAwal = soalBersih
-  .split(" ")
-  .slice(0, 12)
-  .join(" ")
+      const { data: soalList, error: soalError } = await supabase
+        .from("soal")
+        .select(`
+          pertanyaan,
+          opsi_a,
+          opsi_b,
+          opsi_c,
+          opsi_d,
+          opsi_e
+        `)
 
-const { data: soalList } = await supabase
-  .from("soal")
-  .select(`
-    pertanyaan,
-    opsi_a,
-    opsi_b,
-    opsi_c,
-    opsi_d,
-    opsi_e
-  `)
+      let soalData = null
 
-let soalData = null
+      if (soalList && !soalError) {
+        soalData = soalList.find((s) => {
+          const dbSoal = s.pertanyaan
+            ?.replace(/<[^>]*>/g, "")
+            .replace(/&nbsp;/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
 
-if (soalList) {
-  soalData = soalList.find((s) => {
-    const dbSoal = s.pertanyaan
-      ?.replace(/<[^>]*>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-
-    return (
-      dbSoal
-        ?.slice(0, 150)
-        .toLowerCase() ===
-      soalBersih
-        .slice(0, 150)
-        .toLowerCase()
-    )
-  })
-}
-
-console.log("SOAL DITEMUKAN =", soalData)
-
-if (soalData) {
-  console.log("OPSI A =", soalData.opsi_a)
-  console.log("OPSI B =", soalData.opsi_b)
-  console.log("OPSI C =", soalData.opsi_c)
-  console.log("OPSI D =", soalData.opsi_d)
-  console.log("OPSI E =", soalData.opsi_e)
-}
-
-console.log("Soal ditemukan:", soalData ? "YA" : "TIDAK")
-    if (soalData) {
-      console.log("Opsi A:", soalData.opsi_a)
-      console.log("Opsi D:", soalData.opsi_d)
-    }
-    
-    // Format opsi untuk dikirim ke AI
-    let opsiText = null
-    if (soalData) {
-      opsiText = `
+          return (
+            dbSoal
+              ?.slice(0, 150)
+              .toLowerCase() ===
+            soalBersih
+              .slice(0, 150)
+              .toLowerCase()
+          )
+        })
+      }
+      
+      // Format opsi untuk dikirim ke AI
+      let opsiText = null
+      if (soalData) {
+        opsiText = `
 A. ${soalData.opsi_a || ""}
 B. ${soalData.opsi_b || ""}
 C. ${soalData.opsi_c || ""}
 D. ${soalData.opsi_d || ""}
 E. ${soalData.opsi_e || ""}
-      `.trim()
-    }
-    
-    // Siapkan teks jawaban user dan jawaban benar yang lebih informatif
-    let jawabanUserText = item.jawaban_user
-    let jawabanBenarText = item.jawaban_benar
-    
-    if (soalData && opsiText) {
-      // Ambil teks lengkap dari opsi yang dipilih
-  const cleanHtml = (text: string = "") =>
-  text
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .trim()
-
-const opsiMap: Record<string, string> = {
-  a: cleanHtml(soalData.opsi_a),
-  b: cleanHtml(soalData.opsi_b),
-  c: cleanHtml(soalData.opsi_c),
-  d: cleanHtml(soalData.opsi_d),
-  e: cleanHtml(soalData.opsi_e),
-}
-      
-      jawabanUserText = `${item.jawaban_user.toUpperCase()}. ${opsiMap[item.jawaban_user.toLowerCase()] || item.jawaban_user}`
-      jawabanBenarText = `${item.jawaban_benar.toUpperCase()}. ${opsiMap[item.jawaban_benar.toLowerCase()] || item.jawaban_benar}`
-    }
-
-    const res = await fetch("/api/ai", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-  soal: item.soal,
-
-  jawaban_user_huruf: item.jawaban_user,
-  jawaban_benar_huruf: item.jawaban_benar,
-
-  jawaban_user: jawabanUserText,
-  jawaban_benar: jawabanBenarText,
-
-  images: gambarUrl
-    ? [...images, gambarUrl]
-    : images,
-
-  opsi: opsiText,
-
-  opsi_raw: soalData
-    ? {
-        a: soalData.opsi_a,
-        b: soalData.opsi_b,
-        c: soalData.opsi_c,
-        d: soalData.opsi_d,
-        e: soalData.opsi_e,
+        `.trim()
       }
-    : null,
-}),
-    })
-    
-    const result = await res.json()
-    if (!result?.text) { 
-      alert("Pembahasan AI gagal dibuat")
-      return 
+      
+      // Siapkan teks jawaban user dan jawaban benar yang lebih informatif
+      let jawabanUserText = item.jawaban_user
+      let jawabanBenarText = item.jawaban_benar
+      
+      if (soalData && opsiText) {
+        const cleanHtml = (text: string = "") =>
+          text
+            .replace(/<[^>]*>/g, "")
+            .replace(/&nbsp;/g, " ")
+            .trim()
+
+        const opsiMap: Record<string, string> = {
+          a: cleanHtml(soalData.opsi_a),
+          b: cleanHtml(soalData.opsi_b),
+          c: cleanHtml(soalData.opsi_c),
+          d: cleanHtml(soalData.opsi_d),
+          e: cleanHtml(soalData.opsi_e),
+        }
+        
+        jawabanUserText = `${item.jawaban_user.toUpperCase()}. ${opsiMap[item.jawaban_user.toLowerCase()] || item.jawaban_user}`
+        jawabanBenarText = `${item.jawaban_benar.toUpperCase()}. ${opsiMap[item.jawaban_benar.toLowerCase()] || item.jawaban_benar}`
+      }
+
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          soal: item.soal,
+          jawaban_user_huruf: item.jawaban_user,
+          jawaban_benar_huruf: item.jawaban_benar,
+          jawaban_user: jawabanUserText,
+          jawaban_benar: jawabanBenarText,
+          images: gambarUrl ? [...images, gambarUrl] : images,
+          opsi: opsiText,
+          opsi_raw: soalData ? {
+            a: soalData.opsi_a,
+            b: soalData.opsi_b,
+            c: soalData.opsi_c,
+            d: soalData.opsi_d,
+            e: soalData.opsi_e,
+          } : null,
+        }),
+      })
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+      
+      const result = await res.json()
+      if (!result?.text) { 
+        alert("Pembahasan AI gagal dibuat")
+        return 
+      }
+      
+      if (!data) return
+      const updated = [...data.detail]
+      updated[index] = {
+        ...updated[index],
+        pembahasan: result.text,
+        jawaban_user_text: jawabanUserText,
+        jawaban_benar_text: jawabanBenarText,
+      }
+      setData({ ...data, detail: updated })
+      setExpanded((prev) => [...prev, index])
+    } catch (err) {
+      console.error("Error in generateAI:", err)
+      alert("Gagal generate AI: " + (err as Error).message)
+    } finally {
+      setAiLoading(null)
     }
-    
-    if (!data) return
-    const updated = [...data.detail]
-
-updated[index] = {
-  ...updated[index],
-  pembahasan: result.text,
-
-  jawaban_user_text: jawabanUserText,
-  jawaban_benar_text: jawabanBenarText,
-}
-    setData({ ...data, detail: updated })
-    setExpanded((prev) => [...prev, index])
-  } catch (err) {
-    console.error(err)
-    alert("Gagal generate AI: " + (err as Error).message)
-  } finally {
-    setAiLoading(null)
   }
-}
 
   function toggleExpand(index: number) {
     setExpanded((prev) =>
@@ -455,13 +432,33 @@ updated[index] = {
         <div className="anim-pop-in bg-white rounded-3xl shadow-xl p-8 text-center max-w-xs w-full mx-4">
           <div className="text-4xl mb-3">📭</div>
           <p className="font-black text-slate-700">Belum ada hasil ujian</p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold"
+          >
+            Kembali ke Dashboard
+          </button>
         </div>
       </div>
     )
   }
 
-  const benar   = data.detail.filter((d) => d.benar).length
-  const salah   = data.detail.length - benar
+  if (!data.detail || data.detail.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <style dangerouslySetInnerHTML={{ __html: STYLES }} />
+        <div className="bg-white rounded-2xl p-8 text-center">
+          <p className="text-slate-700">Data detail soal tidak tersedia</p>
+          <button onClick={() => router.push("/dashboard")} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl">
+            Kembali
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const benar = data.detail.filter((d) => d.benar).length
+  const salah = data.detail.length - benar
   const akurasi = Math.round((benar / data.detail.length) * 100)
   const accColor = akurasi >= 75 ? "#16a34a" : akurasi >= 50 ? "#d97706" : "#dc2626"
 
@@ -479,7 +476,7 @@ updated[index] = {
           <div className="max-w-3xl mx-auto px-3 py-2 md:px-5 md:py-3 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[3px] text-blue-200">Hasil Ujian</p>
-              <h1 className="text-sm md:text-xl font-black text-white truncate leading-tight">{data.kategori}</h1>
+              <h1 className="text-sm md:text-xl font-black text-white truncate leading-tight">{data.kategori || "Ujian"}</h1>
             </div>
             <button
               onClick={() => router.push("/dashboard")}
@@ -495,9 +492,9 @@ updated[index] = {
 
           {/* STATS */}
           <div className="grid grid-cols-4 gap-1.5 md:gap-3">
-            <StatCard label="Skor"    value={data.skor}    icon="🏆" gradient="linear-gradient(135deg,#dbeafe,#eff6ff)" textColor="text-blue-700"   delay="0ms"   />
-            <StatCard label="Benar"   value={benar}         icon="✅" gradient="linear-gradient(135deg,#dcfce7,#f0fdf4)" textColor="text-green-700"  delay="60ms"  />
-            <StatCard label="Salah"   value={salah}         icon="❌" gradient="linear-gradient(135deg,#fee2e2,#fff1f2)" textColor="text-red-600"    delay="120ms" />
+            <StatCard label="Skor" value={data.skor || 0} icon="🏆" gradient="linear-gradient(135deg,#dbeafe,#eff6ff)" textColor="text-blue-700" delay="0ms" />
+            <StatCard label="Benar" value={benar} icon="✅" gradient="linear-gradient(135deg,#dcfce7,#f0fdf4)" textColor="text-green-700" delay="60ms" />
+            <StatCard label="Salah" value={salah} icon="❌" gradient="linear-gradient(135deg,#fee2e2,#fff1f2)" textColor="text-red-600" delay="120ms" />
             <StatCard label="Akurasi" value={`${akurasi}%`} icon="📊" gradient="linear-gradient(135deg,#fef9c3,#fefce8)" textColor="text-yellow-600" delay="180ms" />
           </div>
 
@@ -556,7 +553,7 @@ updated[index] = {
                       />
                     </div>
 
-                    {/* ← PATCH: GAMBAR SOAL */}
+                    {/* GAMBAR SOAL */}
                     {item.gambar && item.gambar.trim() !== "" && (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 md:px-4 md:py-3">
                         <p className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">
@@ -571,47 +568,43 @@ updated[index] = {
                     )}
 
                     {/* JAWABAN */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="rounded-xl p-3 border border-slate-200 bg-slate-50">
+                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wide mb-2">
+                          Jawaban Kamu
+                        </p>
+                        <MathJax dynamic>
+                          <div
+                            className="text-base md:text-lg font-bold text-slate-700 break-words"
+                            dangerouslySetInnerHTML={{
+                              __html: formatText(
+                                item.jawaban_user_text ||
+                                item.jawaban_user ||
+                                "—"
+                              ),
+                            }}
+                          />
+                        </MathJax>
+                      </div>
 
-  <div className="rounded-xl p-3 border border-slate-200 bg-slate-50">
-    <p className="text-[9px] text-slate-400 font-black uppercase tracking-wide mb-2">
-      Jawaban Kamu
-    </p>
-
-    <MathJax dynamic>
-      <div
-        className="text-base md:text-lg font-bold text-slate-700 break-words"
-        dangerouslySetInnerHTML={{
-          __html: formatText(
-            item.jawaban_user_text ||
-            item.jawaban_user ||
-            "—"
-          ),
-        }}
-      />
-    </MathJax>
-  </div>
-
-  <div className="rounded-xl p-3 border border-green-200 bg-green-50">
-    <p className="text-[9px] text-green-600 font-black uppercase tracking-wide mb-2">
-      Jawaban Benar
-    </p>
-
-    <MathJax dynamic>
-      <div
-        className="text-base md:text-lg font-bold text-green-700 break-words"
-        dangerouslySetInnerHTML={{
-          __html: formatText(
-            item.jawaban_benar_text ||
-            item.jawaban_benar ||
-            "—"
-          ),
-        }}
-      />
-    </MathJax>
-  </div>
-
-</div>
+                      <div className="rounded-xl p-3 border border-green-200 bg-green-50">
+                        <p className="text-[9px] text-green-600 font-black uppercase tracking-wide mb-2">
+                          Jawaban Benar
+                        </p>
+                        <MathJax dynamic>
+                          <div
+                            className="text-base md:text-lg font-bold text-green-700 break-words"
+                            dangerouslySetInnerHTML={{
+                              __html: formatText(
+                                item.jawaban_benar_text ||
+                                item.jawaban_benar ||
+                                "—"
+                              ),
+                            }}
+                          />
+                        </MathJax>
+                      </div>
+                    </div>
 
                     {/* AI */}
                     {!item.pembahasan ? (
@@ -671,5 +664,20 @@ updated[index] = {
         </div>
       </div>
     </MathJaxContext>
+  )
+}
+
+export default function ReviewPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <style dangerouslySetInnerHTML={{ __html: STYLES }} />
+          <div className="anim-spin w-10 h-10 rounded-full border-[3px] border-blue-300 border-t-blue-600" />
+        </div>
+      }
+    >
+      <ReviewContent />
+    </Suspense>
   )
 }
