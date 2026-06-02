@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { supabase } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { GraduationCap } from "lucide-react"
 
-export default function SSOProcess() {
+function SSOProcess() {
 
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [status, setStatus] = useState("Memverifikasi akses...")
 
   useEffect(() => { handleSSO() }, [])
@@ -16,18 +17,10 @@ export default function SSOProcess() {
 
     try {
 
-      // Ambil data dari cookie via API (sekali pakai)
-      setStatus("Mengambil data...")
-      const res = await fetch("/api/sso/data")
+      const email = searchParams.get("email")
+      const password = searchParams.get("password")
 
-      if (!res.ok) {
-        // Cookie tidak ada atau expired → tolak akses
-        router.push("/login")
-        return
-      }
-
-      const { nama, email, password } = await res.json()
-
+      // Tidak ada email/password → tolak
       if (!email || !password) {
         router.push("/login")
         return
@@ -54,46 +47,13 @@ export default function SSOProcess() {
         return
       }
 
-      // Login gagal → belum punya akun → auto register
-      setStatus("Membuat akun baru...")
-      const { data: regData, error: regError } = await supabase.auth.signUp({
-        email,
-        password,
-      })
-
-      // Auto register gagal → arahkan ke form register manual
-      if (regError || !regData.user) {
-        sessionStorage.setItem("register_access", "true")
-        sessionStorage.setItem("sso_nama",     nama)
-        sessionStorage.setItem("sso_email",    email)
-        sessionStorage.setItem("sso_password", password)
-        router.push("/register")
-        return
-      }
-
-      // Simpan profile
-      const { error: profileError } = await supabase.from("profiles").insert([{
-        id: regData.user.id,
-        nama,
-        email,
-        role: "siswa",
-      }])
-
-      // Simpan profile gagal → arahkan ke register manual juga
-      if (profileError) {
-        console.error("Profile error:", profileError)
-        sessionStorage.setItem("register_access", "true")
-        sessionStorage.setItem("sso_nama",     nama)
-        sessionStorage.setItem("sso_email",    email)
-        sessionStorage.setItem("sso_password", password)
-        router.push("/register")
-        return
-      }
-
-      // Login setelah register berhasil
-      setStatus("Masuk ke dashboard...")
-      await supabase.auth.signInWithPassword({ email, password })
-      router.push("/dashboard")
+      // Login gagal → arahkan ke register manual
+      setStatus("Mengarahkan ke registrasi...")
+      sessionStorage.setItem("register_access", "true")
+      sessionStorage.setItem("sso_nama", "")
+      sessionStorage.setItem("sso_email", email)
+      sessionStorage.setItem("sso_password", password)
+      router.push("/register")
 
     } catch (e) {
       console.error("SSO process error:", e)
@@ -127,5 +87,13 @@ export default function SSOProcess() {
 
       </div>
     </div>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <SSOProcess />
+    </Suspense>
   )
 }
