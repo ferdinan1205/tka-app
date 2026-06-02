@@ -22,9 +22,6 @@ function RegisterForm() {
     const kodeDariUrl = searchParams.get("kode")
     const KODE_VALID = process.env.NEXT_PUBLIC_REGISTER_CODE
 
-    console.log("kode dari url:", kodeDariUrl)
-    console.log("kode valid:", KODE_VALID)
-
     if (kodeDariUrl && kodeDariUrl === KODE_VALID) {
       sessionStorage.setItem("register_access", "true")
       setAksesDiizinkan(true)
@@ -33,6 +30,15 @@ function RegisterForm() {
       const sudahAda = sessionStorage.getItem("register_access")
       if (sudahAda === "true") {
         setAksesDiizinkan(true)
+
+        // Auto isi form kalau datang dari SSO yang gagal
+        const ssoNama     = sessionStorage.getItem("sso_nama")
+        const ssoEmail    = sessionStorage.getItem("sso_email")
+        const ssoPassword = sessionStorage.getItem("sso_password")
+        if (ssoNama)     setNama(ssoNama)
+        if (ssoEmail)    setEmail(ssoEmail)
+        if (ssoPassword) setPassword(ssoPassword)
+
       } else {
         setAksesDiizinkan(false)
       }
@@ -66,14 +72,12 @@ function RegisterForm() {
 
       const { error: profileError } = await supabase
         .from("profiles")
-        .insert([
-          {
-            id: user.id,
-            nama: nama,
-            email: email,
-            role: "siswa",
-          },
-        ])
+        .insert([{
+          id: user.id,
+          nama: nama,
+          email: email,
+          role: "siswa",
+        }])
 
       if (profileError) {
         setLoading(false)
@@ -83,7 +87,12 @@ function RegisterForm() {
 
     }
 
+    // Bersihkan semua sessionStorage
     sessionStorage.removeItem("register_access")
+    sessionStorage.removeItem("sso_nama")
+    sessionStorage.removeItem("sso_email")
+    sessionStorage.removeItem("sso_password")
+
     setLoading(false)
     alert("Akun berhasil dibuat, silakan login")
     router.push("/login")
@@ -100,14 +109,8 @@ function RegisterForm() {
 
   if (aksesDiizinkan === false) {
     return (
-      <div className="
-      min-h-screen flex items-center justify-center
-      bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 p-6
-      ">
-        <div className="
-        w-full max-w-md bg-white/90 backdrop-blur-lg
-        rounded-[35px] shadow-2xl border border-white/40 p-8 text-center
-        ">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 p-6">
+        <div className="w-full max-w-md bg-white/90 backdrop-blur-lg rounded-[35px] shadow-2xl border border-white/40 p-8 text-center">
           <div className="flex justify-center mb-5">
             <div className="bg-red-100 w-20 h-20 rounded-full flex items-center justify-center">
               <ShieldX size={38} className="text-red-500" />
@@ -129,15 +132,9 @@ function RegisterForm() {
 
   return (
 
-    <div className="
-    min-h-screen flex items-center justify-center
-    bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 p-6
-    ">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 p-6">
 
-      <div className="
-      w-full max-w-md bg-white/90 backdrop-blur-lg
-      rounded-[35px] shadow-2xl border border-white/40 p-8
-      ">
+      <div className="w-full max-w-md bg-white/90 backdrop-blur-lg rounded-[35px] shadow-2xl border border-white/40 p-8">
 
         <div className="flex justify-center mb-5">
           <div className="bg-blue-600 w-20 h-20 rounded-full flex items-center justify-center shadow-lg">

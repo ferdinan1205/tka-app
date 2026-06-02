@@ -553,7 +553,7 @@ async function handleExportPdf() {
     }
 
     return (
-      <MathJaxContext version={3} config={mathJaxConfig}>
+      <MathJaxContext config={mathJaxConfig}>
         <style>{quillStyle}</style>
         <div className="min-h-screen bg-[#F1EFE8]">
 
