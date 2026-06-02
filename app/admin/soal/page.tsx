@@ -224,10 +224,16 @@
       } finally { setLoading(false) }
     }
 
-    async function getPackages() {
-      const { data } = await supabase.from("packages").select("id, nama_paket").order("id", { ascending: true })
-      setPackages((data || []) as Package[])
-    }
+async function getPackages() {
+  const { data } = await supabase
+    .from("packages")
+    .select("id, nama_paket")
+
+  const sorted = (data || []).sort((a, b) =>
+    a.nama_paket.localeCompare(b.nama_paket, "id", { numeric: true, sensitivity: "base" })
+  )
+  setPackages(sorted as Package[])
+}
 
     async function getPackageIdsForSoal(soalId: number): Promise<number[]> {
       const { data } = await supabase

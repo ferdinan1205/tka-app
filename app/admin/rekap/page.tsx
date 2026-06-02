@@ -10,8 +10,7 @@ import {
 import { supabase } from "../../../lib/supabase"
 import { useRouter } from "next/navigation"
 import * as XLSX from "xlsx"
-import jsPDF from "jspdf"
-import html2canvas from "html2canvas"
+
 
 // ── types ─────────────────────────────────────────────────────
 
@@ -214,16 +213,90 @@ export default function AdminRekapPage() {
     }
   }
 
-  async function exportPDF() {
-    if (!printRef.current) return
-    const canvas  = await html2canvas(printRef.current, { scale: 2 })
-    const imgData = canvas.toDataURL("image/png")
-    const pdf     = new jsPDF("p", "mm", "a4")
-    const width   = pdf.internal.pageSize.getWidth()
-    const height  = (canvas.height * width) / canvas.width
-    pdf.addImage(imgData, "PNG", 0, 0, width, height)
-    pdf.save("rekap_admin.pdf")
-  }
+function exportPDF() {
+  const rows = viewMode === "table" ? filtered : []
+
+  const tableHtml = viewMode === "table"
+    ? `<table cellpadding="8" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead style="background:#EEF2FF;">
+          <tr>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">No</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Siswa</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Paket</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Mapel</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Nilai</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Tanggal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map((item, i) => `
+            <tr>
+              <td style="padding:8px;border:1px solid #E2E8F0;color:#94A3B8;">${i + 1}</td>
+              <td style="padding:8px;border:1px solid #E2E8F0;">
+                <div style="font-weight:600;color:#1E293B;">${item.profiles.nama}</div>
+                <div style="font-size:11px;color:#94A3B8;">${item.profiles.email}</div>
+              </td>
+              <td style="padding:8px;border:1px solid #E2E8F0;color:#64748B;">${item.paket || "-"}</td>
+              <td style="padding:8px;border:1px solid #E2E8F0;color:#64748B;">${item.kategori}</td>
+              <td style="padding:8px;border:1px solid #E2E8F0;font-weight:700;color:#4338CA;">${item.skor}</td>
+              <td style="padding:8px;border:1px solid #E2E8F0;color:#94A3B8;">${new Date(item.tanggal).toLocaleString("id-ID")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>`
+    : `<table cellpadding="8" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead style="background:#EEF2FF;">
+          <tr>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">No</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Siswa</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Paket</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Mapel & Skor</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Rata-rata</th>
+            <th style="text-align:left;padding:8px;color:#4338CA;border:1px solid #C7D2FE;">Tanggal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${paketSummaries.map((p, i) => `
+            <tr>
+              <td style="padding:8px;border:1px solid #E2E8F0;color:#94A3B8;">${i + 1}</td>
+              <td style="padding:8px;border:1px solid #E2E8F0;">
+                <div style="font-weight:600;color:#1E293B;">${p.nama}</div>
+                <div style="font-size:11px;color:#94A3B8;">${p.email}</div>
+              </td>
+              <td style="padding:8px;border:1px solid #E2E8F0;color:#64748B;">${p.paket}</td>
+              <td style="padding:8px;border:1px solid #E2E8F0;font-size:11px;color:#64748B;">${p.mapel.map(m => `${m.kategori}: <b>${m.skor}</b>`).join(", ")}</td>
+              <td style="padding:8px;border:1px solid #E2E8F0;font-weight:700;color:#4338CA;">${p.rata}</td>
+              <td style="padding:8px;border:1px solid #E2E8F0;color:#94A3B8;">${new Date(p.tanggal).toLocaleString("id-ID")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>`
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+    <title>Rekap Nilai</title>
+    <style>* { box-sizing:border-box; } body { font-family:sans-serif; padding:32px; color:#1E293B; } @media print { body { padding:16px; } }</style>
+    </head><body>
+    <div style="margin-bottom:24px;">
+      <div style="font-size:11px;color:#6366F1;font-weight:700;letter-spacing:3px;text-transform:uppercase;">Admin Panel</div>
+      <div style="font-size:20px;font-weight:700;color:#1E293B;">Rekap Nilai</div>
+      <div style="font-size:12px;color:#94A3B8;margin-top:4px;">
+        ${viewMode === "table" ? `${filtered.length} data` : `${paketSummaries.length} paket`} · 
+        Dicetak ${new Date().toLocaleDateString("id-ID", {day:"numeric",month:"long",year:"numeric"})}
+      </div>
+    </div>
+    ${tableHtml}
+    </body></html>`
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement("a")
+  a.href     = url
+  a.download = `rekap_nilai.html`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
   // ── loading ───────────────────────────────────────────────────
   if (loading) {
