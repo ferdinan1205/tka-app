@@ -21,21 +21,20 @@ type Paket = {
 
 function formatNamaPaket(nama: string): string {
   const n = nama.toLowerCase().trim()
-  const map: { match: string; label: string }[] = [
-    { match: "paket ipa 2",    label: "IPA 2"     },
-    { match: "paket ipa 3",    label: "IPA 3"     },
-    { match: "paket ipa",      label: "IPA 1"     },
-    { match: "paket ips 2",    label: "IPS 2"     },
-    { match: "paket ips 3",    label: "IPS 3"     },
-    { match: "paket ips",      label: "IPS 1"     },
-    { match: "paket smk 2",    label: "SMK 2"     },
-    { match: "paket smk",      label: "SMK 1"     },
-    { match: "paket bahasa 2", label: "Bahasa 2"  },
-    { match: "paket bahasa 3", label: "Bahasa 3"  },
-    { match: "paket bahasa",   label: "Bahasa 1"  },
-  ]
-  const found = map.find((m) => n === m.match || n.startsWith(m.match))
-  return found ? found.label : nama
+
+  const match = n.match(
+    /^paket\s+(ipa|ips|smk|bahasa)(?:\s+(\d+))?$/
+  )
+
+  if (!match) return nama
+
+  const jurusan =
+    match[1].charAt(0).toUpperCase() +
+    match[1].slice(1)
+
+  const nomor = match[2] || "1"
+
+  return `${jurusan} ${nomor}`
 }
 
 type PaketTheme = {
@@ -165,7 +164,33 @@ export default function Dashboard() {
   const rataRata = hasil.length
     ? Math.round(hasil.reduce((a, b) => a + b.skor, 0) / hasil.length)
     : 0
+const sortedPaket = [...paketList].sort((a, b) => {
+  const getGroupOrder = (nama: string) => {
+    const n = nama.toLowerCase()
 
+    if (n.includes("ipa")) return 1
+    if (n.includes("ips")) return 2
+    if (n.includes("smk")) return 3
+    if (n.includes("bahasa")) return 4
+
+    return 99
+  }
+
+  const groupA = getGroupOrder(a.nama_paket)
+  const groupB = getGroupOrder(b.nama_paket)
+
+  if (groupA !== groupB) {
+    return groupA - groupB
+  }
+
+  const numA =
+    parseInt(a.nama_paket.match(/\d+/)?.[0] || "1")
+
+  const numB =
+    parseInt(b.nama_paket.match(/\d+/)?.[0] || "1")
+
+  return numA - numB
+})
   return (
     <div className="min-h-screen bg-[#06080F] text-white">
 
@@ -313,7 +338,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
-                {paketList.map((item) => {
+  {sortedPaket.map((item) => {
                   const theme     = getPaketTheme(item.nama_paket)
                   const labelNama = formatNamaPaket(item.nama_paket)
                   return (
