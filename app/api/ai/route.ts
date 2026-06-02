@@ -104,7 +104,19 @@ async function readImageWithVision(imageUrls: string[]): Promise<string> {
 
 export async function POST(req: Request) {
   try {
-   const { soal, jawaban_benar, pertanyaan, images, opsi } = await req.json()
+   const {
+  soal,
+  jawaban_benar,
+  jawaban_user,
+
+  jawaban_benar_huruf,
+  jawaban_user_huruf,
+
+  pertanyaan,
+  images,
+  opsi,
+  opsi_raw
+} = await req.json()
 
     console.log("[AI] POST diterima — images:", images)
 
@@ -143,23 +155,85 @@ ${opsi ? `\nPilihan jawaban:\nA. ${opsi.a}\nB. ${opsi.b}\nC. ${opsi.c}\nD. ${ops
 
 Pertanyaan siswa: ${pertanyaan}
 `
-    } else {
-      systemPrompt = `
+} else {
+  systemPrompt = `
 Kamu adalah guru TKA profesional.
 Buat pembahasan yang rapi, jelas, step by step, mudah dipahami siswa.
 ${imageData ? "Gunakan data dari gambar yang sudah diekstrak untuk membuat pembahasan yang akurat dan spesifik." : ""}
+
+INSTRUKSI PENTING:
+1. Pertama, tuliskan ulang SOAL dengan ringkas
+2. Tuliskan semua OPSI JAWABAN yang tersedia (A, B, C, D, E)
+3. Tunjukkan JAWABAN SISWA dan JAWABAN BENAR
+4. Jelaskan LANGKAH PENYELESAIAN yang benar
+5. Jelaskan MENGAPA jawaban benar itu benar
+6. Jelaskan MENGAPA jawaban siswa salah (jika salah)
+7. Berikan TIPS untuk mengerjakan soal serupa
+
+Gunakan format MARKDOWN dengan:
+- **teks tebal** untuk poin penting
+- \`kode\` untuk rumus
+- > untuk kutipan
+- ### untuk subjudul
 `
-      userPrompt = `
-Soal:
+  
+  // Format jawaban user dan jawaban benar dengan opsi lengkap
+  let jawabanUserText = jawaban_user || ""
+  let jawabanBenarText = jawaban_benar || ""
+  
+  // Jika ada opsi_raw, tampilkan teks lengkap dari opsi yang dipilih
+if (opsi_raw && jawaban_user_huruf) {
+  const userText =
+    opsi_raw[jawaban_user_huruf.toLowerCase()] || ""
+
+  jawabanUserText =
+    `${jawaban_user_huruf.toUpperCase()}. ${userText}`
+}
+
+if (opsi_raw && jawaban_benar_huruf) {
+  const benarText =
+    opsi_raw[jawaban_benar_huruf.toLowerCase()] || ""
+
+  jawabanBenarText =
+    `${jawaban_benar_huruf.toUpperCase()}. ${benarText}`
+}
+  
+  // Format opsi jawaban dengan rapi
+  let opsiFormatted = ""
+  if (opsi_raw) {
+    opsiFormatted = `
+A. ${opsi_raw.a || ""}
+B. ${opsi_raw.b || ""}
+C. ${opsi_raw.c || ""}
+D. ${opsi_raw.d || ""}
+${opsi_raw.e ? `E. ${opsi_raw.e}` : ""}
+`
+  } else if (opsi) {
+    opsiFormatted = opsi
+  }
+
+  userPrompt = `
+SOAL:
 ${soalBersih}
-${imageData ? `\nData dari gambar/tabel:\n${imageData}` : ""}
+${imageData ? `\nDATA DARI GAMBAR/TABEL:\n${imageData}` : ""}
 
-Jawaban benar: ${jawaban_benar}
-${opsi ? `\nPilihan jawaban:\nA. ${opsi.a}\nB. ${opsi.b}\nC. ${opsi.c}\nD. ${opsi.d}${opsi.e ? `\nE. ${opsi.e}` : ""}` : ""}
+OPSI JAWABAN:
+${opsiFormatted || "Tidak tersedia"}
 
-Jelaskan pembahasannya secara lengkap dan akurat berdasarkan data di atas.
+JAWABAN SISWA: ${jawabanUserText}
+JAWABAN BENAR: ${jawabanBenarText}
+
+BUAT PEMBAHASAN LENGKAP MENGGUNAKAN FORMAT MARKDOWN:
+### 📝 Ringkasan Soal
+### 📋 Opsi Jawaban
+### ❌ Jawaban Siswa (${jawabanUserText})
+### ✅ Jawaban Benar (${jawabanBenarText})
+### 📚 Langkah Penyelesaian
+### 💡 Penjelasan Mengapa Jawaban Benar
+### 🔍 Mengapa Jawaban Siswa ${jawaban_user && jawaban_user !== jawaban_benar ? "Salah" : "Benar"}
+### 🎯 Tips Mengerjakan
 `
-    }
+}
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",

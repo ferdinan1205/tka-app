@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../../../../lib/supabase"
 import { useParams, useRouter } from "next/navigation"
+// useRouter sudah ada, tidak perlu tambah
 
 /* ─────────────────────────────────────
    INJECTED ANIMATIONS
@@ -366,9 +367,19 @@ const MAPEL_STYLE: Record<string, { from: string; to: string; icon: string }> = 
 const DEFAULT_PENDAMPING = { from: "#7c3aed", to: "#d946ef", icon: "🎯" }
 
 function ExamCard({
-  nama, icon, colorFrom, colorTo, index, onStart, isCompleted, skor,
+  nama, icon, colorFrom, colorTo, index, onStart, isCompleted, skor, kategori, packageId, onReview
 }: {
-  nama: string; icon: string; colorFrom: string; colorTo: string; index: number; onStart: () => void; isCompleted: boolean; skor?: number
+  nama: string
+  icon: string
+  colorFrom: string
+  colorTo: string
+  index: number
+  onStart: () => void
+  isCompleted: boolean
+  skor?: number
+  kategori?: string
+  packageId?: number
+  onReview?: () => void
 }) {
   return (
     <div
@@ -420,10 +431,20 @@ function ExamCard({
               <span className="md:hidden">Selesai</span>
             </div>
             {skor !== undefined && (
-              <div className="h-9 md:h-10 rounded-2xl flex items-center justify-center gap-1.5 font-black text-xs md:text-sm"
-                style={{ background: `${colorFrom}18`, color: colorFrom }}>
-                🏆 Skor: {skor}
-              </div>
+              <>
+                <div className="h-9 md:h-10 rounded-2xl flex items-center justify-center gap-1.5 font-black text-xs md:text-sm"
+                  style={{ background: `${colorFrom}18`, color: colorFrom }}>
+                  🏆 Skor: {skor}
+                </div>
+                {/* TOMBOL REVIEW BARU */}
+                <button
+                  onClick={onReview}
+                  className="btn-press shrink-0 w-full h-9 md:h-10 rounded-2xl text-white font-black text-xs shadow-md transition-all hover:shadow-lg"
+                  style={{ background: `linear-gradient(135deg,#475569,#64748b)` }}
+                >
+                  📖 Lihat Review
+                </button>
+              </>
             )}
           </div>
         ) : (
@@ -443,7 +464,7 @@ function ExamCard({
    MAIN EXAM PAGE
 ───────────────────────────────────── */
 function MainExamPage({
-  paket, mapel, finalSelectedSubject, completedMapel, completedScores, onStart,
+  paket, mapel, finalSelectedSubject, completedMapel, completedScores, onStart, packageId,
 }: {
   paket: PackageType
   mapel: { nama: string; kategori: string; icon: string; color: { from: string; to: string } }[]
@@ -451,7 +472,10 @@ function MainExamPage({
   completedMapel: string[]
   completedScores: Record<string, number>
   onStart: (k: string) => void
+  packageId: number  // ← TAMBAHKAN
 }) {
+  const router = useRouter() // ← TAMBAHKAN
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-cyan-50/50 p-3 md:p-6">
       <GlobalStyles /><Blobs />
@@ -490,11 +514,18 @@ function MainExamPage({
         <div className={`grid gap-3 md:gap-5 grid-cols-1 ${mapel.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2 xl:grid-cols-4"}`}>
          {mapel.map((item, index) => (
             <ExamCard
-              key={item.nama} nama={item.nama} icon={item.icon}
-              colorFrom={item.color.from} colorTo={item.color.to}
-              index={index} onStart={() => onStart(item.kategori)}
+              key={item.nama}
+              nama={item.nama}
+              icon={item.icon}
+              colorFrom={item.color.from}
+              colorTo={item.color.to}
+              index={index}
+              onStart={() => onStart(item.kategori)}
               isCompleted={completedMapel.includes(item.kategori)}
               skor={completedScores[item.kategori]}
+              kategori={item.kategori}
+              packageId={packageId}
+              onReview={() => router.push(`/review?kategori=${encodeURIComponent(item.kategori)}&package_id=${packageId}`)}
             />
           ))}
         </div>
@@ -795,6 +826,7 @@ return (
     completedMapel={completedMapel}
     completedScores={completedScores}
     onStart={handleStartExam}
+    packageId={packageId}  // ← TAMBAHKAN
   />
 )
 }

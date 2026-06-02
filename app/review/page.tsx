@@ -2,7 +2,7 @@
 
 import { useEffect, useState, memo, useMemo } from "react"
 import { supabase } from "../../lib/supabase"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { MathJax, MathJaxContext } from "better-react-mathjax"
 
 const STYLES = `
@@ -88,11 +88,14 @@ const STYLES = `
 // =========================
 type DetailItem = {
   soal: string
-  gambar?: string | null   // ← PATCH: field gambar dari submit ujian
+  gambar?: string | null
   jawaban_user: string
   jawaban_benar: string
   benar: boolean
   pembahasan?: string
+
+  jawaban_user_text?: string
+  jawaban_benar_text?: string
 }
 type HasilType = {
   id: number
@@ -205,30 +208,69 @@ function StatCard({ label, value, icon, gradient, textColor, delay }: { label: s
 
 export default function Review() {
   const router = useRouter()
+  const searchParams = useSearchParams() // ← TAMBAHKAN
   const [data,      setData]      = useState<HasilType | null>(null)
   const [loading,   setLoading]   = useState(true)
   const [aiLoading, setAiLoading] = useState<number | null>(null)
   const [expanded,  setExpanded]  = useState<number[]>([])
 
-  useEffect(() => { getLastResult() }, [])
+  // Ambil parameter dari URL
+  const kategoriParam = searchParams.get('kategori')     // ← TAMBAHKAN
+  const packageIdParam = searchParams.get('package_id')  // ← TAMBAHKAN
 
-  async function getLastResult() {
-    try {
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user) { router.push("/login"); return }
-      const { data, error } = await supabase
-        .from("hasil").select("*")
+  useEffect(() => { 
+    getLastResult() 
+  }, [kategoriParam, packageIdParam]) // ← UBAH dependency
+
+async function getLastResult() {
+  try {
+    setLoading(true)
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) { 
+      router.push("/login")
+      return 
+    }
+    
+    let query = supabase
+      .from("hasil")
+      .select("*")
+      .eq("user_id", userData.user.id)
+    
+    // Filter berdasarkan kategori jika ada
+    if (kategoriParam) {
+      query = query.eq("kategori", kategoriParam)
+    }
+    
+    // Filter berdasarkan package_id jika ada
+    if (packageIdParam) {
+      query = query.eq("package_id", parseInt(packageIdParam))
+    }
+    
+    const { data, error } = await query.order("id", { ascending: false }).limit(1).maybeSingle()
+    
+    if (error || !data) {
+      // Fallback: ambil hasil terakhir tanpa filter
+      const { data: fallbackData } = await supabase
+        .from("hasil")
+        .select("*")
         .eq("user_id", userData.user.id)
         .order("id", { ascending: false })
-        .limit(1).single()
-      if (error) { console.error(error); return }
-      setData(data)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
+        .limit(1)
+        .maybeSingle()
+      
+      if (fallbackData) {
+        setData(fallbackData)
+      }
+      return
     }
+    
+    setData(data)
+  } catch (err) {
+    console.error(err)
+  } finally {
+    setLoading(false)
   }
+}
 
 async function generateAI(index: number, item: DetailItem) {
   try {
@@ -236,42 +278,153 @@ async function generateAI(index: number, item: DetailItem) {
     const images = extractImages(item.soal)
     const gambarUrl = item.gambar && item.gambar.trim() !== "" ? item.gambar : null
 
-    // Ambil opsi dari tabel soal berdasarkan konten pertanyaan
-    // Cari soal yang cocok dari Supabase
-    const soalBersih = item.soal.replace(/<[^>]*>/g, "").trim().slice(0, 100)
-    const { data: soalData } = await supabase
-      .from("soal")
-      .select("opsi_a, opsi_b, opsi_c, opsi_d, opsi_e")
-      .ilike("pertanyaan", `%${soalBersih.slice(0, 50)}%`)
-      .limit(1)
-      .maybeSingle()
+    // Bersihkan HTML dari soal untuk pencarian
+const soalBersih = item.soal
+  .replace(/<[^>]*>/g, "")
+  .replace(/&nbsp;/g, " ")
+  .replace(/\s+/g, " ")
+  .trim()
+
+const kataAwal = soalBersih
+  .split(" ")
+  .slice(0, 12)
+  .join(" ")
+
+const { data: soalList } = await supabase
+  .from("soal")
+  .select(`
+    pertanyaan,
+    opsi_a,
+    opsi_b,
+    opsi_c,
+    opsi_d,
+    opsi_e
+  `)
+
+let soalData = null
+
+if (soalList) {
+  soalData = soalList.find((s) => {
+    const dbSoal = s.pertanyaan
+      ?.replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+
+    return (
+      dbSoal
+        ?.slice(0, 150)
+        .toLowerCase() ===
+      soalBersih
+        .slice(0, 150)
+        .toLowerCase()
+    )
+  })
+}
+
+console.log("SOAL DITEMUKAN =", soalData)
+
+if (soalData) {
+  console.log("OPSI A =", soalData.opsi_a)
+  console.log("OPSI B =", soalData.opsi_b)
+  console.log("OPSI C =", soalData.opsi_c)
+  console.log("OPSI D =", soalData.opsi_d)
+  console.log("OPSI E =", soalData.opsi_e)
+}
+
+console.log("Soal ditemukan:", soalData ? "YA" : "TIDAK")
+    if (soalData) {
+      console.log("Opsi A:", soalData.opsi_a)
+      console.log("Opsi D:", soalData.opsi_d)
+    }
+    
+    // Format opsi untuk dikirim ke AI
+    let opsiText = null
+    if (soalData) {
+      opsiText = `
+A. ${soalData.opsi_a || ""}
+B. ${soalData.opsi_b || ""}
+C. ${soalData.opsi_c || ""}
+D. ${soalData.opsi_d || ""}
+E. ${soalData.opsi_e || ""}
+      `.trim()
+    }
+    
+    // Siapkan teks jawaban user dan jawaban benar yang lebih informatif
+    let jawabanUserText = item.jawaban_user
+    let jawabanBenarText = item.jawaban_benar
+    
+    if (soalData && opsiText) {
+      // Ambil teks lengkap dari opsi yang dipilih
+  const cleanHtml = (text: string = "") =>
+  text
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .trim()
+
+const opsiMap: Record<string, string> = {
+  a: cleanHtml(soalData.opsi_a),
+  b: cleanHtml(soalData.opsi_b),
+  c: cleanHtml(soalData.opsi_c),
+  d: cleanHtml(soalData.opsi_d),
+  e: cleanHtml(soalData.opsi_e),
+}
+      
+      jawabanUserText = `${item.jawaban_user.toUpperCase()}. ${opsiMap[item.jawaban_user.toLowerCase()] || item.jawaban_user}`
+      jawabanBenarText = `${item.jawaban_benar.toUpperCase()}. ${opsiMap[item.jawaban_benar.toLowerCase()] || item.jawaban_benar}`
+    }
 
     const res = await fetch("/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        soal: item.soal,
-        jawaban_benar: item.jawaban_benar,
-        images: gambarUrl ? [...images, gambarUrl] : images,
-        opsi: soalData ? {
-          a: soalData.opsi_a,
-          b: soalData.opsi_b,
-          c: soalData.opsi_c,
-          d: soalData.opsi_d,
-          e: soalData.opsi_e,
-        } : null,
-      }),
+body: JSON.stringify({
+  soal: item.soal,
+
+  jawaban_user_huruf: item.jawaban_user,
+  jawaban_benar_huruf: item.jawaban_benar,
+
+  jawaban_user: jawabanUserText,
+  jawaban_benar: jawabanBenarText,
+
+  images: gambarUrl
+    ? [...images, gambarUrl]
+    : images,
+
+  opsi: opsiText,
+
+  opsi_raw: soalData
+    ? {
+        a: soalData.opsi_a,
+        b: soalData.opsi_b,
+        c: soalData.opsi_c,
+        d: soalData.opsi_d,
+        e: soalData.opsi_e,
+      }
+    : null,
+}),
     })
+    
     const result = await res.json()
-    if (!result?.text) { alert("Pembahasan AI gagal dibuat"); return }
+    if (!result?.text) { 
+      alert("Pembahasan AI gagal dibuat")
+      return 
+    }
+    
     if (!data) return
     const updated = [...data.detail]
-    updated[index] = { ...updated[index], pembahasan: result.text }
+
+updated[index] = {
+  ...updated[index],
+  pembahasan: result.text,
+
+  jawaban_user_text: jawabanUserText,
+  jawaban_benar_text: jawabanBenarText,
+}
     setData({ ...data, detail: updated })
     setExpanded((prev) => [...prev, index])
   } catch (err) {
     console.error(err)
-    alert("Gagal generate AI")
+    alert("Gagal generate AI: " + (err as Error).message)
   } finally {
     setAiLoading(null)
   }
@@ -418,16 +571,47 @@ async function generateAI(index: number, item: DetailItem) {
                     )}
 
                     {/* JAWABAN */}
-                    <div className="grid grid-cols-2 gap-1.5 md:gap-3">
-                      <div className="rounded-xl p-2 md:p-3 border border-slate-200 bg-slate-50">
-                        <p className="text-[8px] md:text-[9px] text-slate-400 font-black uppercase tracking-wide mb-0.5">Jawaban Kamu</p>
-                        <p className="font-black text-base md:text-xl text-slate-600">{item.jawaban_user || "—"}</p>
-                      </div>
-                      <div className="rounded-xl p-2 md:p-3 border border-green-200 bg-green-50">
-                        <p className="text-[8px] md:text-[9px] text-green-600 font-black uppercase tracking-wide mb-0.5">Jawaban Benar</p>
-                        <p className="font-black text-base md:text-xl text-green-700">{item.jawaban_benar}</p>
-                      </div>
-                    </div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+  <div className="rounded-xl p-3 border border-slate-200 bg-slate-50">
+    <p className="text-[9px] text-slate-400 font-black uppercase tracking-wide mb-2">
+      Jawaban Kamu
+    </p>
+
+    <MathJax dynamic>
+      <div
+        className="text-base md:text-lg font-bold text-slate-700 break-words"
+        dangerouslySetInnerHTML={{
+          __html: formatText(
+            item.jawaban_user_text ||
+            item.jawaban_user ||
+            "—"
+          ),
+        }}
+      />
+    </MathJax>
+  </div>
+
+  <div className="rounded-xl p-3 border border-green-200 bg-green-50">
+    <p className="text-[9px] text-green-600 font-black uppercase tracking-wide mb-2">
+      Jawaban Benar
+    </p>
+
+    <MathJax dynamic>
+      <div
+        className="text-base md:text-lg font-bold text-green-700 break-words"
+        dangerouslySetInnerHTML={{
+          __html: formatText(
+            item.jawaban_benar_text ||
+            item.jawaban_benar ||
+            "—"
+          ),
+        }}
+      />
+    </MathJax>
+  </div>
+
+</div>
 
                     {/* AI */}
                     {!item.pembahasan ? (
