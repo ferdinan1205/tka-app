@@ -18,6 +18,14 @@ type SubjectType = {
   subject: string
 }
 
+// ── TAMBAH: tipe untuk jadwal_ujian ──
+type JadwalUjian = {
+  id: number
+  kategori: string
+  durasi: number
+  status: boolean
+}
+
 const ALL_SUBJECTS = [
   "Matematika", "Bahasa Indonesia", "Bahasa Inggris",
   "Fisika", "Kimia", "Biologi",
@@ -34,7 +42,6 @@ function generateToken() {
   ).join("")
 }
 
-// ── Komponen input URL manual ──
 function ImageUrlInput({
   defaultValue,
   onSave,
@@ -87,27 +94,32 @@ export default function AdminManajemenPaket() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
 
-  // Form buat paket baru
   const [newNama, setNewNama] = useState("")
   const [newToken, setNewToken] = useState("")
   const [saving, setSaving] = useState(false)
 
-  // Inline edit token
   const [editingTokenId, setEditingTokenId] = useState<number | null>(null)
   const [editingToken, setEditingToken] = useState("")
   const [savingTokenId, setSavingTokenId] = useState<number | null>(null)
 
-  // Inline edit nama
   const [editingNamaId, setEditingNamaId] = useState<number | null>(null)
   const [editingNama, setEditingNama] = useState("")
 
-  // Atur pendamping
   const [editingPendampingId, setEditingPendampingId] = useState<number | null>(null)
   const [newSubject, setNewSubject] = useState("")
   const [savingSubject, setSavingSubject] = useState(false)
 
-  // Upload gambar
   const [uploadingImageId, setUploadingImageId] = useState<number | null>(null)
+
+  // ── TAMBAH: state untuk manajemen waktu ──
+  const [jadwalList, setJadwalList] = useState<JadwalUjian[]>([])
+  const [editingWaktuKategori, setEditingWaktuKategori] = useState<string | null>(null)
+  const [editingDurasi, setEditingDurasi] = useState<number>(90)
+  const [savingWaktu, setSavingWaktu] = useState(false)
+  const [addingMapel, setAddingMapel] = useState(false)
+  const [newMapelNama, setNewMapelNama] = useState("")
+  const [newMapelDurasi, setNewMapelDurasi] = useState(90)
+  const [waktuSearch, setWaktuSearch] = useState("")
 
   useEffect(() => { init() }, [])
 
@@ -124,15 +136,16 @@ export default function AdminManajemenPaket() {
   }
 
   async function getData() {
-    const [{ data: pkgData }, { data: subData }] = await Promise.all([
+    const [{ data: pkgData }, { data: subData }, { data: jadwalData }] = await Promise.all([
       supabase.from("packages").select("*").order("id"),
       supabase.from("package_subjects").select("*").order("id"),
+      supabase.from("jadwal_ujian").select("*").order("kategori"),
     ])
     setPackages((pkgData || []) as PackageType[])
     setSubjects((subData || []) as SubjectType[])
+    setJadwalList((jadwalData || []) as JadwalUjian[])
   }
 
-  // ── Buat paket baru ──
   async function buatPaket() {
     if (!newNama.trim()) { alert("Nama paket wajib diisi"); return }
     if (!newToken.trim()) { alert("Token wajib diisi"); return }
@@ -148,7 +161,6 @@ export default function AdminManajemenPaket() {
     await getData()
   }
 
-  // ── Edit token ──
   async function simpanToken(id: number) {
     setSavingTokenId(id)
     const { error } = await supabase
@@ -161,7 +173,6 @@ export default function AdminManajemenPaket() {
     await getData()
   }
 
-  // ── Edit nama ──
   async function simpanNama(id: number) {
     if (!editingNama.trim()) { alert("Nama tidak boleh kosong"); return }
     const { error } = await supabase
@@ -171,7 +182,6 @@ export default function AdminManajemenPaket() {
     await getData()
   }
 
-  // ── Hapus paket ──
   async function hapusPaket(id: number, nama: string) {
     if (!confirm(`Hapus paket "${nama}"? Semua data terkait juga akan terhapus.`)) return
     await supabase.from("package_subjects").delete().eq("package_id", id)
@@ -180,7 +190,6 @@ export default function AdminManajemenPaket() {
     await getData()
   }
 
-  // ── Tambah pendamping ──
   async function tambahPendamping(packageId: number) {
     if (!newSubject) { alert("Pilih mata pelajaran"); return }
     const sudahAda = subjects.some(
@@ -196,14 +205,12 @@ export default function AdminManajemenPaket() {
     await getData()
   }
 
-  // ── Hapus pendamping ──
   async function hapusPendamping(id: number) {
     if (!confirm("Hapus mata pelajaran ini dari paket?")) return
     await supabase.from("package_subjects").delete().eq("id", id)
     await getData()
   }
 
-  // ── Upload gambar ke Supabase Storage ──
   async function uploadGambar(packageId: number, file: File) {
     setUploadingImageId(packageId)
     const ext = file.name.split(".").pop()
@@ -230,7 +237,6 @@ export default function AdminManajemenPaket() {
     await getData()
   }
 
-  // ── Simpan URL gambar manual ──
   async function simpanImageUrl(packageId: number, url: string) {
     const { error } = await supabase
       .from("packages")
@@ -240,9 +246,77 @@ export default function AdminManajemenPaket() {
     await getData()
   }
 
+  // ── TAMBAH: fungsi manajemen waktu ──
+
+  async function simpanWaktu(kategori: string) {
+    if (!editingDurasi || editingDurasi < 1) { alert("Durasi tidak valid"); return }
+    setSavingWaktu(true)
+
+    const existing = jadwalList.find((j) => j.kategori === kategori)
+
+    if (existing) {
+      const { error } = await supabase
+        .from("jadwal_ujian")
+        .update({ durasi: editingDurasi })
+        .eq("id", existing.id)
+      if (error) { alert("Gagal: " + error.message); setSavingWaktu(false); return }
+    } else {
+      // seharusnya tidak terjadi di flow edit, tapi jaga-jaga
+      const { error } = await supabase
+        .from("jadwal_ujian")
+        .insert([{ kategori, durasi: editingDurasi, status: false }])
+      if (error) { alert("Gagal: " + error.message); setSavingWaktu(false); return }
+    }
+
+    setSavingWaktu(false)
+    setEditingWaktuKategori(null)
+    await getData()
+  }
+
+  async function tambahMapelBaru() {
+    if (!newMapelNama.trim()) { alert("Nama mapel wajib diisi"); return }
+    if (!newMapelDurasi || newMapelDurasi < 1) { alert("Durasi tidak valid"); return }
+
+    const sudahAda = jadwalList.some(
+      (j) => j.kategori.toLowerCase() === newMapelNama.trim().toLowerCase()
+    )
+    if (sudahAda) { alert("Mapel ini sudah ada"); return }
+
+    setSavingWaktu(true)
+    const { error } = await supabase
+      .from("jadwal_ujian")
+      .insert([{ kategori: newMapelNama.trim(), durasi: newMapelDurasi, status: false }])
+    setSavingWaktu(false)
+
+    if (error) { alert("Gagal: " + error.message); return }
+    setNewMapelNama("")
+    setNewMapelDurasi(90)
+    setAddingMapel(false)
+    await getData()
+  }
+
+  async function toggleStatusMapel(jadwal: JadwalUjian) {
+    const { error } = await supabase
+      .from("jadwal_ujian")
+      .update({ status: !jadwal.status })
+      .eq("id", jadwal.id)
+    if (error) { alert("Gagal: " + error.message); return }
+    await getData()
+  }
+
+  async function hapusMapel(jadwal: JadwalUjian) {
+    if (!confirm(`Hapus jadwal ujian "${jadwal.kategori}"?`)) return
+    await supabase.from("jadwal_ujian").delete().eq("id", jadwal.id)
+    await getData()
+  }
+
   const filtered = packages.filter((p) =>
     p.nama_paket.toLowerCase().includes(search.toLowerCase()) ||
     (p.token || "").toLowerCase().includes(search.toLowerCase())
+  )
+
+  const filteredJadwal = jadwalList.filter((j) =>
+    j.kategori.toLowerCase().includes(waktuSearch.toLowerCase())
   )
 
   if (loading) {
@@ -535,7 +609,6 @@ export default function AdminManajemenPaket() {
                   <div className="border-t border-slate-100 pt-3 space-y-2">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Foto Paket</p>
 
-                    {/* Preview */}
                     {item.image_url && (
                       <div className="relative w-full h-24 rounded-lg overflow-hidden border border-slate-200">
                         <img
@@ -551,7 +624,6 @@ export default function AdminManajemenPaket() {
                       </div>
                     )}
 
-                    {/* Upload file */}
                     <div>
                       <label className="block text-[11px] text-slate-500 mb-1">Upload gambar</label>
                       <label className={`flex items-center justify-center gap-1.5 h-8 w-full rounded-lg border border-dashed cursor-pointer transition text-xs font-medium
@@ -578,7 +650,6 @@ export default function AdminManajemenPaket() {
                       </label>
                     </div>
 
-                    {/* Atau URL manual */}
                     <ImageUrlInput
                       defaultValue={item.image_url || ""}
                       onSave={(url) => simpanImageUrl(item.id, url)}
@@ -588,6 +659,239 @@ export default function AdminManajemenPaket() {
                 </div>
               )
             })}
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════
+            ── SECTION BARU: MANAJEMEN WAKTU MAPEL ──
+        ══════════════════════════════════════════════════════ */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-5 rounded-full bg-orange-500" />
+              <h2 className="text-sm font-semibold text-slate-800">Manajemen Waktu Mapel</h2>
+              <span className="text-[11px] text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">
+                {jadwalList.length} mapel
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <input
+                  value={waktuSearch}
+                  onChange={(e) => setWaktuSearch(e.target.value)}
+                  placeholder="Cari mapel..."
+                  className="h-9 w-44 border border-slate-200 rounded-xl bg-white px-3 pr-8 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 transition"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+              </div>
+              <button
+                onClick={() => { setAddingMapel(!addingMapel); setNewMapelNama(""); setNewMapelDurasi(90) }}
+                className={`h-9 px-4 rounded-xl text-xs font-semibold transition ${
+                  addingMapel
+                    ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    : "bg-orange-500 text-white hover:bg-orange-600"
+                }`}
+              >
+                {addingMapel ? "Batal" : "+ Tambah Mapel"}
+              </button>
+            </div>
+          </div>
+
+          {/* Form tambah mapel baru */}
+          {addingMapel && (
+            <div className="mb-4 p-4 bg-orange-50 border border-orange-100 rounded-xl">
+              <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-3">Tambah mapel baru ke jadwal</p>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Nama Mapel</label>
+                  <select
+                    value={newMapelNama}
+                    onChange={(e) => setNewMapelNama(e.target.value)}
+                    className="w-full h-10 border border-slate-200 rounded-xl px-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 transition bg-white"
+                  >
+                    <option value="">Pilih mapel...</option>
+                    {ALL_SUBJECTS.filter(
+                      (s) => !jadwalList.some((j) => j.kategori.toLowerCase() === s.toLowerCase())
+                    ).map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    <option value="__custom__">Nama lainnya (ketik manual)</option>
+                  </select>
+                  {newMapelNama === "__custom__" && (
+                    <input
+                      autoFocus
+                      value=""
+                      onChange={(e) => setNewMapelNama(e.target.value)}
+                      placeholder="Ketik nama mapel..."
+                      className="mt-2 w-full h-10 border border-orange-300 rounded-xl px-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-orange-100 bg-white transition"
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Durasi (menit)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={300}
+                    value={newMapelDurasi}
+                    onChange={(e) => setNewMapelDurasi(Number(e.target.value))}
+                    className="w-full h-10 border border-slate-200 rounded-xl px-3 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 transition"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={tambahMapelBaru}
+                  disabled={savingWaktu}
+                  className="h-9 px-5 bg-orange-500 text-white rounded-xl text-xs font-semibold hover:bg-orange-600 disabled:opacity-50 transition"
+                >
+                  {savingWaktu ? "Menyimpan..." : "✓ Simpan"}
+                </button>
+                <button
+                  onClick={() => setAddingMapel(false)}
+                  className="h-9 px-4 rounded-xl border border-slate-200 text-slate-500 text-xs hover:bg-slate-50 transition"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          )}
+
+          {filteredJadwal.length === 0 && (
+            <div className="p-10 text-center">
+              <p className="text-sm text-slate-400">
+                {waktuSearch ? "Tidak ada mapel ditemukan" : "Belum ada jadwal ujian. Tambah mapel terlebih dahulu."}
+              </p>
+            </div>
+          )}
+
+          {/* Tabel waktu mapel */}
+          {filteredJadwal.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest pb-3 pl-1">Mata Pelajaran</th>
+                    <th className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pb-3">Durasi</th>
+                    <th className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pb-3">Status</th>
+                    <th className="text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest pb-3 pr-1">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredJadwal.map((jadwal) => {
+                    const isEditing = editingWaktuKategori === jadwal.kategori
+                    return (
+                      <tr key={jadwal.id} className={`transition ${isEditing ? "bg-orange-50/50" : "hover:bg-slate-50/50"}`}>
+                        {/* Nama mapel */}
+                        <td className="py-3 pl-1">
+                          <span className="font-semibold text-slate-800">{jadwal.kategori}</span>
+                        </td>
+
+                        {/* Durasi */}
+                        <td className="py-3 text-center">
+                          {isEditing ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <input
+                                autoFocus
+                                type="number"
+                                min={1}
+                                max={300}
+                                value={editingDurasi}
+                                onChange={(e) => setEditingDurasi(Number(e.target.value))}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") simpanWaktu(jadwal.kategori)
+                                  if (e.key === "Escape") setEditingWaktuKategori(null)
+                                }}
+                                className="w-20 h-8 border border-orange-300 rounded-lg px-2.5 text-sm font-bold text-center text-slate-800 outline-none focus:ring-2 focus:ring-orange-100 bg-white"
+                              />
+                              <span className="text-xs text-slate-400">menit</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span className="font-black text-slate-800">{jadwal.durasi}</span>
+                              <span className="text-xs text-slate-400">menit</span>
+                              <span className="text-[10px] text-slate-300">
+                                ({Math.floor(jadwal.durasi / 60) > 0 ? `${Math.floor(jadwal.durasi / 60)}j ` : ""}
+                                {jadwal.durasi % 60 > 0 ? `${jadwal.durasi % 60}m` : ""})
+                              </span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Status buka/tutup */}
+                        <td className="py-3 text-center">
+                          <button
+                            onClick={() => toggleStatusMapel(jadwal)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition ${
+                              jadwal.status
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${jadwal.status ? "bg-emerald-500" : "bg-slate-400"}`} />
+                            {jadwal.status ? "Dibuka" : "Ditutup"}
+                          </button>
+                        </td>
+
+                        {/* Aksi */}
+                        <td className="py-3 pr-1 text-right">
+                          {isEditing ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => simpanWaktu(jadwal.kategori)}
+                                disabled={savingWaktu}
+                                className="h-7 px-3 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition"
+                              >
+                                {savingWaktu ? "..." : "✓ Simpan"}
+                              </button>
+                              <button
+                                onClick={() => setEditingWaktuKategori(null)}
+                                className="h-7 px-2.5 rounded-lg border border-slate-200 text-slate-500 text-xs hover:bg-slate-50 transition"
+                              >
+                                Batal
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditingWaktuKategori(jadwal.kategori)
+                                  setEditingDurasi(jadwal.durasi)
+                                }}
+                                className="h-7 px-3 rounded-lg bg-orange-50 text-orange-600 text-xs font-medium hover:bg-orange-100 transition"
+                              >
+                                Edit waktu
+                              </button>
+                              <button
+                                onClick={() => hapusMapel(jadwal)}
+                                className="h-7 px-3 rounded-lg bg-rose-50 text-rose-600 text-xs font-medium hover:bg-rose-100 transition"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Legend */}
+          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-4 text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Dibuka = siswa bisa akses ujian
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-slate-400" />
+              Ditutup = ujian tidak bisa diakses
+            </span>
+            <span className="flex items-center gap-1.5">
+              ⏱ Durasi diatur dalam menit
+            </span>
           </div>
         </div>
 
