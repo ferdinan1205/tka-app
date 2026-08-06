@@ -15,10 +15,18 @@ function RegisterForm() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [aksesDiizinkan, setAksesDiizinkan] = useState<boolean | null>(null)
+
+  // TEMPORARY: gerbang kode dinonaktifkan sementara — register terbuka untuk umum.
+  // Untuk mengunci lagi: ganti balik ke useState<boolean | null>(null) dan
+  // un-comment blok pengecekan kode di dalam useEffect di bawah.
+  const [aksesDiizinkan, setAksesDiizinkan] = useState<boolean | null>(true)
 
   useEffect(() => {
 
+    // TEMPORARY: gerbang kode dinonaktifkan sementara — register terbuka untuk umum.
+    // Untuk mengunci lagi, un-comment blok di bawah dan set aksesDiizinkan awal balik ke null.
+
+    /*
     const kodeDariUrl = searchParams.get("kode")
     const KODE_VALID = process.env.NEXT_PUBLIC_REGISTER_CODE
 
@@ -43,6 +51,7 @@ function RegisterForm() {
         setAksesDiizinkan(false)
       }
     }
+    */
 
   }, [])
 

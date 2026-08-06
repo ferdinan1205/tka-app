@@ -1,9 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { supabase } from "../../../../lib/supabase"
-import { useParams, useRouter } from "next/navigation"
-// useRouter sudah ada, tidak perlu tambah
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 
 /* ─────────────────────────────────────
    INJECTED ANIMATIONS
@@ -472,9 +471,9 @@ function MainExamPage({
   completedMapel: string[]
   completedScores: Record<string, number>
   onStart: (k: string) => void
-  packageId: number  // ← TAMBAHKAN
+  packageId: number
 }) {
-  const router = useRouter() // ← TAMBAHKAN
+  const router = useRouter()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-cyan-50/50 p-3 md:p-6">
@@ -542,12 +541,17 @@ function MainExamPage({
 }
 
 /* ─────────────────────────────────────
-   MAIN PAGE
+   MAIN PAGE (INNER — pakai useSearchParams)
 ───────────────────────────────────── */
-export default function PackagePage() {
-  const params    = useParams()
-  const router    = useRouter()
-  const packageId = parseInt(params.id as string)
+function PackagePageInner() {
+  const params       = useParams()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const packageId    = parseInt(params.id as string)
+
+  // Tanda datang dari halaman kelas (?via_kelas=ID). Kalau ada, cek akses lewat
+  // kelas SETIAP KALI (tidak disimpan permanen). Kalau kosong, wajib token asli.
+  const viaKelasParam = searchParams.get("via_kelas")
 
   const [paket,           setPaket          ] = useState<PackageType | null>(null)
   const [subjects,        setSubjects       ] = useState<SubjectType[]>([])
@@ -557,8 +561,8 @@ export default function PackagePage() {
   const [selectedSubject, setSelectedSubject] = useState("")
   const [savedPendamping, setSavedPendamping] = useState("")
   const [subjectLoading,  setSubjectLoading ] = useState(false)
-    const [completedMapel,  setCompletedMapel ] = useState<string[]>([])
-const [completedScores, setCompletedScores] = useState<Record<string, number>>({})
+  const [completedMapel,  setCompletedMapel ] = useState<string[]>([])
+  const [completedScores, setCompletedScores] = useState<Record<string, number>>({})
 
   // Pendamping berdasarkan kategori dasar paket
   const PENDAMPING_MAP: Record<string, string[]> = {
@@ -571,7 +575,8 @@ const [completedScores, setCompletedScores] = useState<Record<string, number>>({
   useEffect(() => {
     if (isNaN(packageId)) { setLoading(false); return }
     getData()
-  }, [packageId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packageId, viaKelasParam])
 
   async function getData() {
     try {
@@ -585,12 +590,48 @@ const [completedScores, setCompletedScores] = useState<Record<string, number>>({
       if (packageError || !packageData) { setPaket(null); setLoading(false); return }
       setPaket(packageData)
 
-      // ── Cek token tersimpan di localStorage per user per paket ──
+      // ── Cek akses: token asli tersimpan (permanen) ATAU via_kelas valid (tidak permanen) ──
+      let isAllowed = false
+
       if (user) {
-        const tokenKey = `pkg_token_${user.id}_${packageId}`
+        // Key baru (v2) supaya cache lama dari bug sebelumnya otomatis ke-reset
+        const tokenKey = `pkg_token_v2_${user.id}_${packageId}`
         const savedToken = localStorage.getItem(tokenKey)
-        if (savedToken === "true") setAllowed(true)
+
+        if (savedToken === "true") {
+          // Pernah masukin token asli paket secara manual → permanen terbuka
+          isAllowed = true
+        } else if (viaKelasParam) {
+          // Hanya berlaku kalau memang datang dari link halaman kelas.
+          // Dicek ulang setiap kali render, TIDAK disimpan ke localStorage.
+          const kelasIdNum = parseInt(viaKelasParam)
+          if (!isNaN(kelasIdNum)) {
+            // Pastikan paket ini memang terdaftar di kelas tsb
+            const { data: kelasPaket } = await supabase
+              .from("kelas_paket")
+              .select("kelas_id")
+              .eq("package_id", packageId)
+              .eq("kelas_id", kelasIdNum)
+              .maybeSingle()
+
+            if (kelasPaket) {
+              const { data: aksesKelas } = await supabase
+                .from("akses_kelas")
+                .select("id")
+                .eq("user_id", user.id)
+                .eq("kelas_id", kelasIdNum)
+                .maybeSingle()
+
+              if (aksesKelas) {
+                isAllowed = true
+                // SENGAJA TIDAK di-localStorage — akses dari luar kelas tetap wajib token
+              }
+            }
+          }
+        }
       }
+
+      if (isAllowed) setAllowed(true)
 
       // Ambil subjects dari DB
       const { data: subjectData } = await supabase
@@ -619,14 +660,14 @@ const [completedScores, setCompletedScores] = useState<Record<string, number>>({
           .eq("user_id", user.id).eq("package_id", packageId).maybeSingle()
         if (pilihanData) setSavedPendamping(pilihanData.pilihan)
 
-        // ← TAMBAH INI: fetch ujian yang sudah dikerjakan
         const { data: usedData } = await supabase
           .from("token_used")
           .select("kategori")
           .eq("user_id", user.id)
           .eq("package_id", packageId)
         if (usedData) setCompletedMapel(usedData.map((d: any) => d.kategori))
-           const { data: hasilData } = await supabase
+
+        const { data: hasilData } = await supabase
           .from("hasil")
           .select("kategori, skor")
           .eq("user_id", user.id)
@@ -645,7 +686,7 @@ const [completedScores, setCompletedScores] = useState<Record<string, number>>({
     }
   }
 
-  // ── Simpan token ke localStorage setelah berhasil ──
+  // ── Simpan token ke localStorage setelah berhasil (token asli = permanen) ──
   async function handleToken() {
     if (!paket) return
     if (token.trim() !== paket.token) { alert("Token salah"); return }
@@ -653,7 +694,7 @@ const [completedScores, setCompletedScores] = useState<Record<string, number>>({
     const { data: userData } = await supabase.auth.getUser()
     const user = userData.user
     if (user) {
-      const tokenKey = `pkg_token_${user.id}_${packageId}`
+      const tokenKey = `pkg_token_v2_${user.id}_${packageId}`
       localStorage.setItem(tokenKey, "true")
     }
 
@@ -687,146 +728,126 @@ const [completedScores, setCompletedScores] = useState<Record<string, number>>({
     }
   }
 
-  // ── handleStartExam cek soal lewat package_soal, bukan langsung ke tabel soal ──
-// ── handleStartExam cek soal lewat package_soal ──
-async function handleStartExam(kategori: string) {
-  try {
-    const { data: userData } = await supabase.auth.getUser()
-    const user = userData.user
-    if (!user) { alert("Harus login"); return }
+  async function handleStartExam(kategori: string) {
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const user = userData.user
+      if (!user) { alert("Harus login"); return }
 
-    // Ambil soal_id dari package_soal dulu
-    const { data: psData, error: psError } = await supabase
-      .from("package_soal")
-      .select("soal_id")
-      .eq("package_id", packageId)
+      // Ambil soal_id dari package_soal dulu
+      const { data: psData, error: psError } = await supabase
+        .from("package_soal")
+        .select("soal_id")
+        .eq("package_id", packageId)
 
-    console.log("PS DATA LENGTH:", psData?.length)
+      if (psError || !psData || psData.length === 0) {
+        alert("Belum ada soal pada paket ini")
+        return
+      }
 
-    if (psError || !psData || psData.length === 0) {
-      alert("Belum ada soal pada paket ini")
-      return
+      const soalIds = psData.map((x: any) => x.soal_id)
+
+      // Filter soal berdasarkan kategori
+      const { data: soalData, error: soalError } = await supabase
+        .from("soal")
+        .select("id, kategori")
+        .in("id", soalIds)
+        .eq("kategori", kategori)
+
+      if (soalError || !soalData || soalData.length === 0) {
+        alert(`Soal ${kategori} belum ada di paket ini`)
+        return
+      }
+
+      // Cek sudah dikerjakan
+      const { data: usedData } = await supabase
+        .from("token_used")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("kategori", kategori)
+        .eq("package_id", packageId)
+        .maybeSingle()
+
+      if (usedData) {
+        alert(`${kategori} sudah dikerjakan`)
+        return
+      }
+
+      router.push(
+        `/ujian/${encodeURIComponent(kategori)}?paket=${encodeURIComponent(paket?.nama_paket || "")}&package_id=${packageId}`
+      )
+    } catch (err) {
+      console.log(err)
+      alert("Terjadi kesalahan")
     }
-
-    const soalIds = psData.map((x: any) => x.soal_id)
-
-    // Filter soal berdasarkan kategori
-    const { data: soalData, error: soalError } = await supabase
-      .from("soal")
-      .select("id, kategori")
-      .in("id", soalIds)
-      .eq("kategori", kategori)
-
-    console.log("SOAL DATA LENGTH:", soalData?.length)
-    console.log("SOAL ERROR:", soalError)
-
-    if (soalError || !soalData || soalData.length === 0) {
-      alert(`Soal ${kategori} belum ada di paket ini`)
-      return
-    }
-
-    // Cek sudah dikerjakan
-    const { data: usedData } = await supabase
-      .from("token_used")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("kategori", kategori)
-      .eq("package_id", packageId)
-      .maybeSingle()
-
-    if (usedData) {
-      alert(`${kategori} sudah dikerjakan`)
-      return
-    }
-
-    router.push(
-      `/ujian/${encodeURIComponent(kategori)}?paket=${encodeURIComponent(paket?.nama_paket || "")}&package_id=${packageId}`
-    )
-  } catch (err) {
-    console.log(err)
-    alert("Terjadi kesalahan")
   }
-}
-if (loading) return <LoadingScreen />
-if (!paket) return <NotFoundScreen />
 
-if (!allowed) {
-  return (
-    <TokenScreen
-      paket={paket}
-      token={token}
-      setToken={setToken}
-      onSubmit={handleToken}
-    />
-  )
-}
+  if (loading) return <LoadingScreen />
+  if (!paket) return <NotFoundScreen />
 
-const finalSelectedSubject =
-  savedPendamping || selectedSubject
+  if (!allowed) {
+    return (
+      <TokenScreen
+        paket={paket}
+        token={token}
+        setToken={setToken}
+        onSubmit={handleToken}
+      />
+    )
+  }
 
-const mapelWajib = [
-  {
-    nama: "Matematika",
-    kategori: "Matematika",
-    icon: "📐",
-    color: MAPEL_STYLE["Matematika"],
-  },
-  {
-    nama: "Bahasa Indonesia",
-    kategori: "Bahasa Indonesia",
-    icon: "📖",
-    color: MAPEL_STYLE["Bahasa Indonesia"],
-  },
-  {
-    nama: "Bahasa Inggris",
-    kategori: "Bahasa Inggris",
-    icon: "🌍",
-    color: MAPEL_STYLE["Bahasa Inggris"],
-  },
-]
+  const finalSelectedSubject = savedPendamping || selectedSubject
 
-const mapelPendamping =
-  finalSelectedSubject
-    ? [
-        {
-          nama: finalSelectedSubject,
-          kategori: finalSelectedSubject,
-          icon: DEFAULT_PENDAMPING.icon,
-          color: {
-            from: DEFAULT_PENDAMPING.from,
-            to: DEFAULT_PENDAMPING.to,
-          },
-        },
-      ]
+  const mapelWajib = [
+    { nama: "Matematika",         kategori: "Matematika",         icon: "📐", color: MAPEL_STYLE["Matematika"] },
+    { nama: "Bahasa Indonesia",   kategori: "Bahasa Indonesia",   icon: "📖", color: MAPEL_STYLE["Bahasa Indonesia"] },
+    { nama: "Bahasa Inggris",     kategori: "Bahasa Inggris",     icon: "🌍", color: MAPEL_STYLE["Bahasa Inggris"] },
+  ]
+
+  const mapelPendamping = finalSelectedSubject
+    ? [{
+        nama: finalSelectedSubject,
+        kategori: finalSelectedSubject,
+        icon: DEFAULT_PENDAMPING.icon,
+        color: { from: DEFAULT_PENDAMPING.from, to: DEFAULT_PENDAMPING.to },
+      }]
     : []
 
-const allMapel = [
-  ...mapelWajib,
-  ...mapelPendamping,
-]
+  const allMapel = [...mapelWajib, ...mapelPendamping]
 
-if (!finalSelectedSubject) {
+  if (!finalSelectedSubject) {
+    return (
+      <SubjectPage
+        paket={paket}
+        subjects={subjects}
+        savedPendamping={savedPendamping}
+        selectedSubject={selectedSubject}
+        subjectLoading={subjectLoading}
+        onPilih={pilihPendamping}
+      />
+    )
+  }
+
   return (
-    <SubjectPage
+    <MainExamPage
       paket={paket}
-      subjects={subjects}
-      savedPendamping={savedPendamping}
-      selectedSubject={selectedSubject}
-      subjectLoading={subjectLoading}
-      onPilih={pilihPendamping}
+      mapel={allMapel}
+      finalSelectedSubject={finalSelectedSubject}
+      completedMapel={completedMapel}
+      completedScores={completedScores}
+      onStart={handleStartExam}
+      packageId={packageId}
     />
   )
 }
 
-return (
-  <MainExamPage
-    paket={paket}
-    mapel={allMapel}
-    finalSelectedSubject={finalSelectedSubject}
-    completedMapel={completedMapel}
-    completedScores={completedScores}
-    onStart={handleStartExam}
-    packageId={packageId}  // ← TAMBAHKAN
-  />
-)
+/* ─────────────────────────────────────
+   MAIN PAGE (export default — wrap Suspense krn pakai useSearchParams)
+───────────────────────────────────── */
+export default function PackagePage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <PackagePageInner />
+    </Suspense>
+  )
 }

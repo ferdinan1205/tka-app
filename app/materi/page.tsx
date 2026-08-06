@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "../../lib/supabase"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
+import {
+  LayoutDashboard,
+  BookOpen,
+  Trophy,
+  Activity,
+  ClipboardList,
+  LogOut,
+  X,
+  Menu,
+  Search,
+} from "lucide-react"
 
 type Materi = {
   id: number
@@ -23,44 +34,62 @@ const kategoriList = [
 ]
 
 const tipeColor: Record<string, string> = {
-  video:    "bg-rose-500",
-  artikel:  "bg-amber-500",
-  pdf:      "bg-emerald-500",
-  kuis:     "bg-violet-500",
-  latihan:  "bg-sky-500",
+  video:   "#F43F5E",
+  artikel: "#F59E0B",
+  pdf:     "#10B981",
+  kuis:    "#8B5CF6",
+  latihan: "#0EA5E9",
 }
 
-const kategoriGradient: Record<string, string> = {
-  Matematika:         "from-blue-600 to-indigo-700",
-  "Bahasa Indonesia": "from-rose-500 to-pink-700",
-  "Bahasa Inggris":   "from-emerald-500 to-teal-700",
-  TPS:                "from-amber-500 to-orange-700",
-  Literasi:           "from-violet-500 to-purple-700",
-  Semua:              "from-blue-600 to-violet-700",
+type KategoriTheme = { accent: string; soft: string; from: string; to: string; symbol: string }
+
+const kategoriTheme: Record<string, KategoriTheme> = {
+  Matematika:         { accent: "#6366F1", soft: "#EEF2FF", from: "#6366F1", to: "#8B5CF6", symbol: "∑" },
+  "Bahasa Indonesia": { accent: "#F43F5E", soft: "#FFF1F2", from: "#FB7185", to: "#F43F5E", symbol: "A" },
+  "Bahasa Inggris":   { accent: "#10B981", soft: "#ECFDF5", from: "#34D399", to: "#0EA5E9", symbol: "E" },
+  TPS:                { accent: "#F59E0B", soft: "#FFFBEB", from: "#FBBF24", to: "#F97316", symbol: "◈" },
+  Literasi:           { accent: "#8B5CF6", soft: "#F5F3FF", from: "#A78BFA", to: "#6366F1", symbol: "◎" },
+  Semua:              { accent: "#6366F1", soft: "#EEF2FF", from: "#6366F1", to: "#8B5CF6", symbol: "✦" },
 }
 
-const kategoriSymbol: Record<string, string> = {
-  Matematika:         "∑",
-  "Bahasa Indonesia": "A",
-  "Bahasa Inggris":   "E",
-  TPS:                "◈",
-  Literasi:           "◎",
+function getKategoriTheme(kategori: string): KategoriTheme {
+  return kategoriTheme[kategori] || kategoriTheme.Semua
 }
+
+const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/materi", label: "Materi", icon: BookOpen },
+  { href: "/ranking", label: "Ranking", icon: Trophy },
+  { href: "/progress", label: "Progress", icon: Activity },
+  { href: "/rekap", label: "Rekap Nilai", icon: ClipboardList },
+]
 
 export default function MateriPage() {
-  const [materi, setMateri]           = useState<Materi[]>([])
-  const [loading, setLoading]         = useState(true)
-  const [search, setSearch]           = useState("")
+  const [materi, setMateri]               = useState<Materi[]>([])
+  const [loading, setLoading]             = useState(true)
+  const [search, setSearch]               = useState("")
   const [kategoriAktif, setKategoriAktif] = useState("Semua")
-  const router = useRouter()
+  const [sidebarOpen, setSidebarOpen]     = useState(false)
+  const [nama, setNama]                   = useState("")
+  const [foto, setFoto]                   = useState("")
+  const router   = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => { init() }, [])
 
   async function init() {
     const { data } = await supabase.auth.getUser()
     if (!data.user) { router.push("/login"); return }
-    await getMateri()
+    await Promise.all([getProfile(data.user.id), getMateri()])
     setLoading(false)
+  }
+
+  async function getProfile(userId: string) {
+    const { data } = await supabase.from("profiles").select("*").eq("id", userId).single()
+    if (data) {
+      setNama(data.nama || "")
+      setFoto(data.foto || "")
+    }
   }
 
   async function getMateri() {
@@ -71,543 +100,448 @@ export default function MateriPage() {
     setMateri(data || [])
   }
 
+  async function logout() {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
   const filteredMateri = materi.filter((item) => {
     const cocokKategori = kategoriAktif === "Semua" ? true : item.kategori === kategoriAktif
     const cocokSearch   = item.judul.toLowerCase().includes(search.toLowerCase())
     return cocokKategori && cocokSearch
   })
 
+  const inisial = nama
+    ? nama.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()
+    : "U"
+
   /* ─── LOADING ─── */
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0a0f1e" }}>
-        <style>{`
-          @keyframes spin-ring { to { transform: rotate(360deg); } }
-          @keyframes pulse-glow {
-            0%,100% { box-shadow: 0 0 20px rgba(99,102,241,0.4); }
-            50%      { box-shadow: 0 0 44px rgba(99,102,241,0.85); }
-          }
-          .loader-ring {
-            width:56px; height:56px;
-            border:3px solid transparent;
-            border-top:3px solid #6366f1;
-            border-right:3px solid #06b6d4;
-            border-radius:50%;
-            animation: spin-ring 0.8s linear infinite, pulse-glow 1.5s ease-in-out infinite;
-          }
-        `}</style>
-        <div className="flex flex-col items-center gap-4">
-          <div className="loader-ring" />
-          <p style={{ color:"#818cf8", fontSize:12, fontWeight:800, letterSpacing:"0.18em" }}>MEMUAT…</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-2">
+        <div className="w-7 h-7 rounded-full border-2 border-indigo-200 border-t-indigo-500 animate-spin" />
+        <p className="text-slate-500 text-xs">Memuat...</p>
       </div>
-    )
-  }
+    </div>
+  )
 
   /* ─── MAIN ─── */
   return (
-    <>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap');
-
-        *, *::before, *::after { font-family: 'Plus Jakarta Sans', sans-serif; box-sizing: border-box; }
-
-        :root {
-          --bg:       #0a0f1e;
-          --card:     #111827;
-          --border:   rgba(99,102,241,0.15);
-          --accent:   #6366f1;
-          --accent2:  #06b6d4;
-          --text:     #f1f5f9;
-          --muted:    #64748b;
+        .dash-content { margin-left: 0; }
+        @media (min-width: 1024px) {
+          .dash-content { margin-left: 256px; }
         }
-
-        /* ── animations ── */
-        @keyframes fadeUp {
-          from { opacity:0; transform:translateY(24px); }
-          to   { opacity:1; transform:translateY(0);    }
-        }
-        @keyframes float {
-          0%,100% { transform:translateY(0);    }
-          50%     { transform:translateY(-8px); }
-        }
-        @keyframes pulse-dot {
-          0%,100% { transform:scale(1);   opacity:1;   }
-          50%     { transform:scale(1.5); opacity:0.5; }
-        }
-        @keyframes shimmer-slide {
-          0%   { background-position: -200% center; }
-          100% { background-position:  200% center; }
-        }
-
-        /* ── card ── */
-        .mc-card {
-          animation: fadeUp 0.45s ease both;
-          background: var(--card);
-          border: 1px solid var(--border);
-          border-radius: 20px;
-          overflow: hidden;
-          transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-        }
-        .mc-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 24px 48px rgba(0,0,0,0.45), 0 0 0 1px rgba(99,102,241,0.35);
-          border-color: rgba(99,102,241,0.45);
-        }
-
-        /* ── top bar ── */
-        .mc-topbar {
-          background: rgba(10,15,30,0.88);
-          backdrop-filter: blur(18px);
-          -webkit-backdrop-filter: blur(18px);
-          border-bottom: 1px solid rgba(99,102,241,0.12);
-        }
-
-        /* ── search input ── */
-        .mc-search {
-          background: rgba(255,255,255,0.05);
-          border: 1.5px solid rgba(99,102,241,0.2);
-          color: #f1f5f9;
-          transition: all 0.3s ease;
-          width: 100%;
-          border-radius: 14px;
-          padding: 0 16px 0 44px;
-          outline: none;
-        }
-        .mc-search:focus {
-          background: rgba(99,102,241,0.08);
-          border-color: rgba(99,102,241,0.6);
-          box-shadow: 0 0 0 4px rgba(99,102,241,0.1);
-        }
-        .mc-search::placeholder { color: #475569; }
-
-        /* ── chip ── */
-        .mc-chip {
-          transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
-          white-space: nowrap;
-          border-radius: 12px;
-          font-weight: 800;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          cursor: pointer;
-        }
-        .mc-chip-on {
-          background: linear-gradient(135deg, #6366f1, #06b6d4);
-          color: #fff;
-          box-shadow: 0 4px 16px rgba(99,102,241,0.4);
-          transform: scale(1.06);
-        }
-        .mc-chip-off {
-          background: rgba(255,255,255,0.05);
-          color: #94a3b8;
-          border: 1px solid rgba(255,255,255,0.08);
-        }
-        .mc-chip-off:hover {
-          background: rgba(99,102,241,0.15);
-          color: #c7d2fe;
-          border-color: rgba(99,102,241,0.3);
-        }
-
-        /* ── open button ── */
-        .mc-btn {
-          background: linear-gradient(135deg, #6366f1, #06b6d4);
-          color: #fff;
-          font-weight: 800;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          position: relative;
-          overflow: hidden;
-          transition: all 0.3s ease;
-          text-decoration: none;
-        }
-        .mc-btn::before {
-          content:'';
-          position:absolute; inset:0;
-          background: linear-gradient(135deg,#818cf8,#22d3ee);
-          opacity:0;
-          transition: opacity 0.3s;
-        }
-        .mc-btn:hover::before { opacity:1; }
-        .mc-btn:active { transform: scale(0.97); }
-        .mc-btn span { position:relative; z-index:1; }
-
-        /* ── dot live ── */
-        .dot-live {
-          width:7px; height:7px;
-          background:#10b981;
-          border-radius:50%;
-          display:inline-block;
-          animation: pulse-dot 1.5s ease-in-out infinite;
-          flex-shrink:0;
-        }
-
-        /* ── empty float ── */
-        .empty-float { animation: float 3s ease-in-out infinite; }
-
-        /* ── hero banner (desktop only) ── */
-        .mc-hero {
-          background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 50%, #0c1a2e 100%);
-          border-bottom: 1px solid rgba(99,102,241,0.15);
-          position: relative;
-          overflow: hidden;
-        }
-        .mc-hero::before {
-          content:'';
-          position:absolute;
-          width:600px; height:600px;
-          background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
-          top:-200px; right:-100px;
-          pointer-events:none;
-        }
-        .mc-hero::after {
-          content:'';
-          position:absolute;
-          width:400px; height:400px;
-          background: radial-gradient(circle, rgba(6,182,212,0.12) 0%, transparent 70%);
-          bottom:-150px; left:-50px;
-          pointer-events:none;
-        }
-
-        /* ── stat card ── */
-        .mc-stat {
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.07);
-          border-radius: 16px;
-          padding: 16px 20px;
-          transition: all 0.3s ease;
-        }
-        .mc-stat:hover {
-          background: rgba(99,102,241,0.1);
-          border-color: rgba(99,102,241,0.25);
-          transform: translateY(-2px);
-        }
-
-        /* ── scrollbar hide ── */
         .sb-hide::-webkit-scrollbar { display:none; }
         .sb-hide { -ms-overflow-style:none; scrollbar-width:none; }
-
-        /* ── image hover zoom ── */
+        @keyframes fadeUp {
+          from { opacity:0; transform:translateY(16px); }
+          to   { opacity:1; transform:translateY(0);    }
+        }
+        .mc-card { animation: fadeUp 0.4s ease both; }
+        .mc-card:nth-child(1) { animation-delay:0.02s; }
+        .mc-card:nth-child(2) { animation-delay:0.05s; }
+        .mc-card:nth-child(3) { animation-delay:0.08s; }
+        .mc-card:nth-child(4) { animation-delay:0.11s; }
+        .mc-card:nth-child(5) { animation-delay:0.14s; }
+        .mc-card:nth-child(6) { animation-delay:0.17s; }
         .img-zoom { transition: transform 0.5s ease; }
-        .mc-card:hover .img-zoom { transform: scale(1.07); }
-
-        /* ── stagger delays ── */
-        .mc-card:nth-child(1)  { animation-delay:0.04s; }
-        .mc-card:nth-child(2)  { animation-delay:0.08s; }
-        .mc-card:nth-child(3)  { animation-delay:0.12s; }
-        .mc-card:nth-child(4)  { animation-delay:0.16s; }
-        .mc-card:nth-child(5)  { animation-delay:0.20s; }
-        .mc-card:nth-child(6)  { animation-delay:0.24s; }
-        .mc-card:nth-child(7)  { animation-delay:0.28s; }
-        .mc-card:nth-child(8)  { animation-delay:0.32s; }
-        .mc-card:nth-child(9)  { animation-delay:0.36s; }
+        .mc-card:hover .img-zoom { transform: scale(1.06); }
+        .dot-live {
+          width:6px; height:6px; background:#10b981; border-radius:50%; display:inline-block;
+          animation: pulse-dot 1.5s ease-in-out infinite; flex-shrink:0;
+        }
+        @keyframes pulse-dot {
+          0%,100% { transform:scale(1); opacity:1; }
+          50%     { transform:scale(1.5); opacity:0.5; }
+        }
       `}</style>
 
-      <div className="min-h-screen pb-10" style={{ background:"var(--bg)" }}>
+      {/* OVERLAY */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+        />
+      )}
 
-        {/* ═══════════ TOP BAR ═══════════ */}
-        <div className="sticky top-0 z-50 mc-topbar">
-          <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex items-center justify-between gap-4">
-
-            {/* Brand */}
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
-                style={{ background:"linear-gradient(135deg,#6366f1,#06b6d4)" }}>
-                📚
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] md:text-[10px] uppercase tracking-[0.18em] font-black"
-                  style={{ color:"var(--accent2)" }}>
-                  Lampung Cerdas
-                </p>
-                <h1 className="text-sm md:text-xl font-black truncate leading-tight"
-                  style={{ color:"var(--text)" }}>
-                  Materi Pembelajaran
-                </h1>
-              </div>
-            </div>
-
-            {/* Right actions */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Count – desktop only */}
-              <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl"
-                style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.07)" }}>
-                <span className="dot-live" />
-                <span className="text-xs font-bold" style={{ color:"var(--muted)" }}>
-                  {filteredMateri.length} Materi
-                </span>
-              </div>
-
-              <button
-                onClick={() => router.push("/dashboard")}
-                className="h-9 px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95"
-                style={{
-                  background:"rgba(99,102,241,0.15)",
-                  color:"#a5b4fc",
-                  border:"1px solid rgba(99,102,241,0.25)"
-                }}>
-                ← Dashboard
-              </button>
-            </div>
-
+      {/* SIDEBAR — sama seperti Dashboard */}
+      <aside
+        style={{ background: "linear-gradient(180deg, #1E3A8A 0%, #172554 55%, #0B1120 100%)" }}
+        className={`
+        fixed top-0 left-0 z-50 h-screen w-64
+        shadow-2xl shadow-blue-950/30
+        flex flex-col transition-transform duration-300 ease-in-out
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
+      `}>
+        <div className="px-6 pt-7 pb-6 flex items-start justify-between">
+          <div>
+            <p className="text-white font-bold text-lg tracking-tight">Lampung Cerdas</p>
+            <p className="text-xs mt-1 text-blue-300">Portal Belajar Siswa</p>
           </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden w-7 h-7 rounded-lg bg-white/10 text-blue-200 flex items-center justify-center shrink-0"
+          >
+            <X size={14} />
+          </button>
         </div>
 
-        {/* ═══════════ HERO BANNER (desktop) ═══════════ */}
-        <div className="mc-hero hidden md:block">
-          <div className="max-w-7xl mx-auto px-8 py-10 relative z-10">
-            <div className="flex items-end justify-between gap-6">
-
-              {/* Left text */}
-              <div>
-                <p className="text-xs font-black uppercase tracking-widest mb-2"
-                  style={{ color:"var(--accent2)" }}>
-                  ✦ Pusat Belajar Interaktif
-                </p>
-                <h2 className="text-4xl font-black leading-tight mb-3"
-                  style={{ color:"var(--text)" }}>
-                  Temukan Materi<br />
-                  <span style={{ background:"linear-gradient(135deg,#818cf8,#22d3ee)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
-                    Terbaik Untuk Kamu
-                  </span>
-                </h2>
-                <p className="text-sm" style={{ color:"var(--muted)", maxWidth:480 }}>
-                  Koleksi lengkap video, artikel, PDF, dan latihan soal untuk mempersiapkan ujian dengan lebih efektif dan menyenangkan.
-                </p>
+        <div className="px-4 mb-2">
+          <button
+            onClick={() => router.push("/profile")}
+            className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition"
+          >
+            {foto ? (
+              <img src={foto} alt={nama} className="w-9 h-9 rounded-xl object-cover shrink-0" />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-xs font-bold shrink-0 text-white">
+                {inisial}
               </div>
-
-              {/* Stat cards */}
-              <div className="flex gap-3 shrink-0">
-                {[
-                  { label:"Total Materi",  val: materi.length,          icon:"📚" },
-                  { label:"Kategori",      val: kategoriList.length - 1, icon:"🗂️" },
-                  { label:"Tersedia",      val: filteredMateri.length,   icon:"✅" },
-                ].map((s) => (
-                  <div key={s.label} className="mc-stat text-center min-w-[90px]">
-                    <div className="text-2xl mb-1">{s.icon}</div>
-                    <div className="text-2xl font-black" style={{ color:"var(--text)" }}>{s.val}</div>
-                    <div className="text-[10px] font-semibold mt-0.5" style={{ color:"var(--muted)" }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-
+            )}
+            <div className="text-left min-w-0 flex-1">
+              <p className="text-xs font-semibold text-white truncate">{nama || "Pengguna"}</p>
+              <p className="text-[10px] text-blue-300">Lihat profil</p>
             </div>
-          </div>
+          </button>
         </div>
 
-        {/* ═══════════ SEARCH + FILTER ═══════════ */}
-        <div className="max-w-7xl mx-auto px-4 md:px-8 pt-4 md:pt-6">
-
-          <div className="rounded-2xl p-3 md:p-5 mb-4 md:mb-6"
-            style={{ background:"var(--card)", border:"1px solid var(--border)" }}>
-
-            {/* Mobile count */}
-            <div className="flex items-center justify-between mb-3 md:hidden">
-              <div className="flex items-center gap-1.5">
-                <span className="dot-live" />
-                <span className="text-[10px] font-semibold" style={{ color:"var(--muted)" }}>
-                  {filteredMateri.length} materi tersedia
-                </span>
-              </div>
-              {search && (
-                <button onClick={() => setSearch("")}
-                  className="text-[10px] font-bold px-2.5 py-1 rounded-lg"
-                  style={{ background:"rgba(239,68,68,0.15)", color:"#fca5a5" }}>
-                  × Reset
-                </button>
-              )}
-            </div>
-
-            {/* Search row – desktop has reset inline */}
-            <div className="flex gap-3 items-center">
-              <div className="relative flex-1">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base pointer-events-none"
-                  style={{ color:"var(--muted)" }}>🔍</span>
-                <input
-                  type="text"
-                  placeholder="Cari materi matematika, TPS, bahasa..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="mc-search"
-                  style={{ height:48, fontSize:14 }}
-                />
-              </div>
-
-              {/* Desktop reset */}
-              {search && (
-                <button onClick={() => setSearch("")}
-                  className="hidden md:flex h-12 px-5 rounded-xl text-sm font-bold items-center gap-2 shrink-0 transition-all hover:scale-105"
-                  style={{ background:"rgba(239,68,68,0.15)", color:"#fca5a5", border:"1px solid rgba(239,68,68,0.2)" }}>
-                  × Reset
-                </button>
-              )}
-            </div>
-
-            {/* Chips */}
-            <div className="mt-3 md:mt-4 overflow-x-auto sb-hide">
-              <div className="flex gap-2 min-w-max pb-0.5">
-                {kategoriList.map((k) => (
+        <nav className="px-3 mt-2 flex-1 overflow-y-auto">
+          <p className="px-3 text-[11px] font-semibold uppercase tracking-wider mb-2 text-blue-400">
+            Menu Utama
+          </p>
+          <ul className="space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              const isActive = item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(item.href)
+              return (
+                <li key={item.href}>
                   <button
-                    key={k.label}
-                    onClick={() => setKategoriAktif(k.label)}
-                    className={`mc-chip px-3 md:px-4 text-xs md:text-sm ${
-                      kategoriAktif === k.label ? "mc-chip-on" : "mc-chip-off"
-                    }`}
-                    style={{ height: 36 }}>
-                    <span>{k.icon}</span>
-                    {k.label}
+                    onClick={() => router.push(item.href)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition"
+                    style={{
+                      background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                      color: isActive ? "#FFFFFF" : "#C4CCDE",
+                      borderLeft: isActive ? "3px solid #F59E0B" : "3px solid transparent",
+                    }}
+                  >
+                    <Icon size={17} strokeWidth={2} />
+                    <span className="font-medium">{item.label}</span>
                   </button>
-                ))}
+                </li>
+              )
+            })}
+          </ul>
+        </nav>
+
+        <div className="px-3 pb-5 mt-4">
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition"
+            style={{ color: "#C4CCDE", borderLeft: "3px solid transparent" }}
+          >
+            <LogOut size={17} strokeWidth={2} />
+            <span className="font-medium">Keluar</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* CONTENT */}
+      <div className="dash-content flex flex-col min-h-screen bg-slate-50">
+
+        {/* TOPBAR MOBILE */}
+        <header className="lg:hidden sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-4 h-12 flex items-center gap-3">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition"
+          >
+            <Menu size={16} />
+          </button>
+          <p className="text-sm font-bold text-slate-800 flex-1">Materi Pembelajaran</p>
+          {foto ? (
+            <img src={foto} alt={nama} className="w-8 h-8 rounded-lg object-cover" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-[10px] font-bold text-white">
+              {inisial}
+            </div>
+          )}
+        </header>
+
+        <main className="flex-1 w-full px-4 py-4 md:px-10 md:py-8">
+          <div className="space-y-6 md:space-y-8">
+
+            {/* HERO */}
+            <div
+              style={{ background: "linear-gradient(135deg, #1E3A8A 0%, #172554 55%, #0B1120 100%)" }}
+              className="relative overflow-hidden rounded-2xl p-4 md:p-8 shadow-sm"
+            >
+              <div className="absolute top-0 right-0 w-72 h-40 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-40 h-32 bg-amber-400/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-full px-2.5 py-0.5 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-[9px] font-bold tracking-widest text-blue-200 uppercase">
+                      Pusat Belajar
+                    </span>
+                  </div>
+                  <h1 className="text-xl md:text-3xl font-extrabold text-white leading-tight">
+                    Temukan{" "}
+                    <span
+                      style={{
+                        backgroundImage: "linear-gradient(90deg, #FCD34D, #FB923C)",
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        color: "transparent",
+                      }}
+                    >
+                      Materi Terbaik
+                    </span>{" "}
+                    untuk kamu 📚
+                  </h1>
+                  <p className="mt-1 text-blue-300 text-xs max-w-md">
+                    Video, artikel, PDF, dan latihan soal untuk persiapan ujian yang lebih efektif.
+                  </p>
+                </div>
+
+                <div className="flex gap-2 md:gap-3 shrink-0">
+                  {[
+                    { label: "Total", val: materi.length },
+                    { label: "Kategori", val: kategoriList.length - 1 },
+                    { label: "Tersedia", val: filteredMateri.length },
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      className="text-center min-w-[64px] md:min-w-[80px] rounded-xl px-2.5 py-2 md:px-3.5 md:py-3"
+                      style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)" }}
+                    >
+                      <p className="text-base md:text-xl font-extrabold text-white leading-none">{s.val}</p>
+                      <p className="text-[8px] md:text-[10px] text-blue-300 mt-1 font-semibold">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* ═══════════ EMPTY ═══════════ */}
-          {filteredMateri.length === 0 ? (
-            <div className="text-center py-20 rounded-2xl"
-              style={{ background:"var(--card)", border:"1px solid var(--border)" }}>
-              <div className="empty-float text-6xl mb-5">📭</div>
-              <h2 className="text-lg md:text-xl font-black mb-2" style={{ color:"var(--text)" }}>
-                Materi Tidak Ditemukan
-              </h2>
-              <p className="text-sm" style={{ color:"var(--muted)" }}>
-                Coba kata kunci atau kategori lain
-              </p>
-              <button
-                onClick={() => { setSearch(""); setKategoriAktif("Semua") }}
-                className="mc-btn mt-5 inline-flex px-6 h-10 text-sm"
-                style={{ borderRadius:12 }}>
-                <span>Lihat Semua</span>
-              </button>
+            {/* SEARCH + FILTER */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-3 md:p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2.5 md:hidden">
+                <div className="flex items-center gap-1.5">
+                  <span className="dot-live" />
+                  <span className="text-[10px] font-semibold text-slate-500">
+                    {filteredMateri.length} materi tersedia
+                  </span>
+                </div>
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-red-50 text-red-500 border border-red-200"
+                  >
+                    × Reset
+                  </button>
+                )}
+              </div>
+
+              <div className="flex gap-2.5 items-center">
+                <div className="relative flex-1">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Cari materi matematika, TPS, bahasa..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full h-10 md:h-11 rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  />
+                </div>
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="hidden md:flex h-11 px-4 rounded-xl text-sm font-bold items-center gap-1.5 shrink-0 transition bg-red-50 text-red-500 border border-red-200 hover:bg-red-100"
+                  >
+                    × Reset
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-3 overflow-x-auto sb-hide">
+                <div className="flex gap-2 min-w-max pb-0.5">
+                  {kategoriList.map((k) => {
+                    const active = kategoriAktif === k.label
+                    const kt = getKategoriTheme(k.label)
+                    return (
+                      <button
+                        key={k.label}
+                        onClick={() => setKategoriAktif(k.label)}
+                        className="h-8 md:h-9 px-3 md:px-4 rounded-xl text-xs md:text-sm font-bold flex items-center gap-1.5 whitespace-nowrap transition-all"
+                        style={
+                          active
+                            ? { background: `linear-gradient(135deg, ${kt.from}, ${kt.to})`, color: "#fff", boxShadow: `0 4px 14px -4px ${kt.accent}80` }
+                            : { background: "#F1F5F9", color: "#64748B", border: "1px solid #E2E8F0" }
+                        }
+                      >
+                        <span>{k.icon}</span>
+                        {k.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
 
-          ) : (
+            {/* EMPTY */}
+            {filteredMateri.length === 0 ? (
+              <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                <div className="text-5xl mb-4">📭</div>
+                <h2 className="text-base md:text-lg font-extrabold text-slate-900 mb-1">
+                  Materi Tidak Ditemukan
+                </h2>
+                <p className="text-sm text-slate-500">Coba kata kunci atau kategori lain</p>
+                <button
+                  onClick={() => { setSearch(""); setKategoriAktif("Semua") }}
+                  className="mt-4 inline-flex px-5 h-9 rounded-xl text-sm font-bold text-white items-center"
+                  style={{ background: "linear-gradient(135deg, #6366F1, #06B6D4)" }}
+                >
+                  Lihat Semua
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* MOBILE: horizontal list */}
+                <div className="flex flex-col gap-3 md:hidden">
+                  {filteredMateri.map((item) => {
+                    const kt     = getKategoriTheme(item.kategori)
+                    const tipeBg = tipeColor[item.tipe?.toLowerCase()] || "#6366F1"
+                    return (
+                      <div key={item.id} className="mc-card bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="flex">
+                          <div className="relative shrink-0 w-[100px]" style={{ minHeight: 100, background: kt.soft }}>
+                            {item.gambar ? (
+                              <img src={item.gambar} alt={item.judul} className="img-zoom w-full h-full object-cover" style={{ minHeight: 100 }} />
+                            ) : (
+                              <div
+                                className="w-full h-full flex items-center justify-center"
+                                style={{ minHeight: 100, background: `linear-gradient(135deg, ${kt.from}, ${kt.to})` }}
+                              >
+                                <span className="text-2xl text-white opacity-90 font-extrabold">{kt.symbol}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
+                            <div>
+                              <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                                <span
+                                  className="text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider"
+                                  style={{ background: tipeBg }}
+                                >
+                                  {item.tipe}
+                                </span>
+                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-md" style={{ background: kt.soft, color: kt.accent }}>
+                                  {item.kategori}
+                                </span>
+                              </div>
+                              <h2 className="text-sm font-extrabold leading-snug line-clamp-2 text-slate-900">
+                                {item.judul}
+                              </h2>
+                            </div>
+                            <a
+                              href={item.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2.5 h-8 rounded-lg text-[11px] font-bold text-white flex items-center justify-center"
+                              style={{ background: `linear-gradient(135deg, ${kt.from}, ${kt.to})` }}
+                            >
+                              Buka Materi →
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
 
-            /* ═══════════ GRID ═══════════
-               Mobile  → 1 col horizontal card
-               Tablet  → 2 col vertical card
-               Desktop → 3 col vertical card          */
-            <>
-              {/* ── MOBILE: horizontal list ── */}
-              <div className="flex flex-col gap-3 md:hidden">
-                {filteredMateri.map((item, i) => {
-                  const grad   = kategoriGradient[item.kategori] || "from-blue-600 to-indigo-700"
-                  const tipeBg = tipeColor[item.tipe?.toLowerCase()] || "bg-indigo-500"
-                  return (
-                    <div key={item.id} className="mc-card" style={{ animationDelay:`${i*0.06}s` }}>
-                      <div className="flex overflow-hidden">
-                        {/* Thumb */}
-                        <div className="relative shrink-0 w-[110px]" style={{ minHeight:110 }}>
-                          {item.gambar && item.gambar !== "" ? (
-                            <img src={item.gambar} alt={item.judul}
-                              className="img-zoom w-full h-full object-cover" style={{ minHeight:110 }} />
+                {/* DESKTOP/TABLET: grid cards */}
+                <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+                  {filteredMateri.map((item) => {
+                    const kt     = getKategoriTheme(item.kategori)
+                    const tipeBg = tipeColor[item.tipe?.toLowerCase()] || "#6366F1"
+                    return (
+                      <div
+                        key={item.id}
+                        className="mc-card flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm transition-all duration-300 hover:-translate-y-1"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.boxShadow = `0 16px 32px -14px ${kt.accent}55`
+                          e.currentTarget.style.borderColor = kt.accent + "60"
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.boxShadow = ""
+                          e.currentTarget.style.borderColor = ""
+                        }}
+                      >
+                        <div className="relative overflow-hidden" style={{ height: 170, background: kt.soft }}>
+                          {item.gambar ? (
+                            <img src={item.gambar} alt={item.judul} className="img-zoom w-full h-full object-cover" />
                           ) : (
-                            <div className={`w-full h-full bg-gradient-to-br ${grad} flex items-center justify-center`}
-                              style={{ minHeight:110 }}>
-                              <span className="text-3xl opacity-80">
-                                {kategoriSymbol[item.kategori] || "A"}
+                            <div
+                              className="w-full h-full flex items-center justify-center"
+                              style={{ background: `linear-gradient(135deg, ${kt.from}, ${kt.to})` }}
+                            >
+                              <span style={{ fontSize: 56, opacity: 0.35, fontWeight: 900, color: "#fff" }}>
+                                {kt.symbol}
                               </span>
                             </div>
                           )}
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#111827]/60" />
+
+                          <div className="absolute top-3 left-3">
+                            <span
+                              className="text-white text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider"
+                              style={{ background: tipeBg }}
+                            >
+                              {item.tipe}
+                            </span>
+                          </div>
                         </div>
-                        {/* Content */}
-                        <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
+
+                        <div className="flex-1 p-4 md:p-5 flex flex-col justify-between gap-3">
                           <div>
-                            <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                              <span className={`${tipeBg} text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider`}>
-                                {item.tipe}
-                              </span>
-                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-md"
-                                style={{ background:"rgba(255,255,255,0.07)", color:"#94a3b8" }}>
-                                {item.kategori}
-                              </span>
-                            </div>
-                            <h2 className="text-sm font-black leading-snug line-clamp-2" style={{ color:"var(--text)" }}>
+                            <span
+                              className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md mb-2"
+                              style={{ background: kt.soft, color: kt.accent }}
+                            >
+                              {item.kategori}
+                            </span>
+                            <h2 className="text-sm md:text-base font-extrabold leading-snug line-clamp-2 text-slate-900">
                               {item.judul}
                             </h2>
+                            <p className="text-xs leading-relaxed line-clamp-2 text-slate-500 mt-1.5">
+                              Materi pembelajaran untuk membantu siswa belajar lebih mudah dan efektif.
+                            </p>
                           </div>
-                          <a href={item.link} target="_blank" rel="noopener noreferrer"
-                            className="mc-btn mt-2.5 h-8 text-[11px]" style={{ borderRadius:10 }}>
-                            <span>Buka Materi →</span>
+
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-10 md:h-11 rounded-xl text-sm font-bold text-white w-full flex items-center justify-center transition-all"
+                            style={{ background: `linear-gradient(135deg, ${kt.from}, ${kt.to})` }}
+                          >
+                            📚 Buka Materi
                           </a>
                         </div>
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
 
-              {/* ── DESKTOP/TABLET: vertical grid cards ── */}
-              <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredMateri.map((item, i) => {
-                  const grad   = kategoriGradient[item.kategori] || "from-blue-600 to-indigo-700"
-                  const tipeBg = tipeColor[item.tipe?.toLowerCase()] || "bg-indigo-500"
-                  return (
-                    <div key={item.id} className="mc-card flex flex-col" style={{ animationDelay:`${i*0.06}s` }}>
-
-                      {/* Image area */}
-                      <div className="relative overflow-hidden" style={{ height:200 }}>
-                        {item.gambar && item.gambar !== "" ? (
-                          <img src={item.gambar} alt={item.judul}
-                            className="img-zoom w-full h-full object-cover" />
-                        ) : (
-                          <div className={`w-full h-full bg-gradient-to-br ${grad} flex items-center justify-center`}>
-                            <span style={{ fontSize:64, opacity:0.25, fontWeight:900, color:"#fff" }}>
-                              {kategoriSymbol[item.kategori] || "A"}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Gradient overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#111827] via-transparent to-transparent" />
-
-                        {/* Tipe badge top-left */}
-                        <div className="absolute top-3 left-3">
-                          <span className={`${tipeBg} text-white text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider`}>
-                            {item.tipe}
-                          </span>
-                        </div>
-
-                        {/* Kategori bottom-left */}
-                        <div className="absolute bottom-3 left-4">
-                          <p className="text-xs font-bold" style={{ color:"rgba(255,255,255,0.7)" }}>
-                            {item.kategori}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 p-5 flex flex-col justify-between gap-3">
-                        <div>
-                          <h2 className="text-base font-black leading-snug line-clamp-2 mb-2"
-                            style={{ color:"var(--text)" }}>
-                            {item.judul}
-                          </h2>
-                          <p className="text-xs leading-relaxed line-clamp-2"
-                            style={{ color:"var(--muted)" }}>
-                            Materi pembelajaran untuk membantu siswa belajar lebih mudah dan efektif.
-                          </p>
-                        </div>
-
-                        <a href={item.link} target="_blank" rel="noopener noreferrer"
-                          className="mc-btn h-11 text-sm w-full" style={{ borderRadius:12 }}>
-                          <span>📚 Buka Materi</span>
-                        </a>
-                      </div>
-
-                    </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
-
-          <div className="h-6" />
-        </div>
+            <div className="h-4" />
+          </div>
+        </main>
       </div>
-    </>
+    </div>
   )
 }

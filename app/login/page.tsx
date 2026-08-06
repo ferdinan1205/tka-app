@@ -43,19 +43,37 @@ export default function Login() {
       return
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
+   const { data: profile, error: profileError } = await supabase
+  .from("profiles")
+  .select("role")
+  .eq("id", user.id)
+  .single()
 
-    setLoading(false)
+setLoading(false)
 
-    if (profile?.role === "admin") {
-      router.push("/admin")
-    } else {
-      router.push("/dashboard")
-    }
+if (profileError || !profile) {
+  alert("Profil pengguna tidak ditemukan")
+  await supabase.auth.signOut()
+  return
+}
+
+switch (profile.role) {
+  case "admin":
+    router.push("/admin")
+    break
+
+  case "guru":
+    router.push("/guru")
+    break
+
+  case "siswa":
+    router.push("/dashboard")
+    break
+
+  default:
+    alert("Role tidak dikenali")
+    await supabase.auth.signOut()
+}
 
   }
 

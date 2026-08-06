@@ -2,12 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "../../lib/supabase"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import {
   ResponsiveContainer, AreaChart, Area,
   XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell,
 } from "recharts"
+import {
+  LayoutDashboard,
+  BookOpen,
+  Trophy,
+  Activity,
+  ClipboardList,
+  LogOut,
+  X,
+  Menu,
+} from "lucide-react"
 
 type HasilType = {
   id: number
@@ -18,25 +28,64 @@ type HasilType = {
 }
 type PackageType = { id: number; nama_paket: string }
 
-const COLORS = ["#6366f1","#06b6d4","#8b5cf6","#10b981","#f59e0b","#ef4444"]
+const COLORS = ["#6366F1", "#06B6D4", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444"]
 
 const STAT_CFG = [
-  { key:"total",    title:"Total Ujian", icon:"📝", grad:"from-indigo-500 to-blue-600"   },
-  { key:"tinggi",   title:"Tertinggi",   icon:"🏆", grad:"from-amber-400 to-orange-500"  },
-  { key:"terakhir", title:"Terakhir",    icon:"📈", grad:"from-pink-500 to-rose-600"     },
-  { key:"rata",     title:"Rata-rata",   icon:"⭐", grad:"from-emerald-400 to-teal-600"  },
+  { key: "total",    title: "Total Ujian", icon: "📝", from: "#6366F1", to: "#3B82F6" },
+  { key: "tinggi",   title: "Tertinggi",   icon: "🏆", from: "#FBBF24", to: "#F97316" },
+  { key: "terakhir", title: "Terakhir",    icon: "📈", from: "#EC4899", to: "#F43F5E" },
+  { key: "rata",     title: "Rata-rata",   icon: "⭐", from: "#34D399", to: "#0D9488" },
+]
+
+const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/materi", label: "Materi", icon: BookOpen },
+  { href: "/ranking", label: "Ranking", icon: Trophy },
+  { href: "/progress", label: "Progress", icon: Activity },
+  { href: "/rekap", label: "Rekap Nilai", icon: ClipboardList },
 ]
 
 export default function ProgressPage() {
-  const router = useRouter()
+  const router   = useRouter()
+  const pathname = usePathname()
   const [loading, setLoading]             = useState(true)
   const [nama, setNama]                   = useState("Siswa")
   const [foto, setFoto]                   = useState("")
+  const [userId, setUserId]               = useState<string | null>(null)
   const [hasil, setHasil]                 = useState<HasilType[]>([])
   const [packages, setPackages]           = useState<PackageType[]>([])
   const [selectedPaket, setSelectedPaket] = useState("Semua")
+  const [sidebarOpen, setSidebarOpen]     = useState(false)
+  const [isLive, setIsLive]               = useState(false)
 
   useEffect(() => { init() }, [])
+
+  // Realtime subscription — jalan setelah userId kebaca
+  useEffect(() => {
+    if (!userId) return
+
+    const channel = supabase
+      .channel(`hasil-changes-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "hasil",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          getHasil(userId)
+        }
+      )
+      .subscribe((status) => {
+        setIsLive(status === "SUBSCRIBED")
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [userId])
 
   async function init() {
     try {
@@ -44,15 +93,29 @@ export default function ProgressPage() {
       const { data: userData } = await supabase.auth.getUser()
       const user = userData.user
       if (!user) { router.push("/login"); return }
+      setUserId(user.id)
       const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
       setNama(profile?.nama || "Siswa")
       setFoto(profile?.foto || "")
-      const { data: hasilData } = await supabase.from("hasil").select("*").eq("user_id", user.id).order("tanggal", { ascending: true })
-      setHasil(hasilData || [])
+      await getHasil(user.id)
       const { data: packageData } = await supabase.from("packages").select("*")
       setPackages(packageData || [])
     } catch (e) { console.log(e) }
     finally { setLoading(false) }
+  }
+
+  async function getHasil(uid: string) {
+    const { data: hasilData } = await supabase
+      .from("hasil")
+      .select("*")
+      .eq("user_id", uid)
+      .order("tanggal", { ascending: true })
+    setHasil(hasilData || [])
+  }
+
+  async function logout() {
+    await supabase.auth.signOut()
+    router.push("/login")
   }
 
   function getPackageName(id?: number | null) {
@@ -65,516 +128,434 @@ export default function ProgressPage() {
     return hasil.filter(item => getPackageName(item.package_id) === selectedPaket)
   }, [hasil, selectedPaket, packages])
 
-  const totalUjian      = filteredData.length
-  const nilaiTertinggi  = filteredData.length > 0 ? Math.max(...filteredData.map(x => x.skor)) : 0
-  const nilaiTerakhir   = filteredData.length > 0 ? filteredData[filteredData.length - 1]?.skor : 0
-  const rataRata        = filteredData.length > 0 ? Math.round(filteredData.reduce((a,b) => a + b.skor, 0) / filteredData.length) : 0
+  const totalUjian     = filteredData.length
+  const nilaiTertinggi = filteredData.length > 0 ? Math.max(...filteredData.map(x => x.skor)) : 0
+  const nilaiTerakhir  = filteredData.length > 0 ? filteredData[filteredData.length - 1]?.skor : 0
+  const rataRata       = filteredData.length > 0 ? Math.round(filteredData.reduce((a, b) => a + b.skor, 0) / filteredData.length) : 0
 
-  const statValues: Record<string,number> = { total: totalUjian, tinggi: nilaiTertinggi, terakhir: nilaiTerakhir, rata: rataRata }
+  const statValues: Record<string, number> = { total: totalUjian, tinggi: nilaiTertinggi, terakhir: nilaiTerakhir, rata: rataRata }
 
   const chartData = filteredData.map(item => ({
-    tanggal: new Date(item.tanggal).toLocaleDateString("id-ID", { day:"2-digit", month:"short" }),
+    tanggal: new Date(item.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
     skor: item.skor,
     kategori: item.kategori,
     paket: getPackageName(item.package_id),
   }))
 
-  const pieRaw = filteredData.reduce<Record<string,number>>((acc, item) => {
+  const pieRaw = filteredData.reduce<Record<string, number>>((acc, item) => {
     acc[item.kategori] = (acc[item.kategori] || 0) + 1
     return acc
   }, {})
   const pieData = Object.entries(pieRaw).map(([name, value]) => ({ name, value }))
 
+  const inisial = nama
+    ? nama.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()
+    : "U"
+
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null
     const d = payload[0].payload
     return (
-      <div style={{ background:"#1e293b", border:"1px solid rgba(99,102,241,0.3)", borderRadius:16, padding:"12px 16px" }}>
-        <p style={{ color:"#94a3b8", fontSize:11, marginBottom:4 }}>{d.tanggal} · {d.kategori}</p>
-        <p style={{ color:"#a5b4fc", fontSize:28, fontWeight:900, lineHeight:1 }}>{d.skor}</p>
-        <p style={{ color:"#64748b", fontSize:11, marginTop:4 }}>{d.paket}</p>
+      <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-lg">
+        <p className="text-slate-400 text-[11px] mb-1">{d.tanggal} · {d.kategori}</p>
+        <p className="text-indigo-600 text-2xl font-black leading-none">{d.skor}</p>
+        <p className="text-slate-400 text-[11px] mt-1">{d.paket}</p>
       </div>
     )
   }
 
   /* ── LOADING ── */
   if (loading) return (
-    <div style={{ minHeight:"100vh", background:"#0a0f1e", display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <style>{`
-        @keyframes spin-ring { to { transform: rotate(360deg); } }
-        @keyframes pg { 0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.4)} 50%{box-shadow:0 0 44px rgba(99,102,241,0.9)} }
-        .lr { width:56px;height:56px;border:3px solid transparent;border-top:3px solid #6366f1;border-right:3px solid #06b6d4;border-radius:50%;animation:spin-ring .8s linear infinite,pg 1.5s ease-in-out infinite; }
-      `}</style>
-      <div style={{ textAlign:"center" }}>
-        <div className="lr" style={{ margin:"0 auto 16px" }} />
-        <p style={{ color:"#818cf8", fontSize:11, fontWeight:800, letterSpacing:"0.18em" }}>MEMUAT PROGRESS…</p>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-2">
+        <div className="w-7 h-7 rounded-full border-2 border-indigo-200 border-t-indigo-500 animate-spin" />
+        <p className="text-slate-500 text-xs">Memuat...</p>
       </div>
     </div>
   )
 
   /* ── MAIN ── */
   return (
-    <>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap');
-        *, *::before, *::after { font-family:'Plus Jakarta Sans',sans-serif; box-sizing:border-box; }
-        :root {
-          --bg:#0a0f1e; --card:#111827; --card2:#161f35;
-          --border:rgba(99,102,241,0.15); --accent:#6366f1; --accent2:#06b6d4;
-          --text:#f1f5f9; --muted:#64748b; --muted2:#475569;
+        .dash-content { margin-left: 0; }
+        @media (min-width: 1024px) {
+          .dash-content { margin-left: 256px; }
         }
-
-        @keyframes fadeUp   { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
-        @keyframes float    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
-        @keyframes pulse-dot{ 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:0.5} }
-        @keyframes shine    { 0%{background-position:-200% center} 100%{background-position:200% center} }
-        @keyframes countUp  { from{opacity:0;transform:scale(.6)} to{opacity:1;transform:scale(1)} }
-        @keyframes spin-ring{ to{transform:rotate(360deg)} }
-        @keyframes bar-grow { from{width:0} to{width:var(--bar-w)} }
-
-        /* topbar */
-        .pg-topbar {
-          background:rgba(10,15,30,0.88);
-          backdrop-filter:blur(18px);
-          -webkit-backdrop-filter:blur(18px);
-          border-bottom:1px solid rgba(99,102,241,0.12);
+        .sb-hide::-webkit-scrollbar { display:none; }
+        .sb-hide { -ms-overflow-style:none; scrollbar-width:none; }
+        @keyframes pulse-dot {
+          0%,100% { transform:scale(1); opacity:1; }
+          50%     { transform:scale(1.5); opacity:0.5; }
         }
-
-        /* hero */
-        .pg-hero {
-          background:linear-gradient(135deg,#1e1b4b 0%,#0f172a 55%,#0c1a2e 100%);
-          position:relative; overflow:hidden;
-          border-bottom:1px solid rgba(99,102,241,0.12);
+        .dot-live {
+          width:6px; height:6px; border-radius:50%; display:inline-block;
+          animation: pulse-dot 1.5s ease-in-out infinite; flex-shrink:0;
         }
-        .pg-hero::before{
-          content:''; position:absolute;
-          width:700px;height:700px;
-          background:radial-gradient(circle,rgba(99,102,241,0.2) 0%,transparent 70%);
-          top:-250px; right:-100px; pointer-events:none;
-        }
-        .pg-hero::after{
-          content:''; position:absolute;
-          width:500px;height:500px;
-          background:radial-gradient(circle,rgba(6,182,212,0.13) 0%,transparent 70%);
-          bottom:-180px; left:-60px; pointer-events:none;
-        }
-
-        /* card base */
-        .pg-card {
-          background:var(--card);
-          border:1px solid var(--border);
-          border-radius:24px;
-          animation:fadeUp .45s ease both;
-          transition:transform .3s ease,box-shadow .3s ease,border-color .3s ease;
-        }
-        .pg-card:hover {
-          transform:translateY(-4px);
-          box-shadow:0 20px 44px rgba(0,0,0,0.4),0 0 0 1px rgba(99,102,241,0.3);
-          border-color:rgba(99,102,241,0.4);
-        }
-
-        /* stat card */
-        .pg-stat {
-          background:var(--card);
-          border:1px solid var(--border);
-          border-radius:20px;
-          padding:18px 20px;
-          animation:fadeUp .4s ease both;
-          transition:transform .3s,box-shadow .3s,border-color .3s;
-          position:relative; overflow:hidden;
-        }
-        .pg-stat:hover {
-          transform:translateY(-4px);
-          box-shadow:0 16px 40px rgba(0,0,0,0.35),0 0 0 1px rgba(99,102,241,0.3);
-          border-color:rgba(99,102,241,0.35);
-        }
-        .pg-stat-val { animation:countUp .5s cubic-bezier(.34,1.56,.64,1) both; animation-delay:.2s; }
-
-        /* history row */
-        .pg-row {
-          background:rgba(255,255,255,0.03);
-          border:1px solid rgba(255,255,255,0.05);
-          border-radius:18px;
-          animation:fadeUp .4s ease both;
-          transition:all .25s ease;
-        }
-        .pg-row:hover {
-          background:rgba(99,102,241,0.07);
-          border-color:rgba(99,102,241,0.2);
-          transform:translateX(4px);
-        }
-
-        /* select */
-        .pg-select {
-          background:rgba(255,255,255,0.05);
-          border:1.5px solid rgba(99,102,241,0.2);
-          color:#f1f5f9;
-          border-radius:14px;
-          padding:0 16px;
-          outline:none;
-          transition:all .3s;
-          appearance:none;
-          cursor:pointer;
-        }
-        .pg-select:focus {
-          background:rgba(99,102,241,0.1);
-          border-color:rgba(99,102,241,0.6);
-          box-shadow:0 0 0 4px rgba(99,102,241,0.1);
-        }
-        .pg-select option { background:#1e293b; color:#f1f5f9; }
-
-        /* btn */
-        .pg-btn {
-          background:linear-gradient(135deg,#6366f1,#06b6d4);
-          color:#fff; font-weight:800; border-radius:12px;
-          display:flex; align-items:center; justify-content:center;
-          transition:all .3s; position:relative; overflow:hidden; cursor:pointer; border:none;
-        }
-        .pg-btn::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,#818cf8,#22d3ee); opacity:0; transition:opacity .3s; }
-        .pg-btn:hover::before { opacity:1; }
-        .pg-btn:active { transform:scale(.97); }
-        .pg-btn span { position:relative; z-index:1; }
-
-        /* score ring */
-        .score-ring {
-          width:52px; height:52px; border-radius:50%;
-          display:flex; align-items:center; justify-content:center;
-          font-size:18px; font-weight:900; flex-shrink:0;
-        }
-
-        /* dot live */
-        .dot-live { width:7px;height:7px;background:#10b981;border-radius:50%;display:inline-block;animation:pulse-dot 1.5s ease-in-out infinite; }
-
-        /* scrollbar */
-        .sb-hide::-webkit-scrollbar{display:none} .sb-hide{-ms-overflow-style:none;scrollbar-width:none}
-
-        /* chart grid */
+        @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-7px); } }
+        .pg-float { animation: float 3s ease-in-out infinite; }
         .recharts-cartesian-grid-horizontal line,
-        .recharts-cartesian-grid-vertical   line { stroke:rgba(255,255,255,0.05) !important; }
-
-        /* stagger */
-        .pg-stat:nth-child(1){animation-delay:.05s}
-        .pg-stat:nth-child(2){animation-delay:.10s}
-        .pg-stat:nth-child(3){animation-delay:.15s}
-        .pg-stat:nth-child(4){animation-delay:.20s}
-        .pg-row:nth-child(1){animation-delay:.06s}
-        .pg-row:nth-child(2){animation-delay:.10s}
-        .pg-row:nth-child(3){animation-delay:.14s}
-        .pg-row:nth-child(4){animation-delay:.18s}
-        .pg-row:nth-child(5){animation-delay:.22s}
-
-        /* empty float */
-        .pg-float { animation:float 3s ease-in-out infinite; }
-
-        /* score color */
-        .sc-high  { background:linear-gradient(135deg,#10b981,#059669); color:#fff; }
-        .sc-mid   { background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; }
-        .sc-low   { background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; }
-
-        /* avatar shimmer */
-        .ava-ring { box-shadow:0 0 0 3px rgba(99,102,241,0.4),0 0 20px rgba(99,102,241,0.2); }
-
-        /* mobile history compact */
-        @media(max-width:767px){
-          .pg-hist-score { font-size:28px; }
-          .pg-hist-title { font-size:14px; }
-          .pg-hist-sub   { font-size:11px; }
-        }
+        .recharts-cartesian-grid-vertical   line { stroke:#E2E8F0 !important; }
       `}</style>
 
-      <div style={{ minHeight:"100vh", background:"var(--bg)", paddingBottom:40 }}>
+      {/* OVERLAY */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+        />
+      )}
 
-        {/* ══════════ TOP BAR ══════════ */}
-        <div className="sticky top-0 z-50 pg-topbar">
-          <div style={{ maxWidth:1280, margin:"0 auto", padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-
-            <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0 }}>
-              {/* Avatar */}
-              {foto ? (
-                <img src={foto} alt="avatar"
-                  className="ava-ring"
-                  style={{ width:38, height:38, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
-              ) : (
-                <div className="ava-ring"
-                  style={{ width:38, height:38, borderRadius:"50%", background:"linear-gradient(135deg,#6366f1,#06b6d4)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:14, fontWeight:900, flexShrink:0 }}>
-                  {nama.slice(0,2).toUpperCase()}
-                </div>
-              )}
-              <div style={{ minWidth:0 }}>
-                <p style={{ color:"var(--accent2)", fontSize:9, fontWeight:900, letterSpacing:"0.18em", textTransform:"uppercase" }}>Lampung Cerdas</p>
-                <h1 style={{ color:"var(--text)", fontSize:"clamp(13px,3vw,20px)", fontWeight:900, lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                  Progress Akademik
-                </h1>
-              </div>
-            </div>
-
-            <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-              {/* Desktop count */}
-              <div className="d-none d-md-flex" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 14px", borderRadius:10, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.07)" }}>
-                <span className="dot-live" />
-                <span style={{ color:"var(--muted)", fontSize:11, fontWeight:700 }}>{totalUjian} Ujian</span>
-              </div>
-              <button onClick={() => router.push("/dashboard")} className="pg-btn" style={{ height:36, padding:"0 16px", fontSize:12 }}>
-                <span>← Dashboard</span>
-              </button>
-            </div>
-
+      {/* SIDEBAR — sama seperti Dashboard */}
+      <aside
+        style={{ background: "linear-gradient(180deg, #1E3A8A 0%, #172554 55%, #0B1120 100%)" }}
+        className={`
+        fixed top-0 left-0 z-50 h-screen w-64
+        shadow-2xl shadow-blue-950/30
+        flex flex-col transition-transform duration-300 ease-in-out
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
+      `}>
+        <div className="px-6 pt-7 pb-6 flex items-start justify-between">
+          <div>
+            <p className="text-white font-bold text-lg tracking-tight">Lampung Cerdas</p>
+            <p className="text-xs mt-1 text-blue-300">Portal Belajar Siswa</p>
           </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden w-7 h-7 rounded-lg bg-white/10 text-blue-200 flex items-center justify-center shrink-0"
+          >
+            <X size={14} />
+          </button>
         </div>
 
-        {/* ══════════ HERO (desktop) ══════════ */}
-        <div className="pg-hero" style={{ display:"none" }} id="pg-hero-section">
-          {/* shown via media query override below */}
-        </div>
-        <style>{`@media(min-width:768px){#pg-hero-section{display:block!important}}`}</style>
-        <div className="pg-hero" id="pg-hero-section" style={{ display:"none" }}>
-          <div style={{ maxWidth:1280, margin:"0 auto", padding:"36px 32px", position:"relative", zIndex:1 }}>
-            <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:24, flexWrap:"wrap" }}>
-              <div>
-                <p style={{ color:"var(--accent2)", fontSize:11, fontWeight:900, letterSpacing:"0.18em", textTransform:"uppercase", marginBottom:8 }}>✦ Pantau Perkembanganmu</p>
-                <h2 style={{ color:"var(--text)", fontSize:"clamp(28px,3.5vw,44px)", fontWeight:900, lineHeight:1.15, marginBottom:12 }}>
-                  Lihat Seberapa Jauh<br />
-                  <span style={{ background:"linear-gradient(135deg,#a5b4fc,#22d3ee)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
-                    Kamu Berkembang
-                  </span>
-                </h2>
-                <p style={{ color:"var(--muted)", fontSize:14, maxWidth:480, lineHeight:1.6 }}>
-                  Pantau grafik nilai, distribusi mapel, dan riwayat ujian kamu dalam satu halaman yang lengkap.
-                </p>
-              </div>
-
-              {/* Profile + filter */}
-              <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-                  {foto ? (
-                    <img src={foto} alt="avatar" className="ava-ring"
-                      style={{ width:72, height:72, borderRadius:"50%", objectFit:"cover" }} />
-                  ) : (
-                    <div className="ava-ring"
-                      style={{ width:72, height:72, borderRadius:"50%", background:"linear-gradient(135deg,#6366f1,#06b6d4)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:24, fontWeight:900 }}>
-                      {nama.slice(0,2).toUpperCase()}
-                    </div>
-                  )}
-                  <div>
-                    <p style={{ color:"var(--muted)", fontSize:11, fontWeight:600 }}>Selamat belajar,</p>
-                    <h3 style={{ color:"var(--text)", fontSize:22, fontWeight:900, lineHeight:1.1 }}>{nama}</h3>
-                  </div>
-                </div>
-
-                {/* Select */}
-                <div style={{ position:"relative" }}>
-                  <select value={selectedPaket} onChange={e => setSelectedPaket(e.target.value)}
-                    className="pg-select" style={{ height:46, width:220, fontSize:13, fontWeight:700 }}>
-                    <option>Semua</option>
-                    {packages.map(p => <option key={p.id} value={p.nama_paket}>{p.nama_paket}</option>)}
-                  </select>
-                  <span style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", color:"var(--muted)", pointerEvents:"none", fontSize:12 }}>▾</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ══════════ CONTENT ══════════ */}
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"16px 16px 0" }}>
-
-          {/* MOBILE: nama + filter */}
-          <div style={{ marginBottom:14 }} id="mob-profile">
-            <style>{`@media(min-width:768px){#mob-profile{display:none!important}}`}</style>
-            <div style={{ background:"var(--card)", border:"1px solid var(--border)", borderRadius:20, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, animation:"fadeUp .4s ease both" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
-                {foto ? (
-                  <img src={foto} alt="av" className="ava-ring" style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
-                ) : (
-                  <div className="ava-ring" style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#6366f1,#06b6d4)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:15, fontWeight:900, flexShrink:0 }}>
-                    {nama.slice(0,2).toUpperCase()}
-                  </div>
-                )}
-                <div style={{ minWidth:0 }}>
-                  <p style={{ color:"var(--muted)", fontSize:10, fontWeight:600 }}>Halo 👋</p>
-                  <p style={{ color:"var(--text)", fontSize:14, fontWeight:900, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nama}</p>
-                </div>
-              </div>
-              <div style={{ position:"relative", flexShrink:0 }}>
-                <select value={selectedPaket} onChange={e => setSelectedPaket(e.target.value)}
-                  className="pg-select" style={{ height:36, width:130, fontSize:11, fontWeight:700, paddingRight:24 }}>
-                  <option>Semua</option>
-                  {packages.map(p => <option key={p.id} value={p.nama_paket}>{p.nama_paket}</option>)}
-                </select>
-                <span style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", color:"var(--muted)", pointerEvents:"none", fontSize:10 }}>▾</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ── STAT CARDS ── */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, marginBottom:14 }} id="stat-grid">
-            <style>{`@media(min-width:768px){#stat-grid{grid-template-columns:repeat(4,1fr)!important;gap:16px!important;margin-bottom:24px!important}}`}</style>
-            {STAT_CFG.map((s,i) => (
-              <div key={s.key} className="pg-stat" style={{ animationDelay:`${i*0.07}s` }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                  <div style={{ minWidth:0 }}>
-                    <p style={{ color:"var(--muted)", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:4 }}>{s.title}</p>
-                    <p className="pg-stat-val" style={{ color:"var(--text)", fontSize:"clamp(28px,5vw,48px)", fontWeight:900, lineHeight:1 }}>
-                      {statValues[s.key]}
-                    </p>
-                  </div>
-                  <div style={{ width:44, height:44, borderRadius:14, background:`linear-gradient(135deg,${s.grad.replace("from-","").replace(" to-",",")})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, boxShadow:"0 8px 20px rgba(0,0,0,0.3)" }}>
-                    {/* inline gradient trick — use direct style */}
-                  </div>
-                </div>
-                {/* icon via absolute overlay */}
-                <div style={{ position:"absolute", top:18, right:18, width:44, height:44, borderRadius:14, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}
-                  className={`bg-gradient-to-br ${s.grad}`}>
-                  {s.icon}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* ── CHARTS ── */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginBottom:14 }} id="chart-grid">
-            <style>{`@media(min-width:1024px){#chart-grid{grid-template-columns:2fr 1fr!important;gap:20px!important;margin-bottom:24px!important}}`}</style>
-
-            {/* AREA CHART */}
-            <div className="pg-card" style={{ padding:"20px 20px 16px" }}>
-              <div style={{ marginBottom:16 }}>
-                <h2 style={{ color:"var(--text)", fontSize:"clamp(16px,3vw,24px)", fontWeight:900, marginBottom:4 }}>Grafik Nilai</h2>
-                <p style={{ color:"var(--muted)", fontSize:12 }}>Perkembangan nilai ujian dari waktu ke waktu</p>
-              </div>
-              {chartData.length === 0 ? (
-                <div style={{ height:280, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:8 }}>
-                  <div className="pg-float" style={{ fontSize:48 }}>📉</div>
-                  <p style={{ color:"var(--text)", fontWeight:900, fontSize:16 }}>Belum Ada Data</p>
-                  <p style={{ color:"var(--muted)", fontSize:12 }}>Kerjakan ujian agar grafik muncul</p>
-                </div>
-              ) : (
-                <div style={{ width:"100%", height:260 }} id="area-h">
-                  <style>{`@media(min-width:768px){#area-h{height:340px!important}}`}</style>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top:5, right:8, left:-20, bottom:0 }}>
-                      <defs>
-                        <linearGradient id="cScore" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.5} />
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0}   />
-                        </linearGradient>
-                        <linearGradient id="cScore2" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#06b6d4" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}   />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="tanggal" tick={{ fill:"#64748b", fontSize:10 }} axisLine={false} tickLine={false} />
-                      <YAxis domain={[0,100]} tick={{ fill:"#64748b", fontSize:10 }} axisLine={false} tickLine={false} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area type="monotone" dataKey="skor" stroke="#6366f1" strokeWidth={3}
-                        fillOpacity={1} fill="url(#cScore)"
-                        dot={{ r:4, fill:"#6366f1", stroke:"#0a0f1e", strokeWidth:2 }}
-                        activeDot={{ r:6, fill:"#06b6d4", stroke:"#0a0f1e", strokeWidth:2 }} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
-
-            {/* PIE CHART */}
-            <div className="pg-card" style={{ padding:"20px 20px 16px" }}>
-              <div style={{ marginBottom:16 }}>
-                <h2 style={{ color:"var(--text)", fontSize:"clamp(15px,2.5vw,22px)", fontWeight:900, marginBottom:4 }}>Distribusi Mapel</h2>
-                <p style={{ color:"var(--muted)", fontSize:12 }}>Sebaran ujian per kategori</p>
-              </div>
-              {pieData.length === 0 ? (
-                <div style={{ height:220, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  <p style={{ color:"var(--muted)", fontSize:13 }}>Belum ada data</p>
-                </div>
-              ) : (
-                <>
-                  <div style={{ width:"100%", height:200 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={3}>
-                          {pieData.map((_,i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{ background:"#1e293b", border:"1px solid rgba(99,102,241,0.3)", borderRadius:12, color:"#f1f5f9", fontSize:12 }}
-                          itemStyle={{ color:"#a5b4fc" }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* Legend */}
-                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:12 }}>
-                    {pieData.map((d,i) => (
-                      <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
-                          <div style={{ width:10, height:10, borderRadius:"50%", background:COLORS[i%COLORS.length], flexShrink:0 }} />
-                          <span style={{ color:"#94a3b8", fontSize:11, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.name}</span>
-                        </div>
-                        <span style={{ color:"var(--text)", fontSize:12, fontWeight:800, flexShrink:0 }}>{d.value}×</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ── HISTORY ── */}
-          <div className="pg-card" style={{ padding:"20px 20px 8px", marginBottom:16 }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, gap:8, flexWrap:"wrap" }}>
-              <div>
-                <h2 style={{ color:"var(--text)", fontSize:"clamp(16px,3vw,24px)", fontWeight:900 }}>Riwayat Ujian</h2>
-                <p style={{ color:"var(--muted)", fontSize:11, marginTop:2 }}>{filteredData.length} hasil ditemukan</p>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                <span className="dot-live" />
-                <span style={{ color:"var(--muted)", fontSize:11, fontWeight:600 }}>Live sync</span>
-              </div>
-            </div>
-
-            {filteredData.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"48px 0" }}>
-                <div className="pg-float" style={{ fontSize:48, marginBottom:12 }}>📘</div>
-                <p style={{ color:"var(--text)", fontWeight:900, fontSize:16, marginBottom:4 }}>Belum Ada Riwayat</p>
-                <p style={{ color:"var(--muted)", fontSize:12 }}>Kerjakan ujian untuk melihat histori nilai</p>
-              </div>
+        <div className="px-4 mb-2">
+          <button
+            onClick={() => router.push("/profile")}
+            className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition"
+          >
+            {foto ? (
+              <img src={foto} alt={nama} className="w-9 h-9 rounded-xl object-cover shrink-0" />
             ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:8, paddingBottom:12 }}>
-                {filteredData.slice().reverse().map((item, i) => {
-                  const sc = item.skor >= 80 ? "sc-high" : item.skor >= 60 ? "sc-mid" : "sc-low"
-                  return (
-                    <div key={i} className="pg-row" style={{ padding:"12px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, animationDelay:`${i*0.05}s` }}>
-                      {/* Left */}
-                      <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0 }}>
-                        <div className={`score-ring ${sc}`}>{item.skor}</div>
-                        <div style={{ minWidth:0 }}>
-                          <p className="pg-hist-title" style={{ color:"var(--text)", fontWeight:800, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                            {item.kategori}
-                          </p>
-                          <p className="pg-hist-sub" style={{ color:"var(--muted)", fontSize:11, marginTop:1 }}>
-                            {getPackageName(item.package_id)}
-                          </p>
-                          <p className="pg-hist-sub" style={{ color:"var(--muted2)", fontSize:10, marginTop:1 }}>
-                            {new Date(item.tanggal).toLocaleDateString("id-ID", { day:"2-digit", month:"short", year:"numeric" })}
-                          </p>
-                        </div>
-                      </div>
-                      {/* Right: mini progress bar */}
-                      <div style={{ flexShrink:0, textAlign:"right", minWidth:60 }}>
-                        <div style={{ height:4, width:60, background:"rgba(255,255,255,0.07)", borderRadius:99, overflow:"hidden", marginBottom:4 }}>
-                          <div style={{ height:"100%", width:`${item.skor}%`, background:"linear-gradient(90deg,#6366f1,#06b6d4)", borderRadius:99, transition:"width .8s ease" }} />
-                        </div>
-                        <span style={{ color:"var(--muted)", fontSize:10, fontWeight:700 }}>{item.skor}/100</span>
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-xs font-bold shrink-0 text-white">
+                {inisial}
               </div>
             )}
-          </div>
-
+            <div className="text-left min-w-0 flex-1">
+              <p className="text-xs font-semibold text-white truncate">{nama || "Pengguna"}</p>
+              <p className="text-[10px] text-blue-300">Lihat profil</p>
+            </div>
+          </button>
         </div>
+
+        <nav className="px-3 mt-2 flex-1 overflow-y-auto">
+          <p className="px-3 text-[11px] font-semibold uppercase tracking-wider mb-2 text-blue-400">
+            Menu Utama
+          </p>
+          <ul className="space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              const isActive = item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(item.href)
+              return (
+                <li key={item.href}>
+                  <button
+                    onClick={() => router.push(item.href)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition"
+                    style={{
+                      background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                      color: isActive ? "#FFFFFF" : "#C4CCDE",
+                      borderLeft: isActive ? "3px solid #F59E0B" : "3px solid transparent",
+                    }}
+                  >
+                    <Icon size={17} strokeWidth={2} />
+                    <span className="font-medium">{item.label}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </nav>
+
+        <div className="px-3 pb-5 mt-4">
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition"
+            style={{ color: "#C4CCDE", borderLeft: "3px solid transparent" }}
+          >
+            <LogOut size={17} strokeWidth={2} />
+            <span className="font-medium">Keluar</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* CONTENT */}
+      <div className="dash-content flex flex-col min-h-screen bg-slate-50">
+
+        {/* TOPBAR MOBILE */}
+        <header className="lg:hidden sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-4 h-12 flex items-center gap-3">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition"
+          >
+            <Menu size={16} />
+          </button>
+          <p className="text-sm font-bold text-slate-800 flex-1">Progress Akademik</p>
+          {foto ? (
+            <img src={foto} alt={nama} className="w-8 h-8 rounded-lg object-cover" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-[10px] font-bold text-white">
+              {inisial}
+            </div>
+          )}
+        </header>
+
+        <main className="flex-1 w-full px-4 py-4 md:px-10 md:py-8">
+          <div className="space-y-6 md:space-y-8">
+
+            {/* HERO */}
+            <div
+              style={{ background: "linear-gradient(135deg, #1E3A8A 0%, #172554 55%, #0B1120 100%)" }}
+              className="relative overflow-hidden rounded-2xl p-4 md:p-8 shadow-sm"
+            >
+              <div className="absolute top-0 right-0 w-72 h-40 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-40 h-32 bg-amber-400/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-full px-2.5 py-0.5 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-[9px] font-bold tracking-widest text-blue-200 uppercase">
+                      Pantau Perkembanganmu
+                    </span>
+                  </div>
+                  <h1 className="text-xl md:text-3xl font-extrabold text-white leading-tight">
+                    Lihat Seberapa Jauh{" "}
+                    <span
+                      style={{
+                        backgroundImage: "linear-gradient(90deg, #FCD34D, #FB923C)",
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        color: "transparent",
+                      }}
+                    >
+                      Kamu Berkembang
+                    </span>{" "}
+                    📈
+                  </h1>
+                  <p className="mt-1 text-blue-300 text-xs max-w-md">
+                    Pantau grafik nilai, distribusi mapel, dan riwayat ujian kamu dalam satu halaman.
+                  </p>
+                </div>
+
+                {/* filter paket — desktop */}
+                <div className="hidden md:block relative shrink-0">
+                  <select
+                    value={selectedPaket}
+                    onChange={(e) => setSelectedPaket(e.target.value)}
+                    className="h-11 w-56 rounded-xl pl-4 pr-9 text-sm font-bold outline-none appearance-none cursor-pointer bg-white/10 border border-white/20 text-white"
+                  >
+                    <option className="text-slate-900" value="Semua">Semua Paket</option>
+                    {packages.map((p) => (
+                      <option className="text-slate-900" key={p.id} value={p.nama_paket}>{p.nama_paket}</option>
+                    ))}
+                  </select>
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-blue-200 pointer-events-none text-xs">▾</span>
+                </div>
+              </div>
+            </div>
+
+            {/* filter paket — mobile */}
+            <div className="md:hidden bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="dot-live" style={{ background: isLive ? "#10b981" : "#cbd5e1" }} />
+                <span className="text-[11px] font-semibold text-slate-500">{totalUjian} ujian tercatat</span>
+              </div>
+              <div className="relative">
+                <select
+                  value={selectedPaket}
+                  onChange={(e) => setSelectedPaket(e.target.value)}
+                  className="h-9 w-32 rounded-lg pl-3 pr-7 text-xs font-bold outline-none appearance-none cursor-pointer bg-slate-50 border border-slate-200 text-slate-700"
+                >
+                  <option value="Semua">Semua</option>
+                  {packages.map((p) => (
+                    <option key={p.id} value={p.nama_paket}>{p.nama_paket}</option>
+                  ))}
+                </select>
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]">▾</span>
+              </div>
+            </div>
+
+            {/* STAT CARDS */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-4">
+              {STAT_CFG.map((s) => (
+                <div
+                  key={s.key}
+                  className="relative bg-white border border-slate-200 rounded-2xl p-3.5 md:p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
+                >
+                  <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    {s.title}
+                  </p>
+                  <p className="text-2xl md:text-4xl font-black text-slate-900 leading-none">
+                    {statValues[s.key]}
+                  </p>
+                  <div
+                    className="absolute top-3 right-3 md:top-4 md:right-4 w-9 h-9 md:w-11 md:h-11 rounded-xl flex items-center justify-center text-base md:text-lg shadow-sm"
+                    style={{ background: `linear-gradient(135deg, ${s.from}, ${s.to})` }}
+                  >
+                    {s.icon}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* CHARTS */}
+            <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 md:gap-5">
+
+              {/* AREA CHART */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
+                <div className="mb-3 md:mb-4">
+                  <h2 className="text-base md:text-xl font-extrabold text-slate-900">Grafik Nilai</h2>
+                  <p className="text-slate-400 text-[11px] md:text-xs mt-0.5">Perkembangan nilai ujian dari waktu ke waktu</p>
+                </div>
+                {chartData.length === 0 ? (
+                  <div className="h-64 flex flex-col items-center justify-center gap-2">
+                    <div className="pg-float text-4xl">📉</div>
+                    <p className="text-slate-900 font-bold text-sm">Belum Ada Data</p>
+                    <p className="text-slate-400 text-xs">Kerjakan ujian agar grafik muncul</p>
+                  </div>
+                ) : (
+                  <div className="w-full h-64 md:h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="cScore" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366F1" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                        <XAxis dataKey="tanggal" tick={{ fill: "#94A3B8", fontSize: 10 }} axisLine={false} tickLine={false} />
+                        <YAxis domain={[0, 100]} tick={{ fill: "#94A3B8", fontSize: 10 }} axisLine={false} tickLine={false} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area
+                          type="monotone" dataKey="skor" stroke="#6366F1" strokeWidth={3}
+                          fillOpacity={1} fill="url(#cScore)"
+                          dot={{ r: 4, fill: "#6366F1", stroke: "#fff", strokeWidth: 2 }}
+                          activeDot={{ r: 6, fill: "#06B6D4", stroke: "#fff", strokeWidth: 2 }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              {/* PIE CHART */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
+                <div className="mb-3 md:mb-4">
+                  <h2 className="text-sm md:text-lg font-extrabold text-slate-900">Distribusi Mapel</h2>
+                  <p className="text-slate-400 text-[11px] md:text-xs mt-0.5">Sebaran ujian per kategori</p>
+                </div>
+                {pieData.length === 0 ? (
+                  <div className="h-52 flex items-center justify-center">
+                    <p className="text-slate-400 text-sm">Belum ada data</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-full h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={3}>
+                            {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, color: "#0F172A", fontSize: 12 }}
+                            itemStyle={{ color: "#4338CA" }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-col gap-1.5 mt-3">
+                      {pieData.map((d, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
+                            <span className="text-slate-500 text-[11px] font-semibold truncate">{d.name}</span>
+                          </div>
+                          <span className="text-slate-900 text-xs font-extrabold shrink-0">{d.value}×</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* HISTORY */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <div>
+                  <h2 className="text-base md:text-xl font-extrabold text-slate-900">Riwayat Ujian</h2>
+                  <p className="text-slate-400 text-[11px] mt-0.5">{filteredData.length} hasil ditemukan</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="dot-live" style={{ background: isLive ? "#10b981" : "#cbd5e1" }} />
+                  <span className="text-slate-400 text-[11px] font-semibold">
+                    {isLive ? "Live sync" : "Menghubungkan..."}
+                  </span>
+                </div>
+              </div>
+
+              {filteredData.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="pg-float text-4xl mb-3">📘</div>
+                  <p className="text-slate-900 font-bold text-sm mb-1">Belum Ada Riwayat</p>
+                  <p className="text-slate-400 text-xs">Kerjakan ujian untuk melihat histori nilai</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 pb-1">
+                  {filteredData.slice().reverse().map((item, i) => {
+                    const scColor = item.skor >= 80 ? "#10B981" : item.skor >= 60 ? "#F59E0B" : "#EF4444"
+                    const scBg    = item.skor >= 80 ? "linear-gradient(135deg,#10B981,#059669)" : item.skor >= 60 ? "linear-gradient(135deg,#F59E0B,#D97706)" : "linear-gradient(135deg,#EF4444,#DC2626)"
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-all"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className="w-11 h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center text-white font-black text-sm md:text-base shrink-0"
+                            style={{ background: scBg }}
+                          >
+                            {item.skor}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-slate-900 font-extrabold text-[13px] md:text-sm truncate">{item.kategori}</p>
+                            <p className="text-slate-400 text-[11px] mt-0.5 truncate">{getPackageName(item.package_id)}</p>
+                            <p className="text-slate-400 text-[10px] mt-0.5">
+                              {new Date(item.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 min-w-[60px]">
+                          <div className="h-1.5 w-16 bg-slate-200 rounded-full overflow-hidden mb-1 ml-auto">
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${item.skor}%`, background: "linear-gradient(90deg,#6366F1,#06B6D4)" }}
+                            />
+                          </div>
+                          <span className="text-slate-400 text-[10px] font-bold">{item.skor}/100</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </main>
       </div>
-    </>
+    </div>
   )
 }
