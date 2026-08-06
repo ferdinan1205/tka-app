@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "../../../../lib/supabase"
@@ -229,7 +229,10 @@ function isValidStatus(v: string | null): v is StatusKey {
   return v === "ada" || v === "belum"
 }
 
-export default function KelengkapanKontenPage() {
+/* ------------------------------------------------------------------ */
+/* Komponen inti — pakai useSearchParams, WAJIB dibungkus <Suspense>  */
+/* ------------------------------------------------------------------ */
+function KelengkapanKontenInner() {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -560,5 +563,26 @@ export default function KelengkapanKontenPage() {
       </div>
     </div>
     </MathJaxContext>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Default export — bungkus komponen inti dengan <Suspense>           */
+/* Ini wajib karena KelengkapanKontenInner memakai useSearchParams()  */
+/* ------------------------------------------------------------------ */
+export default function KelengkapanKontenPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center" style={{ background: palette.paper }}>
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-9 h-9 border-2 rounded-full animate-spin" style={{ borderColor: palette.border, borderTopColor: palette.amber }} />
+            <p className="text-sm" style={{ color: palette.inkSoft }}>Memuat halaman...</p>
+          </div>
+        </div>
+      }
+    >
+      <KelengkapanKontenInner />
+    </Suspense>
   )
 }
