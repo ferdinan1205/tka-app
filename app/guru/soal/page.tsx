@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
@@ -281,7 +281,7 @@ function initials(name: string) {
 /* PAGE                                                                */
 /* ------------------------------------------------------------------ */
 
-export default function KelolaSoalPage() {
+function KelolaSoalPageInner() {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1449,5 +1449,20 @@ async function handleExportPdf() {
         </div>
       )}
     </MathJaxContext>
+  )
+}
+
+export default function KelolaSoalPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#F5F3EC" }}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 rounded-full animate-spin" style={{ borderColor: "#E7E2D4", borderTopColor: "#D98C2B" }} />
+          <p className="text-sm" style={{ color: "#6B7080" }}>Memuat...</p>
+        </div>
+      </div>
+    }>
+      <KelolaSoalPageInner />
+    </Suspense>
   )
 }

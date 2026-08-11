@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
@@ -409,10 +409,10 @@ function initials(name: string) {
 }
 
 /* ------------------------------------------------------------------ */
-/* PAGE                                                                */
+/* PAGE (inner) — dibungkus Suspense oleh default export di bawah      */
 /* ------------------------------------------------------------------ */
 
-export default function KelolaSoalAdminPage() {
+function KelolaSoalAdminPageInner() {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1782,5 +1782,26 @@ export default function KelolaSoalAdminPage() {
         </div>
       )}
     </MathJaxContext>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Wrapper Suspense — WAJIB untuk useSearchParams() agar tidak gagal    */
+/* saat prerender static build (Next.js App Router).                    */
+/* ------------------------------------------------------------------ */
+export default function KelolaSoalAdminPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center" style={{ background: "#eef2f7" }}>
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-9 h-9 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(15,23,42,.08)", borderTopColor: "#f59e0b" }} />
+            <p className="text-sm" style={{ color: "#64748b" }}>Memuat halaman...</p>
+          </div>
+        </div>
+      }
+    >
+      <KelolaSoalAdminPageInner />
+    </Suspense>
   )
 }
