@@ -5,8 +5,30 @@ import { supabase } from "../../lib/supabase"
 import { useRouter, useSearchParams } from "next/navigation"
 import { MathJax, MathJaxContext } from "better-react-mathjax"
 
+/* ══════════════════════════════════════════════════════════
+   Palet — konsisten dengan app/admin & app/guru
+══════════════════════════════════════════════════════════ */
+const palette = {
+  navy: "#1B2A4A",
+  navySoft: "#2C3F63",
+  paper: "#F5F3EC",
+  card: "#FFFFFF",
+  border: "#E7E2D4",
+  ink: "#242A38",
+  inkSoft: "#6B7080",
+  inkFaint: "#98A0B2",
+  amber: "#D98C2B",
+  amberSoft: "#FBEBD6",
+  amberText: "#8A5412",
+  teal: "#2F7A6D",
+  tealSoft: "#E1F0EC",
+  tealText: "#1F5548",
+  danger: "#B3432E",
+  dangerSoft: "#FBE7E2",
+}
+
 const STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Inter:wght@500;600;700;800&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; }
   body { font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -16,16 +38,12 @@ const STYLES = `
   @keyframes popIn { 0% { opacity: 0; transform: scale(0.88); } 65% { transform: scale(1.04); } 100% { opacity: 1; transform: scale(1); } }
   @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
   @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes barGrow { from { width: 0; } }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-  @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-4px); } }
+  @keyframes ringIn { from { stroke-dashoffset: var(--ring-full); } to { stroke-dashoffset: var(--ring-offset); } }
 
   .anim-slide-down { animation: slideDown 0.4s cubic-bezier(0.22,0.61,0.36,1) both; }
   .anim-fade-up    { animation: fadeUp 0.45s cubic-bezier(0.22,0.61,0.36,1) both; }
   .anim-pop-in     { animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
   .anim-spin       { animation: spin 0.9s linear infinite; }
-  .anim-pulse      { animation: pulse 1.8s ease infinite; }
-  .anim-float      { animation: float 3s ease-in-out infinite; }
 
   .stagger-1 { animation-delay: 0ms; }
   .stagger-2 { animation-delay: 60ms; }
@@ -35,7 +53,7 @@ const STYLES = `
   .card-item { animation: fadeUp 0.4s cubic-bezier(0.22,0.61,0.36,1) both; }
 
   .shimmer-text {
-    background: linear-gradient(90deg, #fff 0%, #bfdbfe 40%, #fff 60%, #bfdbfe 100%);
+    background: linear-gradient(90deg, #fff 0%, #FBEBD6 40%, #fff 60%, #FBEBD6 100%);
     background-size: 200% auto;
     animation: shimmer 2.5s linear infinite;
     -webkit-background-clip: text;
@@ -47,38 +65,36 @@ const STYLES = `
   .collapse-content.open   { max-height: 9999px; opacity: 1; }
   .collapse-content.closed { max-height: 0;      opacity: 0; }
 
-  .acc-bar { animation: barGrow 1s cubic-bezier(0.22,0.61,0.36,1) both; }
-
-  .prose-ai { line-height: 1.9; color: #1e293b; }
-  .prose-ai p  { margin: 0 0 0.7em; }
-  .prose-ai h1 { font-size: 1em;    font-weight: 900; color: #1e40af; margin: 1em 0 0.4em; }
-  .prose-ai h2 { font-size: 0.97em; font-weight: 900; color: #1e40af; margin: 1em 0 0.35em; }
-  .prose-ai h3 { font-size: 0.93em; font-weight: 900; color: #1d4ed8; margin: 0.9em 0 0.3em; }
-  .prose-ai strong { font-weight: 900; color: #1e293b; }
-  .prose-ai em     { font-style: italic; color: #2563eb; }
-  .prose-ai ul  { list-style: disc;    padding-left: 1.4em; margin: 0.4em 0 0.7em; }
-  .prose-ai ol  { list-style: decimal; padding-left: 1.4em; margin: 0.4em 0 0.7em; }
-  .prose-ai li  { margin: 0.25em 0; }
-  .prose-ai code { background: #eff6ff; color: #1d4ed8; padding: 1px 5px; border-radius: 5px; font-size: 0.88em; }
-  .prose-ai blockquote { border-left: 3px solid #93c5fd; padding-left: 0.9em; color: #475569; margin: 0.5em 0; font-style: italic; }
-  .prose-ai hr { border: none; border-top: 1px solid #e2e8f0; margin: 0.75em 0; }
+  .prose-ai { line-height: 1.75; color: #242A38; }
+  .prose-ai p  { margin: 0 0 0.55em; }
+  .prose-ai h1 { font-size: 1em;    font-weight: 900; color: #1B2A4A; margin: 0.9em 0 0.35em; font-family: Georgia, serif; }
+  .prose-ai h2 { font-size: 0.97em; font-weight: 900; color: #1B2A4A; margin: 0.9em 0 0.3em; font-family: Georgia, serif; }
+  .prose-ai h3 { font-size: 0.93em; font-weight: 900; color: #2C3F63; margin: 0.8em 0 0.25em; }
+  .prose-ai strong { font-weight: 900; color: #242A38; }
+  .prose-ai em     { font-style: italic; color: #8A5412; }
+  .prose-ai ul  { list-style: disc;    padding-left: 1.4em; margin: 0.3em 0 0.6em; }
+  .prose-ai ol  { list-style: decimal; padding-left: 1.4em; margin: 0.3em 0 0.6em; }
+  .prose-ai li  { margin: 0.15em 0; }
+  .prose-ai code { background: #FBEBD6; color: #8A5412; padding: 1px 5px; border-radius: 5px; font-size: 0.88em; }
+  .prose-ai blockquote { border-left: 3px solid #D98C2B; padding-left: 0.9em; color: #6B7080; margin: 0.5em 0; font-style: italic; }
+  .prose-ai hr { border: none; border-top: 1px solid #E7E2D4; margin: 0.75em 0; }
   .prose-ai mjx-container { overflow-x: auto; max-width: 100%; }
 
-  .prose-soal { line-height: 1.9; color: #0f172a; }
+  .prose-soal { line-height: 1.9; color: #242A38; }
   .prose-soal p, .prose-soal div { margin: 0 0 0.4em; }
   .prose-soal img { max-width: 100%; border-radius: 10px; margin: 0.5em 0; }
   .prose-soal mjx-container { overflow-x: auto; max-width: 100%; }
 
   .btn-press { transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease; }
-  .btn-press:hover  { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(29,78,216,0.25); }
-  .btn-press:active { transform: scale(0.96); filter: brightness(0.95); }
+  .btn-press:hover  { transform: translateY(-2px); }
+  .btn-press:active { transform: scale(0.96); filter: brightness(0.96); }
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
 
   @media (max-width: 640px) {
-    .btn-press:hover { transform: none; box-shadow: none; }
+    .btn-press:hover { transform: none; }
     .btn-press:active { transform: scale(0.96); }
   }
 `
@@ -130,10 +146,53 @@ function formatText(text: string) {
   return r
 }
 
+// AI kadang balikin teks kayak "JAWABAN SISWA: A." lalu isinya "10°" di
+// baris berikutnya, atau daftar opsi "A." / "10°" / "B." / "30°" per baris.
+// Fungsi ini gabungin baris yang cuma berisi huruf opsi (atau label yang
+// diakhiri huruf opsi) dengan baris konten setelahnya, biar jadi satu baris
+// rapi: "JAWABAN SISWA: A. 10°" — bukan dua paragraf terpisah.
+function mergeBareLetterLines(text: string): string {
+  const lines = text.split("\n")
+  const out: string[] = []
+  const isBareLetter = (s: string) => /^[A-E]\.\*{0,2}$/.test(s)
+  const isLabelEndingWithLetter = (s: string) => /:\s*\*{0,2}[A-E]\.\*{0,2}\s*$/.test(s)
+  const isBlockedCandidate = (s: string) =>
+    /^#{1,3}\s/.test(s) ||
+    /^\d+\.\s/.test(s) ||
+    stripBullet(s).bareOrLabel
+
+  function stripBullet(s: string) {
+    const m = s.match(/^([-*+]\s+)?(.*)$/)
+    const prefix = m?.[1] || ""
+    const rest = (m?.[2] || s).trim()
+    const rest2 = rest.replace(/^\*{1,2}/, "").trim()
+    return { prefix, rest: rest2, bareOrLabel: isBareLetter(rest2) || isLabelEndingWithLetter(rest2) }
+  }
+
+  let i = 0
+  while (i < lines.length) {
+    const { prefix, rest, bareOrLabel } = stripBullet(lines[i].trim())
+    if (bareOrLabel) {
+      // loncat lewatin baris kosong buat nyari baris isi berikutnya
+      let j = i + 1
+      while (j < lines.length && lines[j].trim() === "") j++
+      const candidate = lines[j]?.trim() ?? ""
+      if (candidate !== "" && !isBlockedCandidate(candidate)) {
+        out.push(`${prefix}${rest} ${candidate}`)
+        i = j + 1
+        continue
+      }
+    }
+    out.push(lines[i])
+    i += 1
+  }
+  return out.join("\n")
+}
+
 function formatPembahasan(text: string): string {
   if (!text) return ""
   const blocks: string[] = []
-  let safe = text
+  let safe = mergeBareLetterLines(text)
   for (const pat of [
     /\$\$[\s\S]+?\$\$/g,
     /\\\[[\s\S]+?\\\]/g,
@@ -172,6 +231,74 @@ function extractImages(html: string) {
   return imgs
 }
 
+// Bersihkan tag HTML & spasi berlebih dari sebuah teks, dipakai untuk
+// mencocokkan soal hasil ujian dengan baris di tabel "soal".
+function cleanHtml(text?: string | null) {
+  if (!text) return ""
+  return text
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+// Ambil semua soal dari Supabase sekali, lalu tempelkan teks jawaban
+// lengkap (huruf + isi opsi) ke setiap item detail hasil ujian.
+// Dipanggil otomatis saat halaman dibuka, jadi "Jawaban Kamu" / "Jawaban
+// Benar" langsung nampilin teks lengkap tanpa perlu klik generate AI.
+async function enrichDetailWithAnswerText(hasil: HasilType): Promise<HasilType> {
+  try {
+    if (!hasil.detail || hasil.detail.length === 0) return hasil
+
+    const { data: soalList, error: soalError } = await supabase
+      .from("soal")
+      .select(`pertanyaan, opsi_a, opsi_b, opsi_c, opsi_d, opsi_e`)
+
+    if (!soalList || soalError) return hasil
+
+    const updatedDetail = hasil.detail.map((item) => {
+      // sudah ada teks lengkap, gak usah dicari ulang
+      if (item.jawaban_user_text && item.jawaban_benar_text) return item
+
+      const soalBersih = cleanHtml(item.soal)
+
+      const soalData = soalList.find((s) => {
+        const dbSoal = cleanHtml(s.pertanyaan)
+        return dbSoal.slice(0, 150).toLowerCase() === soalBersih.slice(0, 150).toLowerCase()
+      })
+
+      if (!soalData) return item
+
+      const opsiMap: Record<string, string> = {
+        a: cleanHtml(soalData.opsi_a),
+        b: cleanHtml(soalData.opsi_b),
+        c: cleanHtml(soalData.opsi_c),
+        d: cleanHtml(soalData.opsi_d),
+        e: cleanHtml(soalData.opsi_e),
+      }
+
+      const hurufUser = (item.jawaban_user || "").toLowerCase().trim()
+      const hurufBenar = (item.jawaban_benar || "").toLowerCase().trim()
+      const isValidHuruf = (h: string) => ["a", "b", "c", "d", "e"].includes(h)
+
+      return {
+        ...item,
+        jawaban_user_text: isValidHuruf(hurufUser)
+          ? `${hurufUser.toUpperCase()}. ${opsiMap[hurufUser] || item.jawaban_user}`
+          : "Tidak dijawab",
+        jawaban_benar_text: isValidHuruf(hurufBenar)
+          ? `${hurufBenar.toUpperCase()}. ${opsiMap[hurufBenar] || item.jawaban_benar}`
+          : item.jawaban_benar,
+      }
+    })
+
+    return { ...hasil, detail: updatedDetail }
+  } catch (err) {
+    console.error("Error enriching answer texts:", err)
+    return hasil
+  }
+}
+
 const MathContent = memo(({ html, className = "" }: { html: string; className?: string }) => {
   const fmt = useMemo(() => formatText(html), [html])
   return (
@@ -196,12 +323,45 @@ const PembahasanAI = memo(({ text }: { text: string }) => {
 })
 PembahasanAI.displayName = "PembahasanAI"
 
-function StatCard({ label, value, icon, gradient, textColor, delay }: { label: string; value: string | number; icon: string; gradient: string; textColor: string; delay: string }) {
+/* ── Signature element: ring progress akurasi ── */
+function AccuracyRing({ value, color, size = 112, stroke = 10 }: { value: number; color: string; size?: number; stroke?: number }) {
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const offset = c - (Math.min(Math.max(value, 0), 100) / 100) * c
   return (
-    <div className="anim-pop-in rounded-2xl p-2.5 md:p-4 flex flex-col items-center gap-1 border border-white/60 shadow-sm" style={{ background: gradient, animationDelay: delay }}>
-      <span className="text-base md:text-2xl anim-float" style={{ animationDelay: delay }}>{icon}</span>
-      <p className={`font-black text-xl md:text-3xl leading-none ${textColor}`}>{value}</p>
-      <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
+    <div className="relative anim-pop-in shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={palette.border} strokeWidth={stroke} />
+        <circle
+          cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={color} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={c}
+          style={{
+            ["--ring-full" as any]: c,
+            ["--ring-offset" as any]: offset,
+            animation: "ringIn 1.1s cubic-bezier(0.22,0.61,0.36,1) both",
+          }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <p style={{ fontFamily: "Georgia, serif", color }} className="text-2xl font-black leading-none">{value}%</p>
+        <p style={{ color: palette.inkFaint }} className="text-[8px] font-bold uppercase tracking-widest mt-1">Akurasi</p>
+      </div>
+    </div>
+  )
+}
+
+function StatChip({ icon, label, value, color, delay }: { icon: string; label: string; value: string | number; color: string; delay: string }) {
+  return (
+    <div
+      className="anim-fade-up flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
+      style={{ background: palette.paper, border: `1px solid ${palette.border}`, animationDelay: delay }}
+    >
+      <span className="text-base shrink-0">{icon}</span>
+      <div className="min-w-0">
+        <p style={{ color: palette.inkFaint }} className="text-[8px] font-bold uppercase tracking-widest leading-none">{label}</p>
+        <p style={{ color, fontFamily: "Georgia, serif" }} className="text-base font-black leading-tight mt-0.5">{value}</p>
+      </div>
     </div>
   )
 }
@@ -261,7 +421,8 @@ function ReviewContent() {
           .maybeSingle()
         
         if (fallbackData) {
-          setData(fallbackData)
+          const enriched = await enrichDetailWithAnswerText(fallbackData)
+          setData(enriched)
           return
         }
         
@@ -269,7 +430,8 @@ function ReviewContent() {
         return
       }
       
-      setData(resultData)
+      const enriched = await enrichDetailWithAnswerText(resultData)
+      setData(enriched)
     } catch (err) {
       console.error("Error in getLastResult:", err)
       setData(null)
@@ -285,11 +447,7 @@ function ReviewContent() {
       const gambarUrl = item.gambar && item.gambar.trim() !== "" ? item.gambar : null
 
       // Bersihkan HTML dari soal untuk pencarian
-      const soalBersih = item.soal
-        .replace(/<[^>]*>/g, "")
-        .replace(/&nbsp;/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
+      const soalBersih = cleanHtml(item.soal)
 
       const { data: soalList, error: soalError } = await supabase
         .from("soal")
@@ -306,20 +464,8 @@ function ReviewContent() {
 
       if (soalList && !soalError) {
         soalData = soalList.find((s) => {
-          const dbSoal = s.pertanyaan
-            ?.replace(/<[^>]*>/g, "")
-            .replace(/&nbsp;/g, " ")
-            .replace(/\s+/g, " ")
-            .trim()
-
-          return (
-            dbSoal
-              ?.slice(0, 150)
-              .toLowerCase() ===
-            soalBersih
-              .slice(0, 150)
-              .toLowerCase()
-          )
+          const dbSoal = cleanHtml(s.pertanyaan)
+          return dbSoal.slice(0, 150).toLowerCase() === soalBersih.slice(0, 150).toLowerCase()
         })
       }
       
@@ -336,16 +482,10 @@ E. ${soalData.opsi_e || ""}
       }
       
       // Siapkan teks jawaban user dan jawaban benar yang lebih informatif
-      let jawabanUserText = item.jawaban_user
-      let jawabanBenarText = item.jawaban_benar
+      let jawabanUserText = item.jawaban_user_text || item.jawaban_user
+      let jawabanBenarText = item.jawaban_benar_text || item.jawaban_benar
       
       if (soalData && opsiText) {
-        const cleanHtml = (text: string = "") =>
-          text
-            .replace(/<[^>]*>/g, "")
-            .replace(/&nbsp;/g, " ")
-            .trim()
-
         const opsiMap: Record<string, string> = {
           a: cleanHtml(soalData.opsi_a),
           b: cleanHtml(soalData.opsi_b),
@@ -354,8 +494,16 @@ E. ${soalData.opsi_e || ""}
           e: cleanHtml(soalData.opsi_e),
         }
         
-        jawabanUserText = `${item.jawaban_user.toUpperCase()}. ${opsiMap[item.jawaban_user.toLowerCase()] || item.jawaban_user}`
-        jawabanBenarText = `${item.jawaban_benar.toUpperCase()}. ${opsiMap[item.jawaban_benar.toLowerCase()] || item.jawaban_benar}`
+        const hurufUser = (item.jawaban_user || "").toLowerCase().trim()
+        const hurufBenar = (item.jawaban_benar || "").toLowerCase().trim()
+        const isValidHuruf = (h: string) => ["a", "b", "c", "d", "e"].includes(h)
+
+        jawabanUserText = isValidHuruf(hurufUser)
+          ? `${hurufUser.toUpperCase()}. ${opsiMap[hurufUser] || item.jawaban_user}`
+          : "Tidak dijawab"
+        jawabanBenarText = isValidHuruf(hurufBenar)
+          ? `${hurufBenar.toUpperCase()}. ${opsiMap[hurufBenar] || item.jawaban_benar}`
+          : item.jawaban_benar
       }
 
       const res = await fetch("/api/ai", {
@@ -415,11 +563,11 @@ E. ${soalData.opsi_e || ""}
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(135deg,#1e3a8a,#1d4ed8,#0ea5e9)" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: palette.navy }}>
         <style dangerouslySetInnerHTML={{ __html: STYLES }} />
         <div className="flex flex-col items-center gap-3">
-          <div className="anim-spin w-10 h-10 rounded-full border-[3px] border-white/30 border-t-white" />
-          <p className="text-white font-black text-xs tracking-widest uppercase opacity-80">Memuat…</p>
+          <div className="anim-spin w-10 h-10 rounded-full border-[3px] border-white/20" style={{ borderTopColor: palette.amber }} />
+          <p className="text-white font-black text-xs tracking-widest uppercase opacity-70">Memuat…</p>
         </div>
       </div>
     )
@@ -427,14 +575,15 @@ E. ${soalData.opsi_e || ""}
 
   if (!data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: palette.paper }}>
         <style dangerouslySetInnerHTML={{ __html: STYLES }} />
-        <div className="anim-pop-in bg-white rounded-3xl shadow-xl p-8 text-center max-w-xs w-full mx-4">
+        <div className="anim-pop-in bg-white rounded-3xl shadow-xl p-8 text-center max-w-xs w-full mx-4" style={{ border: `1px solid ${palette.border}` }}>
           <div className="text-4xl mb-3">📭</div>
-          <p className="font-black text-slate-700">Belum ada hasil ujian</p>
+          <p className="font-black" style={{ color: palette.ink }}>Belum ada hasil ujian</p>
           <button
             onClick={() => router.push("/dashboard")}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold"
+            className="btn-press mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white"
+            style={{ background: palette.navy }}
           >
             Kembali ke Dashboard
           </button>
@@ -445,11 +594,15 @@ E. ${soalData.opsi_e || ""}
 
   if (!data.detail || data.detail.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: palette.paper }}>
         <style dangerouslySetInnerHTML={{ __html: STYLES }} />
-        <div className="bg-white rounded-2xl p-8 text-center">
-          <p className="text-slate-700">Data detail soal tidak tersedia</p>
-          <button onClick={() => router.push("/dashboard")} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl">
+        <div className="bg-white rounded-2xl p-8 text-center" style={{ border: `1px solid ${palette.border}` }}>
+          <p style={{ color: palette.ink }}>Data detail soal tidak tersedia</p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="btn-press mt-4 px-4 py-2 rounded-xl text-white"
+            style={{ background: palette.navy }}
+          >
             Kembali
           </button>
         </div>
@@ -460,93 +613,105 @@ E. ${soalData.opsi_e || ""}
   const benar = data.detail.filter((d) => d.benar).length
   const salah = data.detail.length - benar
   const akurasi = Math.round((benar / data.detail.length) * 100)
-  const accColor = akurasi >= 75 ? "#16a34a" : akurasi >= 50 ? "#d97706" : "#dc2626"
+  const accColor = akurasi >= 75 ? palette.teal : akurasi >= 50 ? palette.amber : palette.danger
 
   return (
     <MathJaxContext config={mathJaxConfig}>
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
 
-      <div className="min-h-screen pb-10" style={{ background: "linear-gradient(160deg,#f0f4ff 0%,#e8f0fe 50%,#f0fdf4 100%)" }}>
+      <div className="min-h-screen pb-10" style={{ background: palette.paper }}>
 
-        {/* HEADER */}
+        {/* HEADER — tanpa sidebar, sticky di atas */}
         <div
-          className="sticky top-0 z-50 anim-slide-down border-b"
-          style={{ background: "linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 60%,#0ea5e9 100%)", borderColor: "rgba(255,255,255,0.15)", boxShadow: "0 4px 24px rgba(29,78,216,0.3)" }}
+          className="sticky top-0 z-50 anim-slide-down relative overflow-hidden"
+          style={{ background: `linear-gradient(135deg, ${palette.navy} 0%, ${palette.navySoft} 100%)`, boxShadow: "0 4px 24px rgba(27,42,74,0.25)" }}
         >
-          <div className="max-w-3xl mx-auto px-3 py-2 md:px-5 md:py-3 flex items-center justify-between gap-3">
+          <div className="absolute inset-0 pointer-events-none opacity-40"
+            style={{
+              backgroundImage: "linear-gradient(rgba(217,140,43,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(217,140,43,.08) 1px,transparent 1px)",
+              backgroundSize: "28px 28px",
+            }} />
+          <div className="relative max-w-3xl mx-auto px-4 py-3 md:px-6 md:py-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[3px] text-blue-200">Hasil Ujian</p>
-              <h1 className="text-sm md:text-xl font-black text-white truncate leading-tight">{data.kategori || "Ujian"}</h1>
+              <p style={{ color: "#AEB8CC", letterSpacing: "3px" }} className="text-[8px] md:text-[10px] font-black uppercase">Hasil Ujian</p>
+              <h1 className="text-sm md:text-xl font-black text-white truncate leading-tight" style={{ fontFamily: "Georgia, serif" }}>
+                {data.kategori || "Ujian"}
+              </h1>
             </div>
             <button
               onClick={() => router.push("/dashboard")}
-              className="btn-press shrink-0 h-8 md:h-9 px-3 md:px-4 rounded-xl text-blue-700 text-[11px] md:text-xs font-black"
-              style={{ background: "rgba(255,255,255,0.95)" }}
+              className="btn-press shrink-0 h-8 md:h-9 px-3 md:px-4 rounded-xl text-[11px] md:text-xs font-black"
+              style={{ background: palette.amber, color: "#40260A" }}
             >
               ← Dashboard
             </button>
           </div>
         </div>
 
-        <div className="max-w-3xl mx-auto px-2.5 md:px-5 py-3 md:py-5 space-y-2.5 md:space-y-4">
+        <div className="max-w-3xl mx-auto px-3 md:px-6 py-4 md:py-6 space-y-3 md:space-y-5">
 
-          {/* STATS */}
-          <div className="grid grid-cols-4 gap-1.5 md:gap-3">
-            <StatCard label="Skor" value={data.skor || 0} icon="🏆" gradient="linear-gradient(135deg,#dbeafe,#eff6ff)" textColor="text-blue-700" delay="0ms" />
-            <StatCard label="Benar" value={benar} icon="✅" gradient="linear-gradient(135deg,#dcfce7,#f0fdf4)" textColor="text-green-700" delay="60ms" />
-            <StatCard label="Salah" value={salah} icon="❌" gradient="linear-gradient(135deg,#fee2e2,#fff1f2)" textColor="text-red-600" delay="120ms" />
-            <StatCard label="Akurasi" value={`${akurasi}%`} icon="📊" gradient="linear-gradient(135deg,#fef9c3,#fefce8)" textColor="text-yellow-600" delay="180ms" />
-          </div>
-
-          {/* ACCURACY BAR */}
-          <div className="anim-fade-up bg-white rounded-2xl px-3 py-2.5 md:px-5 md:py-4 border border-slate-100 shadow-sm" style={{ animationDelay: "220ms" }}>
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-400">Akurasi</p>
-              <p className="font-black text-sm md:text-base" style={{ color: accColor }}>{akurasi}%</p>
-            </div>
-            <div className="h-1.5 md:h-2 rounded-full bg-slate-100 overflow-hidden">
-              <div className="acc-bar h-full rounded-full" style={{ width: `${akurasi}%`, background: `linear-gradient(90deg,${accColor},${accColor}88)` }} />
-            </div>
-            <div className="flex justify-between mt-1">
-              <p className="text-[9px] text-green-600 font-bold">{benar} benar</p>
-              <p className="text-[9px] text-red-500 font-bold">{salah} salah</p>
+          {/* HERO SKOR — ring akurasi + stat chip */}
+          <div
+            className="anim-fade-up bg-white rounded-3xl p-4 md:p-6 shadow-sm flex flex-col sm:flex-row items-center gap-4 md:gap-6"
+            style={{ border: `1px solid ${palette.border}` }}
+          >
+            <AccuracyRing value={akurasi} color={accColor} />
+            <div className="flex-1 w-full grid grid-cols-3 gap-2 md:gap-3">
+              <StatChip icon="🏆" label="Skor" value={data.skor || 0} color={palette.navy} delay="0ms" />
+              <StatChip icon="✓" label="Benar" value={benar} color={palette.tealText} delay="60ms" />
+              <StatChip icon="✕" label="Salah" value={salah} color={palette.danger} delay="120ms" />
             </div>
           </div>
 
           {/* DIVIDER */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-px bg-slate-200" />
-            <p className="text-[8px] md:text-[9px] font-black uppercase tracking-[3px] text-slate-400">{data.detail.length} Soal</p>
-            <div className="flex-1 h-px bg-slate-200" />
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px" style={{ background: palette.border }} />
+            <p style={{ color: palette.inkFaint, letterSpacing: "3px" }} className="text-[8px] md:text-[9px] font-black uppercase whitespace-nowrap">
+              {data.detail.length} Soal Dikerjakan
+            </p>
+            <div className="flex-1 h-px" style={{ background: palette.border }} />
           </div>
 
           {/* SOAL LIST */}
-          <div className="space-y-2 md:space-y-3">
+          <div className="space-y-2.5 md:space-y-3">
             {data.detail.map((item, i) => {
               const isExp = expanded.includes(i)
               return (
-                <div key={i} className="card-item bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden" style={{ animationDelay: `${Math.min(i * 25, 300)}ms` }}>
+                <div
+                  key={i}
+                  className="card-item bg-white rounded-2xl overflow-hidden shadow-sm"
+                  style={{ border: `1px solid ${palette.border}`, animationDelay: `${Math.min(i * 25, 300)}ms` }}
+                >
 
                   {/* SOAL HEADER */}
-                  <div className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 border-b border-slate-100" style={{ background: "linear-gradient(135deg,#f8faff,#f0f4ff)" }}>
-                    <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl flex items-center justify-center font-black text-[11px] md:text-xs text-white shrink-0" style={{ background: "linear-gradient(135deg,#1d4ed8,#0ea5e9)" }}>
+                  <div
+                    className="flex items-center gap-2.5 px-3 py-2.5 md:px-4 md:py-3"
+                    style={{ background: palette.paper, borderBottom: `1px solid ${palette.border}` }}
+                  >
+                    <div
+                      className="w-7 h-7 md:w-8 md:h-8 rounded-xl flex items-center justify-center font-black text-[12px] md:text-xs text-white shrink-0"
+                      style={{ background: palette.navy, fontFamily: "Georgia, serif" }}
+                    >
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400 leading-none">Soal</p>
-                      <p className="text-[11px] md:text-xs font-black text-slate-700">Review Jawaban</p>
+                      <p style={{ color: palette.inkFaint }} className="text-[8px] md:text-[9px] font-black uppercase tracking-widest leading-none">Soal</p>
+                      <p style={{ color: palette.ink }} className="text-[11px] md:text-xs font-black">Review Jawaban</p>
                     </div>
-                    <div className={`shrink-0 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[9px] md:text-[10px] font-black border ${item.benar ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"}`}>
+                    <div
+                      className="shrink-0 px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black"
+                      style={item.benar ? { background: palette.tealSoft, color: palette.tealText } : { background: palette.dangerSoft, color: palette.danger }}
+                    >
                       {item.benar ? "✔ Benar" : "✖ Salah"}
                     </div>
                   </div>
 
                   {/* SOAL BODY */}
-                  <div className="p-2.5 md:p-4 space-y-2 md:space-y-3">
+                  <div className="p-3 md:p-4 space-y-2.5 md:space-y-3">
 
                     {/* PERTANYAAN */}
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 md:px-4 md:py-3">
-                      <p className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Pertanyaan</p>
+                    <div className="rounded-xl px-3 py-2.5 md:px-4 md:py-3" style={{ background: palette.paper, border: `1px solid ${palette.border}` }}>
+                      <p style={{ color: palette.inkFaint }} className="text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-1">Pertanyaan</p>
                       <MathContent
                         html={item.soal}
                         className="prose-soal text-[12px] md:text-[14px] leading-relaxed"
@@ -555,27 +720,29 @@ E. ${soalData.opsi_e || ""}
 
                     {/* GAMBAR SOAL */}
                     {item.gambar && item.gambar.trim() !== "" && (
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 md:px-4 md:py-3">
-                        <p className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                      <div className="rounded-xl px-3 py-2.5 md:px-4 md:py-3" style={{ background: palette.paper, border: `1px solid ${palette.border}` }}>
+                        <p style={{ color: palette.inkFaint }} className="text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">
                           Gambar Soal
                         </p>
                         <img
                           src={item.gambar}
                           alt="Gambar soal"
-                          className="max-w-full h-auto rounded-xl border border-slate-100 shadow-sm max-h-[300px] object-contain"
+                          className="max-w-full h-auto rounded-xl shadow-sm max-h-[300px] object-contain"
+                          style={{ border: `1px solid ${palette.border}` }}
                         />
                       </div>
                     )}
 
                     {/* JAWABAN */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="rounded-xl p-3 border border-slate-200 bg-slate-50">
-                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wide mb-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 md:gap-3">
+                      <div className="rounded-xl p-3" style={{ background: palette.paper, border: `1px solid ${palette.border}` }}>
+                        <p style={{ color: palette.inkFaint }} className="text-[9px] font-black uppercase tracking-wide mb-2">
                           Jawaban Kamu
                         </p>
                         <MathJax dynamic>
                           <div
-                            className="text-base md:text-lg font-bold text-slate-700 break-words"
+                            className="text-base md:text-lg font-medium break-words"
+                            style={{ color: palette.ink }}
                             dangerouslySetInnerHTML={{
                               __html: formatText(
                                 item.jawaban_user_text ||
@@ -587,13 +754,14 @@ E. ${soalData.opsi_e || ""}
                         </MathJax>
                       </div>
 
-                      <div className="rounded-xl p-3 border border-green-200 bg-green-50">
-                        <p className="text-[9px] text-green-600 font-black uppercase tracking-wide mb-2">
+                      <div className="rounded-xl p-3" style={{ background: palette.tealSoft, border: `1px solid ${palette.teal}33` }}>
+                        <p style={{ color: palette.tealText }} className="text-[9px] font-black uppercase tracking-wide mb-2">
                           Jawaban Benar
                         </p>
                         <MathJax dynamic>
                           <div
-                            className="text-base md:text-lg font-bold text-green-700 break-words"
+                            className="text-base md:text-lg font-medium break-words"
+                            style={{ color: palette.tealText }}
                             dangerouslySetInnerHTML={{
                               __html: formatText(
                                 item.jawaban_benar_text ||
@@ -613,8 +781,8 @@ E. ${soalData.opsi_e || ""}
                         disabled={aiLoading === i}
                         className="btn-press w-full h-9 md:h-11 rounded-xl text-white text-[11px] md:text-sm font-black disabled:opacity-60"
                         style={{
-                          background: aiLoading === i ? "linear-gradient(135deg,#94a3b8,#64748b)" : "linear-gradient(135deg,#1d4ed8,#0ea5e9)",
-                          boxShadow: aiLoading === i ? "none" : "0 4px 16px rgba(29,78,216,0.3)",
+                          background: aiLoading === i ? "linear-gradient(135deg,#94a3b8,#64748b)" : `linear-gradient(135deg, ${palette.navy}, ${palette.amber})`,
+                          boxShadow: aiLoading === i ? "none" : "0 4px 16px rgba(27,42,74,0.25)",
                         }}
                       >
                         {aiLoading === i ? (
@@ -627,21 +795,27 @@ E. ${soalData.opsi_e || ""}
                         )}
                       </button>
                     ) : (
-                      <div className="rounded-xl border overflow-hidden" style={{ borderColor: "#bfdbfe" }}>
+                      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${palette.amber}55` }}>
                         {/* ACCORDION HEADER */}
                         <button
                           onClick={() => toggleExpand(i)}
-                          className="w-full flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 text-left transition-colors"
-                          style={{ background: "linear-gradient(135deg,#eff6ff,#dbeafe)" }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 md:px-4 md:py-3 text-left transition-colors"
+                          style={{ background: palette.amberSoft }}
                         >
-                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl flex items-center justify-center text-sm shrink-0" style={{ background: "linear-gradient(135deg,#1d4ed8,#0ea5e9)" }}>
+                          <div
+                            className="w-7 h-7 md:w-8 md:h-8 rounded-xl flex items-center justify-center text-sm shrink-0 text-white"
+                            style={{ background: palette.navy }}
+                          >
                             📘
                           </div>
                           <div className="flex-1">
-                            <p className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-blue-400">Pembahasan AI</p>
-                            <p className="text-[11px] md:text-xs font-black text-blue-900">{isExp ? "Sembunyikan penjelasan" : "Lihat penjelasan lengkap"}</p>
+                            <p style={{ color: palette.amberText }} className="text-[8px] md:text-[9px] font-black uppercase tracking-widest">Pembahasan AI</p>
+                            <p style={{ color: palette.navy }} className="text-[11px] md:text-xs font-black">{isExp ? "Sembunyikan penjelasan" : "Lihat penjelasan lengkap"}</p>
                           </div>
-                          <div className="w-6 h-6 md:w-7 md:h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 transition-transform duration-300" style={{ background: "rgba(29,78,216,0.1)", color: "#1d4ed8", transform: isExp ? "rotate(180deg)" : "rotate(0deg)" }}>
+                          <div
+                            className="w-6 h-6 md:w-7 md:h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 transition-transform duration-300"
+                            style={{ background: "rgba(27,42,74,0.1)", color: palette.navy, transform: isExp ? "rotate(180deg)" : "rotate(0deg)" }}
+                          >
                             ↓
                           </div>
                         </button>
@@ -671,9 +845,9 @@ export default function ReviewPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center" style={{ background: palette.navy }}>
           <style dangerouslySetInnerHTML={{ __html: STYLES }} />
-          <div className="anim-spin w-10 h-10 rounded-full border-[3px] border-blue-300 border-t-blue-600" />
+          <div className="anim-spin w-10 h-10 rounded-full border-[3px] border-white/20" style={{ borderTopColor: palette.amber }} />
         </div>
       }
     >

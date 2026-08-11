@@ -170,6 +170,16 @@ INSTRUKSI PENTING:
 6. Jelaskan MENGAPA jawaban siswa salah (jika salah)
 7. Berikan TIPS untuk mengerjakan soal serupa
 
+ATURAN FORMAT WAJIB (PENTING, JANGAN DILANGGAR):
+- Huruf opsi dan isinya harus SELALU berada di baris yang SAMA. Contoh yang BENAR: "A. 10°". Contoh yang SALAH: "A." lalu baris baru "10°".
+- Jangan pernah menaruh baris kosong di antara huruf opsi dan isi opsi, atau di antara label (misalnya "JAWABAN SISWA:") dan isinya.
+- Tulis daftar opsi sebagai list markdown satu baris per opsi, contoh:
+  - A. 10°
+  - B. 30°
+  - C. 45°
+  - D. 60°
+- "JAWABAN SISWA: A. 10°" dan "JAWABAN BENAR: D. 60°" masing-masing HARUS satu baris utuh, jangan dipecah.
+
 Gunakan format MARKDOWN dengan:
 - **teks tebal** untuk poin penting
 - \`kode\` untuk rumus
@@ -223,7 +233,7 @@ ${opsiFormatted || "Tidak tersedia"}
 JAWABAN SISWA: ${jawabanUserText}
 JAWABAN BENAR: ${jawabanBenarText}
 
-BUAT PEMBAHASAN LENGKAP MENGGUNAKAN FORMAT MARKDOWN:
+BUAT PEMBAHASAN LENGKAP MENGGUNAKAN FORMAT MARKDOWN, dengan struktur berikut (ingat: huruf opsi dan isinya dalam SATU baris, contoh "A. 10°", jangan dipisah baris):
 ### 📝 Ringkasan Soal
 ### 📋 Opsi Jawaban
 ### ❌ Jawaban Siswa (${jawabanUserText})
