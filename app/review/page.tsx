@@ -103,6 +103,7 @@ const STYLES = `
 // TYPES
 // =========================
 type DetailItem = {
+  soal_id?: number | null
   soal: string
   gambar?: string | null
   jawaban_user: string
@@ -232,7 +233,8 @@ function extractImages(html: string) {
 }
 
 // Bersihkan tag HTML & spasi berlebih dari sebuah teks, dipakai untuk
-// mencocokkan soal hasil ujian dengan baris di tabel "soal".
+// mencocokkan soal hasil ujian dengan baris di tabel "soal" (dipakai
+// hanya sebagai FALLBACK kalau soal_id tidak tersedia di data lama).
 function cleanHtml(text?: string | null) {
   if (!text) return ""
   return text
@@ -242,54 +244,70 @@ function cleanHtml(text?: string | null) {
     .trim()
 }
 
+function buildOpsiMap(soalData: any): Record<string, string> {
+  return {
+    a: cleanHtml(soalData.opsi_a),
+    b: cleanHtml(soalData.opsi_b),
+    c: cleanHtml(soalData.opsi_c),
+    d: cleanHtml(soalData.opsi_d),
+    e: cleanHtml(soalData.opsi_e),
+  }
+}
+
+function buildAnswerTexts(item: DetailItem, opsiMap: Record<string, string>) {
+  const hurufUser = (item.jawaban_user || "").toLowerCase().trim()
+  const hurufBenar = (item.jawaban_benar || "").toLowerCase().trim()
+  const isValidHuruf = (h: string) => ["a", "b", "c", "d", "e"].includes(h)
+
+  return {
+    jawaban_user_text: isValidHuruf(hurufUser)
+      ? `${hurufUser.toUpperCase()}. ${opsiMap[hurufUser] || item.jawaban_user}`
+      : "Tidak dijawab",
+    jawaban_benar_text: isValidHuruf(hurufBenar)
+      ? `${hurufBenar.toUpperCase()}. ${opsiMap[hurufBenar] || item.jawaban_benar}`
+      : item.jawaban_benar,
+  }
+}
+
 // Ambil semua soal dari Supabase sekali, lalu tempelkan teks jawaban
 // lengkap (huruf + isi opsi) ke setiap item detail hasil ujian.
-// Dipanggil otomatis saat halaman dibuka, jadi "Jawaban Kamu" / "Jawaban
-// Benar" langsung nampilin teks lengkap tanpa perlu klik generate AI.
+//
+// Prioritas pencocokan:
+//   1) soal_id (akurat 100%, dipakai untuk data ujian baru setelah patch ini)
+//   2) fallback cocokkan teks pertanyaan (dipakai HANYA untuk data lama yang
+//      belum punya soal_id tersimpan)
 async function enrichDetailWithAnswerText(hasil: HasilType): Promise<HasilType> {
   try {
     if (!hasil.detail || hasil.detail.length === 0) return hasil
 
     const { data: soalList, error: soalError } = await supabase
       .from("soal")
-      .select(`pertanyaan, opsi_a, opsi_b, opsi_c, opsi_d, opsi_e`)
+      .select(`id, pertanyaan, opsi_a, opsi_b, opsi_c, opsi_d, opsi_e`)
 
     if (!soalList || soalError) return hasil
+
+    const soalById = new Map(soalList.map((s) => [s.id, s]))
 
     const updatedDetail = hasil.detail.map((item) => {
       // sudah ada teks lengkap, gak usah dicari ulang
       if (item.jawaban_user_text && item.jawaban_benar_text) return item
 
-      const soalBersih = cleanHtml(item.soal)
+      // 1) Coba lewat soal_id dulu (akurat, tahan terhadap soal yang diedit ulang)
+      let soalData: any = item.soal_id ? soalById.get(item.soal_id) : null
 
-      const soalData = soalList.find((s) => {
-        const dbSoal = cleanHtml(s.pertanyaan)
-        return dbSoal.slice(0, 150).toLowerCase() === soalBersih.slice(0, 150).toLowerCase()
-      })
+      // 2) Fallback ke pencocokan teks kalau soal_id belum ada (data lama)
+      if (!soalData) {
+        const soalBersih = cleanHtml(item.soal)
+        soalData = soalList.find((s) => {
+          const dbSoal = cleanHtml(s.pertanyaan)
+          return dbSoal.slice(0, 150).toLowerCase() === soalBersih.slice(0, 150).toLowerCase()
+        })
+      }
 
       if (!soalData) return item
 
-      const opsiMap: Record<string, string> = {
-        a: cleanHtml(soalData.opsi_a),
-        b: cleanHtml(soalData.opsi_b),
-        c: cleanHtml(soalData.opsi_c),
-        d: cleanHtml(soalData.opsi_d),
-        e: cleanHtml(soalData.opsi_e),
-      }
-
-      const hurufUser = (item.jawaban_user || "").toLowerCase().trim()
-      const hurufBenar = (item.jawaban_benar || "").toLowerCase().trim()
-      const isValidHuruf = (h: string) => ["a", "b", "c", "d", "e"].includes(h)
-
-      return {
-        ...item,
-        jawaban_user_text: isValidHuruf(hurufUser)
-          ? `${hurufUser.toUpperCase()}. ${opsiMap[hurufUser] || item.jawaban_user}`
-          : "Tidak dijawab",
-        jawaban_benar_text: isValidHuruf(hurufBenar)
-          ? `${hurufBenar.toUpperCase()}. ${opsiMap[hurufBenar] || item.jawaban_benar}`
-          : item.jawaban_benar,
-      }
+      const opsiMap = buildOpsiMap(soalData)
+      return { ...item, ...buildAnswerTexts(item, opsiMap) }
     })
 
     return { ...hasil, detail: updatedDetail }
@@ -452,6 +470,7 @@ function ReviewContent() {
       const { data: soalList, error: soalError } = await supabase
         .from("soal")
         .select(`
+          id,
           pertanyaan,
           opsi_a,
           opsi_b,
@@ -463,10 +482,17 @@ function ReviewContent() {
       let soalData = null
 
       if (soalList && !soalError) {
-        soalData = soalList.find((s) => {
-          const dbSoal = cleanHtml(s.pertanyaan)
-          return dbSoal.slice(0, 150).toLowerCase() === soalBersih.slice(0, 150).toLowerCase()
-        })
+        // Prioritas: cocokkan lewat soal_id (akurat), fallback ke teks
+        soalData = item.soal_id
+          ? soalList.find((s) => s.id === item.soal_id)
+          : null
+
+        if (!soalData) {
+          soalData = soalList.find((s) => {
+            const dbSoal = cleanHtml(s.pertanyaan)
+            return dbSoal.slice(0, 150).toLowerCase() === soalBersih.slice(0, 150).toLowerCase()
+          })
+        }
       }
       
       // Format opsi untuk dikirim ke AI

@@ -471,12 +471,13 @@ export default function UjianPage() {
         ].filter(Boolean).join("")
 
         return {
-          soal: soalLengkap,
-          gambar: item.gambar || null,   // ← PATCH: simpan URL gambar
-          jawaban_user: jawaban || "-",
-          jawaban_benar: item.jawaban_benar,
-          benar,
-        }
+  soal_id: item.id,              // ← PATCH: simpan ID asli soal, biar review akurat
+  soal: soalLengkap,
+  gambar: item.gambar || null,   // ← PATCH: simpan URL gambar
+  jawaban_user: jawaban || "-",
+  jawaban_benar: item.jawaban_benar,
+  benar,
+}
       })
 
       const { error: hasilError } = await supabase.from("hasil").insert([{
