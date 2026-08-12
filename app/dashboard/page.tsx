@@ -297,43 +297,20 @@ export default function Dashboard() {
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
 
-        /* ===== Kelas Saya: mobile = scroll ke samping, desktop = grid ===== */
+        /* ===== Kelas Saya: grid rapi di SEMUA ukuran layar (mobile juga) ===== */
         .kelas-scroll {
-          display: flex;
-          flex-wrap: nowrap;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 0.75rem;
-          overflow-x: auto;
-          scroll-snap-type: x mandatory;
-          margin-left: -1rem;
-          margin-right: -1rem;
-          padding-left: 1rem;
-          padding-right: 1rem;
-          padding-bottom: 4px;
-          -ms-overflow-style: none;
-          scrollbar-width: none;
         }
-        .kelas-scroll::-webkit-scrollbar { display: none; }
         .kelas-card {
-          flex: 0 0 68%;
-          max-width: 260px;
-          scroll-snap-align: start;
+          width: auto;
+          max-width: none;
         }
         @media (min-width: 640px) {
           .kelas-scroll {
-            display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 1rem;
-            overflow-x: visible;
-            margin-left: 0;
-            margin-right: 0;
-            padding-left: 0;
-            padding-right: 0;
-            padding-bottom: 0;
-          }
-          .kelas-card {
-            flex: initial;
-            max-width: none;
-            width: auto;
           }
         }
         @media (min-width: 1024px) {
@@ -343,43 +320,23 @@ export default function Dashboard() {
           .kelas-scroll { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
 
-        /* ===== Paket Belajar (per grup): mobile = scroll ke samping, desktop = grid auto-fill ===== */
+        /* ===== Paket Belajar (per grup): grid rapi di SEMUA ukuran layar (mobile juga) ===== */
         .paket-scroll {
-          display: flex;
-          flex-wrap: nowrap;
-          gap: 0.375rem;
-          overflow-x: auto;
-          scroll-snap-type: x mandatory;
-          margin-left: -1rem;
-          margin-right: -1rem;
-          padding-left: 1rem;
-          padding-right: 1rem;
-          padding-bottom: 4px;
-          -ms-overflow-style: none;
-          scrollbar-width: none;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.5rem;
         }
-        .paket-scroll::-webkit-scrollbar { display: none; }
         .paket-card {
-          flex: 0 0 40%;
-          max-width: 165px;
-          scroll-snap-align: start;
+          width: auto;
+          max-width: none;
+        }
+        @media (min-width: 480px) {
+          .paket-scroll { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
         @media (min-width: 640px) {
           .paket-scroll {
-            display: grid;
             grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
             gap: 0.5rem;
-            overflow-x: visible;
-            margin-left: 0;
-            margin-right: 0;
-            padding-left: 0;
-            padding-right: 0;
-            padding-bottom: 0;
-          }
-          .paket-card {
-            flex: initial;
-            max-width: none;
-            width: auto;
           }
         }
       `}</style>
@@ -559,8 +516,7 @@ export default function Dashboard() {
               </div>
 
               {/*
-                MOBILE (default): .kelas-scroll = flex row, overflow-x-auto -> scroll ke samping.
-                DESKTOP (>=640px, lewat @media CSS di atas): otomatis berubah jadi grid, TIDAK berubah tampilannya.
+                Grid rapi di semua ukuran layar: 2 kolom di HP, makin lebar makin banyak kolom.
               */}
               <div className="kelas-scroll">
                 {kelasList.map((k) => {
@@ -691,8 +647,8 @@ export default function Dashboard() {
                     </div>
 
                     {/*
-                      MOBILE (default): .paket-scroll = flex row, overflow-x-auto -> scroll ke samping per grup.
-                      DESKTOP (>=640px, lewat @media CSS di atas): otomatis berubah jadi grid auto-fill, TIDAK berubah tampilannya.
+                      Grid rapi di semua ukuran layar: 2 kolom di HP kecil, 3 kolom di HP lebar,
+                      lalu grid auto-fill di tablet/desktop.
                     */}
                     <div className="paket-scroll">
                       {group.items.map((item) => {
