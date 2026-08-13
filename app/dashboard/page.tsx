@@ -292,10 +292,66 @@ export default function Dashboard() {
           .dash-content { margin-left: 256px; }
         }
         .lc-no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
+          -ms-overflow-style: none !important;
+          scrollbar-width: none !important;
         }
-        .lc-no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
+        .lc-no-scrollbar::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+        /* ===== Kelas Saya ===== */
+        #lc-kelas-wrap {
+          display: flex !important;
+          flex-wrap: nowrap !important;
+          overflow-x: auto !important;
+          gap: 0.75rem !important;
+          padding-bottom: 0.25rem !important;
+          scroll-snap-type: x mandatory !important;
+          -webkit-overflow-scrolling: touch !important;
+        }
+        #lc-kelas-wrap > .lc-kelas-card {
+          flex: 0 0 auto !important;
+          width: 42% !important;
+          scroll-snap-align: start !important;
+        }
+        @media (min-width: 640px) {
+          #lc-kelas-wrap {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            overflow-x: visible !important;
+            gap: 1rem !important;
+          }
+          #lc-kelas-wrap > .lc-kelas-card { width: auto !important; }
+        }
+        @media (min-width: 1024px) {
+          #lc-kelas-wrap { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        }
+        @media (min-width: 1280px) {
+          #lc-kelas-wrap { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+        }
+
+        /* ===== Paket Belajar ===== */
+        .lc-paket-wrap {
+          display: flex !important;
+          flex-wrap: nowrap !important;
+          overflow-x: auto !important;
+          gap: 0.5rem !important;
+          padding-bottom: 0.25rem !important;
+          scroll-snap-type: x mandatory !important;
+          -webkit-overflow-scrolling: touch !important;
+        }
+        .lc-paket-wrap > .lc-paket-card {
+          flex: 0 0 auto !important;
+          width: 32% !important;
+          scroll-snap-align: start !important;
+        }
+        @media (min-width: 640px) {
+          .lc-paket-wrap {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 280px)) !important;
+            overflow-x: visible !important;
+            gap: 0.5rem !important;
+          }
+          .lc-paket-wrap > .lc-paket-card { width: auto !important; }
+        }
       `}</style>
 
       {/* OVERLAY */}
@@ -476,7 +532,11 @@ export default function Dashboard() {
                 Mobile: scroll horizontal (kartu geser ke samping).
                 sm ke atas: kembali jadi grid rapi multi-kolom.
               */}
-              <div className="lc-no-scrollbar flex flex-nowrap overflow-x-auto gap-3 pb-1 snap-x snap-mandatory sm:grid sm:grid-cols-2 sm:overflow-visible sm:gap-4 sm:pb-0 sm:snap-none lg:grid-cols-3 xl:grid-cols-4">
+              <div
+                id="lc-kelas-wrap"
+                className="lc-no-scrollbar"
+                style={{ display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: "0.75rem" }}
+              >
                 {kelasList.map((k) => {
                   const kt = KELAS_THEMES[k.id % KELAS_THEMES.length]
                   const iconChar = KELAS_ICONS[k.id % KELAS_ICONS.length]
@@ -484,7 +544,8 @@ export default function Dashboard() {
                     <button
                       key={k.id}
                       onClick={() => router.push(`/kelas/${k.id}`)}
-                      className="group relative overflow-hidden rounded-xl md:rounded-2xl border border-slate-200 bg-white transition-all duration-300 active:scale-[0.97] hover:-translate-y-0.5 shadow-sm hover:shadow-md flex-none w-[42%] snap-start sm:w-auto"
+                      className="lc-kelas-card group relative overflow-hidden rounded-xl md:rounded-2xl border border-slate-200 bg-white transition-all duration-300 active:scale-[0.97] hover:-translate-y-0.5 shadow-sm hover:shadow-md"
+                      style={{ flex: "0 0 auto", width: "42%" }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.boxShadow = `0 10px 24px -10px ${kt.accent}40`
                         e.currentTarget.style.borderColor = kt.accent + "60"
@@ -608,7 +669,10 @@ export default function Dashboard() {
                       Mobile: scroll horizontal (kartu geser ke samping).
                       sm ke atas: kembali jadi grid auto-fill rapi.
                     */}
-                    <div className="lc-no-scrollbar flex flex-nowrap overflow-x-auto gap-2 pb-1 snap-x snap-mandatory sm:grid sm:[grid-template-columns:repeat(auto-fill,minmax(220px,280px))] sm:overflow-visible sm:pb-0 sm:snap-none">
+                    <div
+                      className="lc-paket-wrap lc-no-scrollbar"
+                      style={{ display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: "0.5rem" }}
+                    >
                       {group.items.map((item) => {
                         const theme     = getPaketTheme(item.nama_paket)
                         const labelNama = formatNamaPaket(item.nama_paket)
@@ -616,7 +680,8 @@ export default function Dashboard() {
                           <button
                             key={item.id}
                             onClick={() => router.push(`/ujian/package/${item.id}`)}
-                            className="group relative overflow-hidden rounded-xl md:rounded-2xl text-left border border-slate-200 bg-white transition-all duration-300 active:scale-[0.97] hover:-translate-y-0.5 shadow-sm hover:shadow-md flex flex-col flex-none w-[31%] snap-start sm:w-auto"
+                            className="lc-paket-card group relative overflow-hidden rounded-xl md:rounded-2xl text-left border border-slate-200 bg-white transition-all duration-300 active:scale-[0.97] hover:-translate-y-0.5 shadow-sm hover:shadow-md flex flex-col"
+                            style={{ flex: "0 0 auto", width: "32%" }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.boxShadow = `0 10px 24px -10px ${theme.accent}40`
                               e.currentTarget.style.borderColor = theme.accent + "60"
