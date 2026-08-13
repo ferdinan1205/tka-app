@@ -297,21 +297,28 @@ export default function Dashboard() {
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
 
-        /* ===== Kelas Saya: grid rapi di SEMUA ukuran layar (mobile juga) ===== */
+        /* ===== Kelas Saya: scroll horizontal khusus mobile, grid di layar besar ===== */
         .kelas-scroll {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          display: flex;
+          overflow-x: auto;
           gap: 0.75rem;
+          padding-bottom: 0.25rem;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
         }
         .kelas-card {
-          width: auto;
-          max-width: none;
+          flex: 0 0 auto;
+          width: 42%;
+          scroll-snap-align: start;
         }
         @media (min-width: 640px) {
           .kelas-scroll {
+            display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            overflow-x: visible;
             gap: 1rem;
           }
+          .kelas-card { width: auto; }
         }
         @media (min-width: 1024px) {
           .kelas-scroll { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -320,24 +327,31 @@ export default function Dashboard() {
           .kelas-scroll { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
 
-        /* ===== Paket Belajar (per grup): grid rapi di SEMUA ukuran layar (mobile juga) ===== */
+        /* ===== Paket Belajar (per grup): scroll horizontal khusus mobile, grid di layar besar ===== */
         .paket-scroll {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          display: flex;
+          overflow-x: auto;
           gap: 0.5rem;
+          padding-bottom: 0.25rem;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
         }
         .paket-card {
-          width: auto;
-          max-width: none;
+          flex: 0 0 auto;
+          width: 32%;
+          scroll-snap-align: start;
         }
         @media (min-width: 480px) {
-          .paket-scroll { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .paket-card { width: 30%; }
         }
         @media (min-width: 640px) {
           .paket-scroll {
+            display: grid;
             grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
+            overflow-x: visible;
             gap: 0.5rem;
           }
+          .paket-card { width: auto; }
         }
       `}</style>
 
@@ -516,9 +530,10 @@ export default function Dashboard() {
               </div>
 
               {/*
-                Grid rapi di semua ukuran layar: 2 kolom di HP, makin lebar makin banyak kolom.
+                Mobile: scroll horizontal (kartu geser ke samping).
+                sm ke atas: kembali jadi grid rapi multi-kolom.
               */}
-              <div className="kelas-scroll">
+              <div className="kelas-scroll no-scrollbar">
                 {kelasList.map((k) => {
                   const kt = KELAS_THEMES[k.id % KELAS_THEMES.length]
                   const iconChar = KELAS_ICONS[k.id % KELAS_ICONS.length]
@@ -647,10 +662,10 @@ export default function Dashboard() {
                     </div>
 
                     {/*
-                      Grid rapi di semua ukuran layar: 2 kolom di HP kecil, 3 kolom di HP lebar,
-                      lalu grid auto-fill di tablet/desktop.
+                      Mobile: scroll horizontal (kartu geser ke samping).
+                      sm ke atas: kembali jadi grid auto-fill rapi.
                     */}
-                    <div className="paket-scroll">
+                    <div className="paket-scroll no-scrollbar">
                       {group.items.map((item) => {
                         const theme     = getPaketTheme(item.nama_paket)
                         const labelNama = formatNamaPaket(item.nama_paket)
