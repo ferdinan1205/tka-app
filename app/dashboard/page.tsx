@@ -291,68 +291,11 @@ export default function Dashboard() {
         @media (min-width: 1024px) {
           .dash-content { margin-left: 256px; }
         }
-        .no-scrollbar {
+        .lc-no-scrollbar {
           -ms-overflow-style: none;
           scrollbar-width: none;
         }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-
-        /* ===== Kelas Saya: scroll horizontal khusus mobile, grid di layar besar ===== */
-        .kelas-scroll {
-          display: flex;
-          overflow-x: auto;
-          gap: 0.75rem;
-          padding-bottom: 0.25rem;
-          scroll-snap-type: x mandatory;
-          -webkit-overflow-scrolling: touch;
-        }
-        .kelas-card {
-          flex: 0 0 auto;
-          width: 42%;
-          scroll-snap-align: start;
-        }
-        @media (min-width: 640px) {
-          .kelas-scroll {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            overflow-x: visible;
-            gap: 1rem;
-          }
-          .kelas-card { width: auto; }
-        }
-        @media (min-width: 1024px) {
-          .kelas-scroll { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        }
-        @media (min-width: 1280px) {
-          .kelas-scroll { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        }
-
-        /* ===== Paket Belajar (per grup): scroll horizontal khusus mobile, grid di layar besar ===== */
-        .paket-scroll {
-          display: flex;
-          overflow-x: auto;
-          gap: 0.5rem;
-          padding-bottom: 0.25rem;
-          scroll-snap-type: x mandatory;
-          -webkit-overflow-scrolling: touch;
-        }
-        .paket-card {
-          flex: 0 0 auto;
-          width: 32%;
-          scroll-snap-align: start;
-        }
-        @media (min-width: 480px) {
-          .paket-card { width: 30%; }
-        }
-        @media (min-width: 640px) {
-          .paket-scroll {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
-            overflow-x: visible;
-            gap: 0.5rem;
-          }
-          .paket-card { width: auto; }
-        }
+        .lc-no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
       `}</style>
 
       {/* OVERLAY */}
@@ -533,7 +476,7 @@ export default function Dashboard() {
                 Mobile: scroll horizontal (kartu geser ke samping).
                 sm ke atas: kembali jadi grid rapi multi-kolom.
               */}
-              <div className="kelas-scroll no-scrollbar">
+              <div className="lc-no-scrollbar flex flex-nowrap overflow-x-auto gap-3 pb-1 snap-x snap-mandatory sm:grid sm:grid-cols-2 sm:overflow-visible sm:gap-4 sm:pb-0 sm:snap-none lg:grid-cols-3 xl:grid-cols-4">
                 {kelasList.map((k) => {
                   const kt = KELAS_THEMES[k.id % KELAS_THEMES.length]
                   const iconChar = KELAS_ICONS[k.id % KELAS_ICONS.length]
@@ -541,7 +484,7 @@ export default function Dashboard() {
                     <button
                       key={k.id}
                       onClick={() => router.push(`/kelas/${k.id}`)}
-                      className="kelas-card group relative overflow-hidden rounded-xl md:rounded-2xl border border-slate-200 bg-white transition-all duration-300 active:scale-[0.97] hover:-translate-y-0.5 shadow-sm hover:shadow-md"
+                      className="group relative overflow-hidden rounded-xl md:rounded-2xl border border-slate-200 bg-white transition-all duration-300 active:scale-[0.97] hover:-translate-y-0.5 shadow-sm hover:shadow-md flex-none w-[42%] snap-start sm:w-auto"
                       onMouseEnter={(e) => {
                         e.currentTarget.style.boxShadow = `0 10px 24px -10px ${kt.accent}40`
                         e.currentTarget.style.borderColor = kt.accent + "60"
@@ -665,7 +608,7 @@ export default function Dashboard() {
                       Mobile: scroll horizontal (kartu geser ke samping).
                       sm ke atas: kembali jadi grid auto-fill rapi.
                     */}
-                    <div className="paket-scroll no-scrollbar">
+                    <div className="lc-no-scrollbar flex flex-nowrap overflow-x-auto gap-2 pb-1 snap-x snap-mandatory sm:grid sm:[grid-template-columns:repeat(auto-fill,minmax(220px,280px))] sm:overflow-visible sm:pb-0 sm:snap-none">
                       {group.items.map((item) => {
                         const theme     = getPaketTheme(item.nama_paket)
                         const labelNama = formatNamaPaket(item.nama_paket)
@@ -673,7 +616,7 @@ export default function Dashboard() {
                           <button
                             key={item.id}
                             onClick={() => router.push(`/ujian/package/${item.id}`)}
-                            className="paket-card group relative overflow-hidden rounded-xl md:rounded-2xl text-left border border-slate-200 bg-white transition-all duration-300 active:scale-[0.97] hover:-translate-y-0.5 shadow-sm hover:shadow-md flex flex-col"
+                            className="group relative overflow-hidden rounded-xl md:rounded-2xl text-left border border-slate-200 bg-white transition-all duration-300 active:scale-[0.97] hover:-translate-y-0.5 shadow-sm hover:shadow-md flex flex-col flex-none w-[31%] snap-start sm:w-auto"
                             onMouseEnter={(e) => {
                               e.currentTarget.style.boxShadow = `0 10px 24px -10px ${theme.accent}40`
                               e.currentTarget.style.borderColor = theme.accent + "60"
