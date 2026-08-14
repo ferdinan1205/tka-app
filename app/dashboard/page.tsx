@@ -372,9 +372,16 @@ export default function Dashboard() {
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
       `}>
         <div className="px-6 pt-7 pb-6 flex items-start justify-between">
-          <div>
-            <p className="text-white font-bold text-lg tracking-tight">Lampung Cerdas</p>
-            <p className="text-xs mt-1 text-blue-300">Portal Belajar Siswa</p>
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/logo-lampung-cerdas.png"
+              alt="Lampung Cerdas"
+              className="h-10 w-auto object-contain shrink-0"
+            />
+            <div>
+              <p className="text-white font-bold text-lg tracking-tight leading-tight">Lampung Cerdas</p>
+              <p className="text-xs mt-0.5 text-blue-300">Portal Belajar Siswa</p>
+            </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -490,7 +497,7 @@ export default function Dashboard() {
                 Halo,{" "}
                 <span
                   style={{
-                    backgroundImage: "linear-gradient(90deg, #FCD34D, #FB923C)",
+                    backgroundImage: "linear-gradient(90deg, #eaf0e9, #f2f0ef)",
                     WebkitBackgroundClip: "text",
                     backgroundClip: "text",
                     WebkitTextFillColor: "transparent",
@@ -499,9 +506,8 @@ export default function Dashboard() {
                 >
                   {nama.split(" ")[0] || "Sahabat Belajar"}
                 </span>
-                ! 👋
               </h1>
-              <p className="mt-1 text-blue-300 text-xs">Siap belajar hari ini? 🚀</p>
+              <p className="mt-1 text-blue-300 text-xs">Siap belajar hari ini? </p>
             </div>
           </div>
 

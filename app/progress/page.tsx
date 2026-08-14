@@ -216,9 +216,16 @@ export default function ProgressPage() {
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
       `}>
         <div className="px-6 pt-7 pb-6 flex items-start justify-between">
-          <div>
-            <p className="text-white font-bold text-lg tracking-tight">Lampung Cerdas</p>
-            <p className="text-xs mt-1 text-blue-300">Portal Belajar Siswa</p>
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/logo-lampung-cerdas.png"
+              alt="Lampung Cerdas"
+              className="h-10 w-auto object-contain shrink-0"
+            />
+            <div>
+              <p className="text-white font-bold text-lg tracking-tight leading-tight">Lampung Cerdas</p>
+              <p className="text-xs mt-0.5 text-blue-300">Portal Belajar Siswa</p>
+            </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -332,7 +339,7 @@ export default function ProgressPage() {
                     Lihat Seberapa Jauh{" "}
                     <span
                       style={{
-                        backgroundImage: "linear-gradient(90deg, #FCD34D, #FB923C)",
+                        backgroundImage: "linear-gradient(90deg, #fbfbfb, #FB923C)",
                         WebkitBackgroundClip: "text",
                         backgroundClip: "text",
                         WebkitTextFillColor: "transparent",
@@ -341,7 +348,6 @@ export default function ProgressPage() {
                     >
                       Kamu Berkembang
                     </span>{" "}
-                    📈
                   </h1>
                   <p className="mt-1 text-blue-300 text-xs max-w-md">
                     Pantau grafik nilai, distribusi mapel, dan riwayat ujian kamu dalam satu halaman.
@@ -400,7 +406,7 @@ export default function ProgressPage() {
                     {statValues[s.key]}
                   </p>
                   <div
-                    className="absolute top-3 right-3 md:top-4 md:right-4 w-9 h-9 md:w-11 md:h-11 rounded-xl flex items-center justify-center text-base md:text-lg shadow-sm"
+                    className="absolute top-6 right-3 md:top-7 md:right-4 w-9 h-9 md:w-11 md:h-11 rounded-xl flex items-center justify-center text-base md:text-lg shadow-sm"
                     style={{ background: `linear-gradient(135deg, ${s.from}, ${s.to})` }}
                   >
                     {s.icon}

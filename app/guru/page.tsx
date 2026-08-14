@@ -363,11 +363,14 @@ loadData()
     >
       {/* SIDEBAR — fixed, tidak ikut scroll konten tengah */}
       <aside className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 overflow-y-auto" style={{ width: "260px", background: palette.navy }}>
-        <div className="px-6 pt-7 pb-6">
-          <p className="text-white font-bold text-lg tracking-tight" style={{ fontFamily: "Georgia, serif" }}>
-            Lampung Cerdas
-          </p>
-          <p className="text-xs mt-1" style={{ color: "#AEB8CC" }}>Portal Bank Soal TKA</p>
+        <div className="px-6 pt-7 pb-6 flex items-center gap-3">
+          <img src="/logo-lampung-cerdas.png" alt="Logo" className="h-10 w-auto" />
+          <div>
+            <p className="text-white font-bold text-lg tracking-tight" style={{ fontFamily: "Georgia, serif" }}>
+              Lampung Cerdas
+            </p>
+            <p className="text-xs mt-1" style={{ color: "#AEB8CC" }}>Portal Bank Soal TKA</p>
+          </div>
         </div>
 
         <nav className="px-3 mt-2 flex-1">

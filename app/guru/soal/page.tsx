@@ -37,10 +37,22 @@ import {
   AlertTriangle,
   PackageCheck,
   LogOut,
+  Loader2,
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
-/* DESAIN — sama persis dengan app/guru/page.tsx (dashboard)          */
+/* DESAIN — tampilan 100% sama seperti app/guru/soal/page.tsx lama     */
+/* (sidebar kiri navy, topbar, palette guru), TAPI data-layer-nya      */
+/* sekarang memakai pola yang sama dengan app/admin/soal/page.tsx:     */
+/*                                                                      */
+/* - Soal TIDAK lagi ditarik semua sekaligus (select("*") tanpa filter).*/
+/*   Query ke Supabase memakai .eq()/.ilike()/.range() sesuai kategori, */
+/*   status, pencarian, dan paket yang dipilih di UI.                   */
+/* - Dipaginasi PAGE_SIZE per load, ada tombol "Muat lebih banyak".      */
+/* - Statistik (total soal, jumlah mapel, draft, tanpa-paket) dihitung  */
+/*   lewat query ringan (count / kolom tunggal), bukan dari array penuh.*/
+/* - Export PDF tetap mengambil SEMUA baris yang cocok filter langsung  */
+/*   dari server (bukan cuma yang sudah tampil di layar).               */
 /* ------------------------------------------------------------------ */
 
 const palette = {
@@ -162,6 +174,10 @@ const kategoriList = [
 
 const CARD_ACCENTS = ["#D98C2B", "#2F7A6D", "#1B2A4A", "#A32D2D", "#3B6D11", "#185FA5"]
 
+// Berapa soal yang ditarik per halaman/load. Kunci supaya buka awal ringan:
+// bukan ambil semua ribuan soal sekaligus, tapi sedikit-sedikit sesuai filter.
+const PAGE_SIZE = 30
+
 function hasMath(text = "") {
   return (
     text.includes("$") || text.includes("\\(") || text.includes("\\[") ||
@@ -191,19 +207,24 @@ function MathContent({ html, className = "" }: { html: string; className?: strin
   const ref = useRef<HTMLDivElement>(null)
   const normalized = useMemo(() => normalizeContent(html), [html])
   const isMath = useMemo(() => hasMath(normalized), [normalized])
+  // Kalau MathJax gagal/lambat load (CDN diblok, internet lambat, adblocker, dll),
+  // jangan biarkan LaTeX mentah nampil selamanya — setelah beberapa detik, beralih
+  // ke versi teks biasa yang sudah dikonversi (\frac{a}{b} -> (a/b), dst).
+  const [renderFailed, setRenderFailed] = useState(false)
 
   useEffect(() => {
+    setRenderFailed(false)
     if (!isMath || !ref.current) return
     ref.current.innerHTML = normalized
 
     let cancelled = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let giveUpTimer: ReturnType<typeof setTimeout> | null = null
 
     function tryTypeset() {
       if (cancelled) return
       const win = window as any
 
-      // Script MathJax belum selesai dimuat -> coba lagi sebentar lagi
       if (!win.MathJax?.typesetPromise) {
         retryTimer = setTimeout(tryTypeset, 150)
         return
@@ -211,10 +232,11 @@ function MathContent({ html, className = "" }: { html: string; className?: strin
 
       const run = () => {
         if (cancelled || !ref.current) return
-        win.MathJax.typesetPromise([ref.current]).catch(() => {})
+        win.MathJax.typesetPromise([ref.current]).catch((err: any) => {
+          console.error("MathJax typeset gagal:", err)
+        })
       }
 
-      // Kalau MathJax masih dalam proses startup, tunggu promise-nya baru typeset
       if (win.MathJax.startup?.promise) {
         win.MathJax.startup.promise.then(run)
       } else {
@@ -224,15 +246,35 @@ function MathContent({ html, className = "" }: { html: string; className?: strin
 
     tryTypeset()
 
+    // Batas waktu tunggu: kalau setelah 4 detik MathJax masih belum siap sama sekali,
+    // anggap gagal load dan tampilkan fallback teks biasa.
+    giveUpTimer = setTimeout(() => {
+      if (cancelled) return
+      const win = window as any
+      if (!win.MathJax?.typesetPromise) {
+        setRenderFailed(true)
+      }
+    }, 4000)
+
     return () => {
       cancelled = true
       if (retryTimer) clearTimeout(retryTimer)
+      if (giveUpTimer) clearTimeout(giveUpTimer)
     }
   }, [normalized, isMath])
 
   if (!isMath) {
     return <div className={`leading-7 ${className}`} style={{ color: palette.ink }} dangerouslySetInnerHTML={{ __html: normalized }} />
   }
+
+  if (renderFailed) {
+    return (
+      <div className={`leading-7 ${className}`} style={{ color: palette.ink }}>
+        {latexToPlainText(stripHtml(normalized))}
+      </div>
+    )
+  }
+
   return <div ref={ref} className={`leading-7 ${className}`} style={{ color: palette.ink }} dangerouslySetInnerHTML={{ __html: normalized }} />
 }
 
@@ -261,6 +303,60 @@ function stripHtml(html?: string | null) {
     .trim()
 }
 
+// jsPDF cuma nulis teks polos — dia ga bisa render LaTeX/MathJax kayak di halaman web.
+// Jadi khusus untuk export PDF, konversi notasi LaTeX yang umum dipakai di soal
+// (\frac, \sqrt, ^{...}, \left(\right), simbol) ke bentuk teks biasa yang lebih terbaca,
+// alih-alih membiarkan kode LaTeX mentah muncul di PDF.
+function latexToPlainText(input: string): string {
+  let s = input
+
+  s = s.replace(/\$\$([\s\S]*?)\$\$/g, "$1")
+  s = s.replace(/\$([^$]*?)\$/g, "$1")
+  s = s.replace(/\\\[(.*?)\\\]/g, "$1")
+  s = s.replace(/\\\((.*?)\\\)/g, "$1")
+
+  s = s.replace(/\\left/g, "").replace(/\\right/g, "")
+
+  for (let i = 0; i < 6; i++) {
+    s = s.replace(/\\d?frac\{([^{}]*)\}\{([^{}]*)\}/g, "($1/$2)")
+  }
+
+  for (let i = 0; i < 6; i++) {
+    s = s.replace(/\\sqrt\{([^{}]*)\}/g, "√($1)")
+  }
+  s = s.replace(/\\sqrt/g, "√")
+
+  for (let i = 0; i < 6; i++) {
+    s = s.replace(/\\(?:text|ce|mathrm|mathbf|mathit)\{([^{}]*)\}/g, "$1")
+  }
+
+  for (let i = 0; i < 6; i++) {
+    s = s.replace(/\^\{([^{}]*)\}/g, "^($1)")
+    s = s.replace(/_\{([^{}]*)\}/g, "_($1)")
+  }
+
+  const symbolMap: Record<string, string> = {
+    "\\times": "×", "\\cdot": "·", "\\div": "÷", "\\pm": "±",
+    "\\leq": "≤", "\\geq": "≥", "\\neq": "≠", "\\approx": "≈",
+    "\\infty": "∞", "\\pi": "π", "\\alpha": "α", "\\beta": "β",
+    "\\theta": "θ", "\\Delta": "Δ", "\\sum": "Σ", "\\to": "→",
+    "\\rightarrow": "→", "\\circ": "°",
+  }
+  for (const [k, v] of Object.entries(symbolMap)) {
+    s = s.split(k).join(v)
+  }
+
+  s = s.replace(/\\([a-zA-Z]+)/g, "$1")
+  s = s.replace(/[{}]/g, "")
+
+  return s
+}
+
+// Gabungan: bersihkan HTML lalu konversi LaTeX -> teks biasa. Dipakai khusus di export PDF.
+function stripForPdf(html?: string | null) {
+  return latexToPlainText(stripHtml(html))
+}
+
 function paketBadgeStyle(nama: string) {
   const n = nama.toLowerCase()
   if (n.includes("ipa")) return { bg: "#EAF3DE", color: "#27500A" }
@@ -278,7 +374,7 @@ function initials(name: string) {
 }
 
 /* ------------------------------------------------------------------ */
-/* PAGE                                                                */
+/* PAGE (inner) — dibungkus Suspense oleh default export di bawah      */
 /* ------------------------------------------------------------------ */
 
 function KelolaSoalPageInner() {
@@ -286,12 +382,12 @@ function KelolaSoalPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-const [checking, setChecking] = useState(true)
-const [namaGuru, setNamaGuru] = useState("Guru")
-const [foto, setFoto] = useState("")
+  const [checking, setChecking] = useState(true)
+  const [namaGuru, setNamaGuru] = useState("Guru")
+  const [foto, setFoto] = useState("")
 
-const [showNotif, setShowNotif] = useState(false)
-const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [showNotif, setShowNotif] = useState(false)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   const quillModules = useMemo(() => ({
     toolbar: [
@@ -303,6 +399,9 @@ const [showProfileMenu, setShowProfileMenu] = useState(false)
     ],
   }), [])
 
+  // `soal` sekarang HANYA berisi soal yang sudah di-load sesuai filter aktif +
+  // halaman saat ini (bukan seluruh tabel). Nambah kategori/paket/status/pencarian
+  // akan memicu query baru ke Supabase, bukan filter di memori.
   const [soal, setSoal] = useState<Soal[]>([])
   const [packages, setPackages] = useState<PackageT[]>([])
   const [soalPackageMap, setSoalPackageMap] = useState<Record<number, string[]>>({})
@@ -312,12 +411,26 @@ const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [selectedStatus, setSelectedStatus] = useState<"semua" | "aktif" | "nonaktif">("semua")
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showPreview, setShowPreview] = useState<Record<string, boolean>>({})
   const [exportingPdf, setExportingPdf] = useState(false)
   const [paketSoalIds, setPaketSoalIds] = useState<number[]>([])
+  const [idsWithPackage, setIdsWithPackage] = useState<number[]>([])
+
+  // Pagination
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [totalFilteredCount, setTotalFilteredCount] = useState(0)
+
+  // Statistik ringan (bukan dari array penuh, tapi dari query count/kolom tunggal)
+  const [totalSoalCount, setTotalSoalCount] = useState(0)
+  const [totalKategoriCount, setTotalKategoriCount] = useState(0)
+  const [notifDraftCount, setNotifDraftCount] = useState(0)
+  const [notifTanpaPaketCount, setNotifTanpaPaketCount] = useState(0)
 
   const [form, setForm] = useState<Soal>({
     pertanyaan: "", opsi_a: "", opsi_b: "", opsi_c: "", opsi_d: "", opsi_e: "",
@@ -328,12 +441,12 @@ const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   useEffect(() => { checkAccessAndLoad() }, [])
 
-  // Kalau datang dari halaman lain (mis. dashboard, "Kelengkapan Konten") dengan
+  // Kalau datang dari halaman lain (mis. dashboard guru, "Kelengkapan Konten") dengan
   // query param, otomatis terapkan filter yang sesuai supaya soal yang dimaksud
   // langsung ketemu:
-  //   ?cari=...            -> isi kolom pencarian
+  //   ?cari=...              -> isi kolom pencarian
   //   ?status=aktif|nonaktif -> filter status aktif/nonaktif
-  //   ?paket=belum          -> filter soal yang belum masuk paket manapun
+  //   ?paket=belum           -> filter soal yang belum masuk paket manapun
   useEffect(() => {
     const cari = searchParams.get("cari")
     if (cari) setSearch(cari)
@@ -354,6 +467,12 @@ const [showProfileMenu, setShowProfileMenu] = useState(false)
     if (match) setSelectedPaketId(match.id)
   }, [searchParams, packages])
 
+  // Debounce pencarian, biar tiap ketikan ga langsung nembak query baru
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
   async function checkAccessAndLoad() {
     const { data } = await supabase.auth.getUser()
     if (!data.user) {
@@ -372,10 +491,12 @@ const [showProfileMenu, setShowProfileMenu] = useState(false)
       return
     }
 
-setNamaGuru(profile.nama_lengkap || profile.full_name || profile.nama || "Guru")
-setFoto(profile.foto || profile.avatar_url || "")
-setChecking(false)
-await Promise.all([getSoal(), getPackages()])
+    setNamaGuru(profile.nama_lengkap || profile.full_name || profile.nama || "Guru")
+    setFoto(profile.foto || profile.avatar_url || "")
+    setChecking(false)
+    // Soal itu sendiri ditarik lewat effect di bawah (bergantung pada filter),
+    // di sini cukup load paket + statistik ringan.
+    await Promise.all([getPackages(), refreshStats(), refreshCounts()])
   }
 
   async function handleLogout() {
@@ -384,26 +505,120 @@ await Promise.all([getSoal(), getPackages()])
     router.push("/login")
   }
 
-  async function getSoal() {
+  // Susun query dasar sesuai filter kategori/status/pencarian yang aktif
+  // (belum termasuk filter paket, karena itu butuh daftar id terpisah).
+  function buildBaseQuery(withCount: boolean) {
+    let query = supabase
+      .from("soal")
+      .select("*", withCount ? { count: "exact" } : undefined)
+      .order("id", { ascending: true })
+
+    if (selectedKategori !== "Semua") query = query.eq("kategori", selectedKategori)
+    if (selectedStatus !== "semua") query = query.eq("is_active", selectedStatus === "aktif")
+    if (debouncedSearch) query = query.ilike("pertanyaan", `%${debouncedSearch}%`)
+    return query
+  }
+
+  // Terapkan filter paket ke query yang sudah ada. skip=true artinya sudah pasti
+  // tidak ada hasil (misal paket dipilih tapi belum ada satu soal pun di paket itu).
+  function applyPaketFilter(query: any): { query: any; skip: boolean } {
+    if (typeof selectedPaketId === "number") {
+      if (paketSoalIds.length === 0) return { query, skip: true }
+      return { query: query.in("id", paketSoalIds), skip: false }
+    }
+    if (selectedPaketId === "belum") {
+      let q = query.or("paket.is.null,paket.eq.")
+      if (idsWithPackage.length > 0) q = q.not("id", "in", `(${idsWithPackage.join(",")})`)
+      return { query: q, skip: false }
+    }
+    return { query, skip: false }
+  }
+
+  async function fetchSoalPage(targetPage: number) {
     try {
-      setLoading(true)
-      const { data, error } = await supabase.from("soal").select("*").order("id", { ascending: true })
-      if (error) { console.log(error); return }
-      setSoal((data || []) as Soal[])
+      if (targetPage === 1) setLoading(true)
+      else setLoadingMore(true)
 
-      const { data: pkgSoal } = await supabase
-        .from("package_soal")
-        .select("soal_id, package_id, packages(nama_paket)")
-
-      const map: Record<number, string[]> = {}
-      for (const row of pkgSoal || []) {
-        const sid = row.soal_id as number
-        const nama = (row.packages as any)?.nama_paket || ""
-        if (!map[sid]) map[sid] = []
-        if (nama && !map[sid].includes(nama)) map[sid].push(nama)
+      const base = buildBaseQuery(true)
+      const { query, skip } = applyPaketFilter(base)
+      if (skip) {
+        setSoal([]); setTotalFilteredCount(0); setHasMore(false)
+        return
       }
-      setSoalPackageMap(map)
-    } finally { setLoading(false) }
+
+      const from = (targetPage - 1) * PAGE_SIZE
+      const to = from + PAGE_SIZE - 1
+      const { data, count, error } = await query.range(from, to)
+      if (error) { console.log(error); return }
+
+      const rows = (data || []) as Soal[]
+      setSoal((prev) => (targetPage === 1 ? rows : [...prev, ...rows]))
+      setTotalFilteredCount(count || 0)
+      setHasMore((count || 0) > targetPage * PAGE_SIZE)
+
+      // Ambil relasi paket hanya untuk soal yang baru di-load (bukan semua soal di DB)
+      const ids = rows.map((r) => r.id).filter(Boolean) as number[]
+      if (ids.length > 0) {
+        const { data: pkgSoal } = await supabase
+          .from("package_soal")
+          .select("soal_id, package_id, packages(nama_paket)")
+          .in("soal_id", ids)
+
+        const map: Record<number, string[]> = {}
+        for (const row of pkgSoal || []) {
+          const sid = row.soal_id as number
+          const nama = (row.packages as any)?.nama_paket || ""
+          if (!map[sid]) map[sid] = []
+          if (nama && !map[sid].includes(nama)) map[sid].push(nama)
+        }
+        setSoalPackageMap((prev) => (targetPage === 1 ? map : { ...prev, ...map }))
+      } else if (targetPage === 1) {
+        setSoalPackageMap({})
+      }
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  function handleLoadMore() {
+    const next = page + 1
+    setPage(next)
+    fetchSoalPage(next)
+  }
+
+  // Statistik ringan untuk hero/stat card: total soal & jumlah mapel yang benar2 dipakai.
+  // Kolom "kategori" saja yang ditarik (jauh lebih ringan dari select("*")).
+  async function refreshStats() {
+    const { count } = await supabase.from("soal").select("id", { count: "exact", head: true })
+    setTotalSoalCount(count || 0)
+
+    const { data } = await supabase.from("soal").select("kategori")
+    setTotalKategoriCount(new Set((data || []).map((d: any) => d.kategori)).size)
+  }
+
+  // Notifikasi (draft & tanpa-paket) juga dihitung lewat count query, bukan array penuh.
+  async function refreshCounts() {
+    try {
+      const { count: draftCount } = await supabase
+        .from("soal").select("id", { count: "exact", head: true }).eq("is_active", false)
+      setNotifDraftCount(draftCount || 0)
+
+      const { data: pkgSoalAll } = await supabase.from("package_soal").select("soal_id")
+      const idsWithPkg = Array.from(new Set((pkgSoalAll || []).map((r: any) => r.soal_id as number)))
+
+      let tanpaQuery = supabase.from("soal").select("id", { count: "exact", head: true }).or("paket.is.null,paket.eq.")
+      if (idsWithPkg.length > 0) tanpaQuery = tanpaQuery.not("id", "in", `(${idsWithPkg.join(",")})`)
+      const { count: tanpaPaketCount } = await tanpaQuery
+      setNotifTanpaPaketCount(tanpaPaketCount || 0)
+    } catch (e) {
+      console.log(e)
+    }
+  }
+
+  async function reloadAll() {
+    setPage(1)
+    await Promise.all([fetchSoalPage(1), refreshStats(), refreshCounts()])
   }
 
   async function getPackages() {
@@ -423,6 +638,7 @@ await Promise.all([getSoal(), getPackages()])
     return (data || []).map((d: any) => d.package_id)
   }
 
+  // Cari id-id soal yang termasuk paket terpilih (relasi tabel + fallback kolom lama `paket`)
   useEffect(() => {
     if (typeof selectedPaketId !== "number") { setPaketSoalIds([]); return }
 
@@ -432,20 +648,40 @@ await Promise.all([getSoal(), getPackages()])
       ? pkgNameRaw.replace("paket ", "").trim()
       : pkgNameRaw
 
-    supabase
-      .from("package_soal")
-      .select("soal_id")
-      .eq("package_id", selectedPaketId)
-      .then(({ data }) => {
-        const idsFromRelasi = (data || []).map((d: any) => d.soal_id as number)
-        const idsFromLegacy = soal
-          .filter(s => s.paket?.toLowerCase().trim() === legacyKey)
-          .map(s => s.id!)
-          .filter(Boolean)
-        const merged = Array.from(new Set([...idsFromRelasi, ...idsFromLegacy]))
-        setPaketSoalIds(merged)
-      })
-  }, [selectedPaketId, packages, soal])
+    Promise.all([
+      supabase.from("package_soal").select("soal_id").eq("package_id", selectedPaketId),
+      legacyKey
+        ? supabase.from("soal").select("id").ilike("paket", legacyKey)
+        : Promise.resolve({ data: [] as any[] }),
+    ]).then(([relasi, legacy]) => {
+      const idsFromRelasi = (relasi.data || []).map((d: any) => d.soal_id as number)
+      const idsFromLegacy = ((legacy as any).data || []).map((d: any) => d.id as number)
+      setPaketSoalIds(Array.from(new Set([...idsFromRelasi, ...idsFromLegacy])))
+    })
+  }, [selectedPaketId, packages])
+
+  // Kalau filter "Belum Ada Paket" dipilih, siapkan daftar id soal yang SUDAH punya
+  // relasi paket, supaya bisa di-exclude di query (anti-join sederhana).
+  useEffect(() => {
+    if (selectedPaketId !== "belum") return
+    supabase.from("package_soal").select("soal_id").then(({ data }) => {
+      setIdsWithPackage(Array.from(new Set((data || []).map((r: any) => r.soal_id as number))))
+    })
+  }, [selectedPaketId])
+
+  // Setiap kali filter berubah, balik ke halaman 1
+  useEffect(() => {
+    setPage(1)
+  }, [selectedKategori, selectedStatus, debouncedSearch, selectedPaketId])
+
+  // Query utama: jalan tiap kali halaman 1 dan/atau filter (termasuk paketSoalIds/idsWithPackage
+  // yang baru selesai dihitung) berubah.
+  useEffect(() => {
+    if (checking) return
+    if (page !== 1) return
+    fetchSoalPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checking, selectedKategori, selectedStatus, debouncedSearch, selectedPaketId, paketSoalIds, idsWithPackage])
 
   async function uploadGambar(file: File) {
     try {
@@ -516,7 +752,7 @@ await Promise.all([getSoal(), getPackages()])
       alert("Berhasil disimpan")
       setShowModal(false)
       resetForm()
-      await getSoal()
+      await reloadAll()
     } catch (err: any) {
       alert(err.message || "Gagal menyimpan")
     } finally { setSaving(false) }
@@ -552,7 +788,7 @@ await Promise.all([getSoal(), getPackages()])
     if (!confirm("Hapus soal?")) return
     await supabase.from("package_soal").delete().eq("soal_id", id)
     await supabase.from("soal").delete().eq("id", id)
-    getSoal()
+    await reloadAll()
   }
 
   function resetForm() {
@@ -605,188 +841,171 @@ await Promise.all([getSoal(), getPackages()])
         }])
       }
       alert("Upload Excel berhasil!")
-      getSoal()
+      await reloadAll()
     }
     reader.readAsArrayBuffer(file)
   }
 
-async function handleExportPdf() {
-  if (filteredSoal.length === 0) { alert("Tidak ada soal untuk diexport"); return }
-  try {
-    setExportingPdf(true)
-
-    const namaFilter = typeof selectedPaketId === "number"
-      ? packages.find(p => p.id === selectedPaketId)?.nama_paket || "Semua Paket"
-      : selectedPaketId === "belum"
-        ? "Tanpa Paket"
-        : "Semua Paket"
-
-    const doc = new jsPDF({ unit: "pt", format: "a4" })
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    const margin = 48
-    const contentWidth = pageWidth - margin * 2
-    let y = margin
-
-    function addNewPageIfNeeded(neededHeight: number) {
-      if (y + neededHeight > pageHeight - margin) {
-        doc.addPage()
-        y = margin
-      }
-    }
-
-    function writeWrapped(text: string, x: number, fontSize: number, style: "normal" | "bold" = "normal", color: [number, number, number] = [30, 30, 30], lineGap = 1.3) {
-      if (!text) return
-      doc.setFont("helvetica", style)
-      doc.setFontSize(fontSize)
-      doc.setTextColor(color[0], color[1], color[2])
-      const maxWidth = contentWidth - (x - margin)
-      const lines = doc.splitTextToSize(text, maxWidth)
-      const lineHeight = fontSize * lineGap
-      addNewPageIfNeeded(lines.length * lineHeight)
-      doc.text(lines, x, y)
-      y += lines.length * lineHeight
-    }
-
-    // ── HEADER ──
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(9)
-    doc.setTextColor(217, 140, 43) // amber
-    doc.text("BANK SOAL", pageWidth / 2, y, { align: "center" })
-    y += 18
-
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(18)
-    doc.setTextColor(27, 42, 74) // navy
-    doc.text(namaFilter, pageWidth / 2, y, { align: "center" })
-    y += 18
-
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(10)
-    doc.setTextColor(140, 140, 140)
-    const subInfo = `${selectedKategori === "Semua" ? "Semua Kategori" : selectedKategori} \u00b7 ${filteredSoal.length} Soal`
-    doc.text(subInfo, pageWidth / 2, y, { align: "center" })
-    y += 14
-
-    doc.setDrawColor(231, 226, 212)
-    doc.setLineWidth(1.2)
-    doc.line(margin, y, pageWidth - margin, y)
-    y += 24
-
-    // ── ISI SOAL ──
-    filteredSoal.forEach((s, i) => {
-      addNewPageIfNeeded(60)
-
-      // Nomor + kategori
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(11)
-      doc.setTextColor(27, 42, 74)
-      doc.text(`${i + 1}.`, margin, y)
-      doc.setFont("helvetica", "normal")
-      doc.setFontSize(9)
-      doc.setTextColor(138, 84, 18)
-      doc.text(`[${s.kategori}]`, margin + 20, y)
-      y += 16
-
-      // Pengantar
-      if (s.pengantar) {
-        writeWrapped(stripHtml(s.pengantar), margin, 9.5, "normal", [85, 85, 85])
-        y += 6
-      }
-
-      // Bacaan
-      if (s.bacaan) {
-        writeWrapped(stripHtml(s.bacaan), margin, 9.5, "normal", [68, 68, 68])
-        y += 6
-      }
-
-      // Pertanyaan
-      writeWrapped(stripHtml(s.pertanyaan), margin, 11, "normal", [17, 17, 17])
-      y += 8
-
-      // Opsi
-      const opsiList = [
-        { l: "A", v: s.opsi_a }, { l: "B", v: s.opsi_b },
-        { l: "C", v: s.opsi_c }, { l: "D", v: s.opsi_d },
-        { l: "E", v: s.opsi_e },
-      ].filter(o => stripHtml(o.v))
-
-      opsiList.forEach((o) => {
-        const isCorrect = s.jawaban_benar?.toLowerCase() === o.l.toLowerCase()
-        const text = `${o.l}. ${stripHtml(o.v)}${isCorrect ? "  \u2713" : ""}`
-        writeWrapped(
-          text, margin + 14, 10,
-          isCorrect ? "bold" : "normal",
-          isCorrect ? [31, 85, 72] : [51, 51, 51]
-        )
-      })
-      y += 6
-
-      // Pembahasan
-      const pembahasan = stripHtml(s.pembahasan)
-      if (pembahasan) {
-        addNewPageIfNeeded(30)
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(9)
-        doc.setTextColor(31, 85, 72)
-        doc.text("Pembahasan:", margin, y)
-        y += 12
-        writeWrapped(pembahasan, margin, 9, "normal", [31, 85, 72])
-      }
-
-      y += 18
-      addNewPageIfNeeded(1)
-      doc.setDrawColor(231, 226, 212)
-      doc.setLineWidth(0.5)
-      doc.line(margin, y, pageWidth - margin, y)
-      y += 18
-    })
-
-    // ── FOOTER tanggal cetak di halaman terakhir ──
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(8)
-    doc.setTextColor(170, 170, 170)
-    const tanggal = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
-    doc.text(`Dicetak pada ${tanggal}`, pageWidth / 2, pageHeight - 20, { align: "center" })
-
-    doc.save(`soal_${namaFilter.replace(/\s+/g, "_").toLowerCase()}.pdf`)
-
-  } catch (err) {
-    console.error(err)
-    alert("Gagal export")
-  } finally {
-    setExportingPdf(false)
+  // Ambil SEMUA soal yang cocok filter aktif langsung dari server (bukan cuma yang
+  // sudah tampil di layar) — dipakai khusus saat export PDF supaya hasilnya lengkap.
+  async function fetchAllFilteredSoal(): Promise<Soal[]> {
+    const base = buildBaseQuery(false)
+    const { query, skip } = applyPaketFilter(base)
+    if (skip) return []
+    const { data, error } = await query.limit(3000)
+    if (error) { console.log(error); return [] }
+    return (data || []) as Soal[]
   }
-}
 
-  // Soal yang tampil sesuai filter paket: id numerik (paket tertentu),
-  // "belum" (belum masuk paket manapun -- baik lewat relasi package_soal
-  // maupun kolom legacy `paket`), atau null (semua soal).
-  const displayedSoal = useMemo(() => {
-    if (selectedPaketId === "belum") {
-      return soal.filter((s) => {
-        const relasiPaket = s.id ? (soalPackageMap[s.id] || []) : []
-        return relasiPaket.length === 0 && !s.paket?.trim()
+  async function handleExportPdf() {
+    try {
+      setExportingPdf(true)
+      const rows = await fetchAllFilteredSoal()
+      if (rows.length === 0) { alert("Tidak ada soal untuk diexport"); return }
+
+      const namaFilter = typeof selectedPaketId === "number"
+        ? packages.find(p => p.id === selectedPaketId)?.nama_paket || "Semua Paket"
+        : selectedPaketId === "belum"
+          ? "Tanpa Paket"
+          : "Semua Paket"
+
+      const doc = new jsPDF({ unit: "pt", format: "a4" })
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 48
+      const contentWidth = pageWidth - margin * 2
+      let y = margin
+
+      function addNewPageIfNeeded(neededHeight: number) {
+        if (y + neededHeight > pageHeight - margin) {
+          doc.addPage()
+          y = margin
+        }
+      }
+
+      function writeWrapped(text: string, x: number, fontSize: number, style: "normal" | "bold" = "normal", color: [number, number, number] = [30, 30, 30], lineGap = 1.3) {
+        if (!text) return
+        doc.setFont("helvetica", style)
+        doc.setFontSize(fontSize)
+        doc.setTextColor(color[0], color[1], color[2])
+        const maxWidth = contentWidth - (x - margin)
+        const lines = doc.splitTextToSize(text, maxWidth)
+        const lineHeight = fontSize * lineGap
+        addNewPageIfNeeded(lines.length * lineHeight)
+        doc.text(lines, x, y)
+        y += lines.length * lineHeight
+      }
+
+      // ── HEADER ──
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(9)
+      doc.setTextColor(217, 140, 43) // amber
+      doc.text("BANK SOAL", pageWidth / 2, y, { align: "center" })
+      y += 18
+
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(18)
+      doc.setTextColor(27, 42, 74) // navy
+      doc.text(namaFilter, pageWidth / 2, y, { align: "center" })
+      y += 18
+
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(10)
+      doc.setTextColor(140, 140, 140)
+      const subInfo = `${selectedKategori === "Semua" ? "Semua Kategori" : selectedKategori} \u00b7 ${rows.length} Soal`
+      doc.text(subInfo, pageWidth / 2, y, { align: "center" })
+      y += 14
+
+      doc.setDrawColor(231, 226, 212)
+      doc.setLineWidth(1.2)
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 24
+
+      // ── ISI SOAL ──
+      rows.forEach((s, i) => {
+        addNewPageIfNeeded(60)
+
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(11)
+        doc.setTextColor(27, 42, 74)
+        doc.text(`${i + 1}.`, margin, y)
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(9)
+        doc.setTextColor(138, 84, 18)
+        doc.text(`[${s.kategori}]`, margin + 20, y)
+        y += 16
+
+        if (s.pengantar) {
+          writeWrapped(stripForPdf(s.pengantar), margin, 9.5, "normal", [85, 85, 85])
+          y += 6
+        }
+
+        if (s.bacaan) {
+          writeWrapped(stripForPdf(s.bacaan), margin, 9.5, "normal", [68, 68, 68])
+          y += 6
+        }
+
+        writeWrapped(stripForPdf(s.pertanyaan), margin, 11, "normal", [17, 17, 17])
+        y += 8
+
+        const opsiList = [
+          { l: "A", v: s.opsi_a }, { l: "B", v: s.opsi_b },
+          { l: "C", v: s.opsi_c }, { l: "D", v: s.opsi_d },
+          { l: "E", v: s.opsi_e },
+        ].filter(o => stripForPdf(o.v))
+
+        opsiList.forEach((o) => {
+          const isCorrect = s.jawaban_benar?.toLowerCase() === o.l.toLowerCase()
+          const text = `${o.l}. ${stripForPdf(o.v)}${isCorrect ? "  (Benar)" : ""}`
+          writeWrapped(
+            text, margin + 14, 10,
+            isCorrect ? "bold" : "normal",
+            isCorrect ? [31, 85, 72] : [51, 51, 51]
+          )
+        })
+        y += 6
+
+        const pembahasan = stripForPdf(s.pembahasan)
+        if (pembahasan) {
+          addNewPageIfNeeded(30)
+          doc.setFont("helvetica", "bold")
+          doc.setFontSize(9)
+          doc.setTextColor(31, 85, 72)
+          doc.text("Pembahasan:", margin, y)
+          y += 12
+          writeWrapped(pembahasan, margin, 9, "normal", [31, 85, 72])
+        }
+
+        y += 18
+        addNewPageIfNeeded(1)
+        doc.setDrawColor(231, 226, 212)
+        doc.setLineWidth(0.5)
+        doc.line(margin, y, pageWidth - margin, y)
+        y += 18
       })
+
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(8)
+      doc.setTextColor(170, 170, 170)
+      const tanggal = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+      doc.text(`Dicetak pada ${tanggal}`, pageWidth / 2, pageHeight - 20, { align: "center" })
+
+      doc.save(`soal_${namaFilter.replace(/\s+/g, "_").toLowerCase()}.pdf`)
+
+    } catch (err) {
+      console.error(err)
+      alert("Gagal export")
+    } finally {
+      setExportingPdf(false)
     }
-    if (selectedPaketId === null) return soal
-    return soal.filter(s => s.id && paketSoalIds.includes(s.id))
-  }, [soal, selectedPaketId, paketSoalIds, soalPackageMap])
+  }
 
-  const filteredSoal = useMemo(() =>
-    displayedSoal
-      .filter((s) => selectedKategori === "Semua" || s.kategori === selectedKategori)
-      .filter((s) => selectedStatus === "semua" || (selectedStatus === "aktif" ? !!s.is_active : !s.is_active))
-      .filter((s) => s.pertanyaan?.toLowerCase().includes(search.toLowerCase())),
-    [displayedSoal, selectedKategori, selectedStatus, search]
-  )
+  // Ini sekarang cuma alias: soal yang tampil DI LAYAR (sudah difilter di server + dipaginasi).
+  const filteredSoal = soal
 
-  // --- Ringkasan untuk dropdown notifikasi (dihitung dari data yang sudah ada) ---
-  const notifDraft = useMemo(() => soal.filter((s) => !s.is_active).length, [soal])
-  const notifTanpaPaket = useMemo(() => soal.filter((s) => {
-    const relasiPaket = s.id ? (soalPackageMap[s.id] || []) : []
-    return relasiPaket.length === 0 && !s.paket?.trim()
-  }).length, [soal, soalPackageMap])
+  // --- Ringkasan untuk dropdown notifikasi (dihitung dari count query, bukan array penuh) ---
+  const notifDraft = notifDraftCount
+  const notifTanpaPaket = notifTanpaPaketCount
 
   const editorFields = [
     { label: "Pengantar", key: "pengantar" }, { label: "Bacaan", key: "bacaan" },
@@ -870,11 +1089,14 @@ async function handleExportPdf() {
       <div className="h-screen w-full flex overflow-hidden" style={{ background: palette.paper, fontFamily: "Inter, ui-sans-serif, system-ui" }}>
         {/* SIDEBAR — fixed, tidak ikut scroll konten tengah */}
         <aside className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 overflow-y-auto" style={{ width: "260px", background: palette.navy }}>
-          <div className="px-6 pt-7 pb-6">
-            <p className="text-white font-bold text-lg tracking-tight" style={{ fontFamily: "Georgia, serif" }}>
-              Lampung Cerdas
-            </p>
-            <p className="text-xs mt-1" style={{ color: "#AEB8CC" }}>Portal Bank Soal TKA</p>
+          <div className="px-6 pt-7 pb-6 flex items-center gap-3">
+            <img src="/logo-lampung-cerdas.png" alt="Logo" className="h-10 w-auto" />
+            <div>
+              <p className="text-white font-bold text-lg tracking-tight" style={{ fontFamily: "Georgia, serif" }}>
+                Lampung Cerdas
+              </p>
+              <p className="text-xs mt-1" style={{ color: "#AEB8CC" }}>Portal Bank Soal TKA</p>
+            </div>
           </div>
 
           <nav className="px-3 mt-2 flex-1">
@@ -996,45 +1218,45 @@ async function handleExportPdf() {
                 )}
               </div>
 
-         {/* PROFIL */}
-<div className="relative">
-  <button
-    type="button"
-    onClick={() => { setShowProfileMenu((v) => !v); setShowNotif(false) }}
-    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold overflow-hidden"
-    style={{ background: palette.tealSoft, color: palette.tealText }}
-  >
-    {foto ? <img src={foto} alt="avatar" className="w-full h-full object-cover" /> : initials(namaGuru)}
-  </button>
-  {showProfileMenu && (
-    <>
-      <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
-      <div
-        className="absolute right-0 mt-2 w-56 rounded-2xl overflow-hidden z-50"
-        style={{ background: palette.card, border: `1px solid ${palette.border}`, boxShadow: "0 12px 32px rgba(27,42,74,0.16)" }}
-      >
-        <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: `1px solid ${palette.border}` }}>
-          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 overflow-hidden" style={{ background: palette.tealSoft, color: palette.tealText }}>
-            {foto ? <img src={foto} alt="avatar" className="w-full h-full object-cover" /> : initials(namaGuru)}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold truncate" style={{ color: palette.ink }}>{namaGuru}</p>
-            <p className="text-[11px]" style={{ color: palette.inkFaint }}>Guru</p>
-          </div>
-        </div>
-        <Link
-          href="/guru/profil"
-          onClick={() => setShowProfileMenu(false)}
-          className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold transition"
-          style={{ color: palette.ink }}
-        >
-          <UserRound size={14} />
-          Lihat Profil
-        </Link>
-      </div>
-    </>
-  )}
-</div>
+              {/* PROFIL */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setShowProfileMenu((v) => !v); setShowNotif(false) }}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold overflow-hidden"
+                  style={{ background: palette.tealSoft, color: palette.tealText }}
+                >
+                  {foto ? <img src={foto} alt="avatar" className="w-full h-full object-cover" /> : initials(namaGuru)}
+                </button>
+                {showProfileMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
+                    <div
+                      className="absolute right-0 mt-2 w-56 rounded-2xl overflow-hidden z-50"
+                      style={{ background: palette.card, border: `1px solid ${palette.border}`, boxShadow: "0 12px 32px rgba(27,42,74,0.16)" }}
+                    >
+                      <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 overflow-hidden" style={{ background: palette.tealSoft, color: palette.tealText }}>
+                          {foto ? <img src={foto} alt="avatar" className="w-full h-full object-cover" /> : initials(namaGuru)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate" style={{ color: palette.ink }}>{namaGuru}</p>
+                          <p className="text-[11px]" style={{ color: palette.inkFaint }}>Guru</p>
+                        </div>
+                      </div>
+                      <Link
+                        href="/guru/profil"
+                        onClick={() => setShowProfileMenu(false)}
+                        className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold transition"
+                        style={{ color: palette.ink }}
+                      >
+                        <UserRound size={14} />
+                        Lihat Profil
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1058,7 +1280,7 @@ async function handleExportPdf() {
                     <p className="text-xs uppercase tracking-wider mb-1.5" style={{ color: "#8FA0C4" }}>Bank Soal</p>
                     <h2 className="text-xl font-bold text-white">Kelola seluruh soal TKA di sini</h2>
                     <p className="text-sm mt-1" style={{ color: "#AEB8CC" }}>
-                      {soal.length} soal &middot; {new Set(soal.map(s => s.kategori)).size} mata pelajaran &middot; {packages.length} paket
+                      {totalSoalCount} soal &middot; {totalKategoriCount} mata pelajaran &middot; {packages.length} paket
                     </p>
                   </div>
                   <button
@@ -1076,12 +1298,12 @@ async function handleExportPdf() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="rounded-2xl p-5" style={{ background: palette.navy }}>
                     <p className="text-sm" style={{ color: "#AEB8CC" }}>Total Soal</p>
-                    <h2 className="text-3xl font-bold mt-1 text-white">{soal.length}</h2>
+                    <h2 className="text-3xl font-bold mt-1 text-white">{totalSoalCount}</h2>
                     <p className="text-xs mt-1.5" style={{ color: "#8C9AB8" }}>Soal yang telah dibuat</p>
                   </div>
                   <div className="rounded-2xl p-5" style={{ background: palette.card, border: `1px solid ${palette.border}` }}>
                     <p className="text-sm" style={{ color: palette.inkSoft }}>Mata Pelajaran</p>
-                    <h2 className="text-3xl font-bold mt-1" style={{ color: palette.ink }}>{new Set(soal.map(s => s.kategori)).size}</h2>
+                    <h2 className="text-3xl font-bold mt-1" style={{ color: palette.ink }}>{totalKategoriCount}</h2>
                     <p className="text-xs mt-1.5" style={{ color: palette.inkFaint }}>Mata pelajaran dikelola</p>
                   </div>
                   <div className="rounded-2xl p-5" style={{ background: palette.card, border: `1px solid ${palette.border}` }}>
@@ -1139,12 +1361,12 @@ async function handleExportPdf() {
                   <button
                     type="button"
                     onClick={handleExportPdf}
-                    disabled={exportingPdf || filteredSoal.length === 0}
+                    disabled={exportingPdf || totalFilteredCount === 0}
                     className="h-10 px-4 rounded-xl text-sm flex items-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ background: palette.tealSoft, border: `1px solid ${palette.teal}`, color: palette.tealText }}
                   >
                     <FileDown size={15} />
-                    {exportingPdf ? "Menyiapkan..." : `Export PDF (${filteredSoal.length})`}
+                    {exportingPdf ? "Menyiapkan..." : `Export PDF (${totalFilteredCount})`}
                   </button>
                 </div>
 
@@ -1152,7 +1374,7 @@ async function handleExportPdf() {
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold" style={{ color: palette.ink }}>Daftar Soal</p>
                   <span className="text-[11px] font-semibold rounded-full px-2.5 py-0.5" style={{ background: palette.amberSoft, color: palette.amberText }}>
-                    {filteredSoal.length} soal
+                    Menampilkan {filteredSoal.length} dari {totalFilteredCount} soal
                   </span>
                 </div>
 
@@ -1173,27 +1395,27 @@ async function handleExportPdf() {
                           return (
                             <Draggable key={String(item.id)} draggableId={String(item.id)} index={index}>
                               {(provided) => (
-                               <div
-  ref={provided.innerRef}
-  {...provided.draggableProps}
-  style={{
-    ...provided.draggableProps.style,
-    background: palette.card,
-    borderTopWidth: 1,
-    borderTopStyle: "solid",
-    borderTopColor: palette.border,
-    borderRightWidth: 1,
-    borderRightStyle: "solid",
-    borderRightColor: palette.border,
-    borderBottomWidth: 1,
-    borderBottomStyle: "solid",
-    borderBottomColor: palette.border,
-    borderLeftWidth: 4,
-    borderLeftStyle: "solid",
-    borderLeftColor: accentColor,
-  }}
-  className="rounded-2xl p-4 transition"
->
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  style={{
+                                    ...provided.draggableProps.style,
+                                    background: palette.card,
+                                    borderTopWidth: 1,
+                                    borderTopStyle: "solid",
+                                    borderTopColor: palette.border,
+                                    borderRightWidth: 1,
+                                    borderRightStyle: "solid",
+                                    borderRightColor: palette.border,
+                                    borderBottomWidth: 1,
+                                    borderBottomStyle: "solid",
+                                    borderBottomColor: palette.border,
+                                    borderLeftWidth: 4,
+                                    borderLeftStyle: "solid",
+                                    borderLeftColor: accentColor,
+                                  }}
+                                  className="rounded-2xl p-4 transition"
+                                >
                                   <div className="flex gap-3">
                                     <div {...provided.dragHandleProps} className="cursor-grab select-none mt-0.5 text-lg" style={{ color: palette.inkFaint }}>☰</div>
                                     <div
@@ -1289,6 +1511,28 @@ async function handleExportPdf() {
                     )}
                   </Droppable>
                 </DragDropContext>
+
+                {/* MUAT LEBIH BANYAK — pagination, biar ga sekali tarik semua soal */}
+                {hasMore && (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="h-10 px-6 rounded-xl text-sm font-semibold flex items-center gap-2 transition disabled:opacity-60"
+                      style={{ background: palette.card, border: `1px solid ${palette.border}`, color: palette.ink }}
+                    >
+                      {loadingMore ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin" />
+                          Memuat...
+                        </>
+                      ) : (
+                        `Muat lebih banyak (${filteredSoal.length}/${totalFilteredCount})`
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </main>
@@ -1452,6 +1696,10 @@ async function handleExportPdf() {
   )
 }
 
+/* ------------------------------------------------------------------ */
+/* Wrapper Suspense — WAJIB untuk useSearchParams() agar tidak gagal    */
+/* saat prerender static build (Next.js App Router).                    */
+/* ------------------------------------------------------------------ */
 export default function KelolaSoalPage() {
   return (
     <Suspense fallback={
