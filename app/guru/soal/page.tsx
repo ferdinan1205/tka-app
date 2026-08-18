@@ -728,6 +728,10 @@ function KelolaSoalPageInner() {
       }
 
       if (soalId) {
+        // Paksa selalu bertipe number, biar tidak ada mismatch dengan kolom
+        // package_soal.soal_id (bigint) saat delete maupun insert di bawah.
+        const numericSoalId = Number(soalId)
+
         let finalPackageIds: number[] = [...(form.package_ids || [])]
 
         if (form.paket) {
@@ -741,11 +745,45 @@ function KelolaSoalPageInner() {
           }
         }
 
-        await supabase.from("package_soal").delete().eq("soal_id", soalId)
+        // Hapus dulu semua relasi paket lama untuk soal ini, SEBELUM insert ulang.
+        // Dulu hasil delete ini tidak pernah dicek — kalau gagal (mis. karena RLS
+        // menolak DELETE untuk role guru, atau soal_id tidak match tipe datanya),
+        // baris lama tetap ada dan insert di bawah akan nabrak unique constraint
+        // "package_soal_package_id_soal_id_key" (duplicate key). Sekarang errornya
+        // ditangkap eksplisit supaya ketahuan penyebab aslinya, bukan cuma gagal
+        // pas insert.
+        const { error: delError, count: delCount } = await supabase
+          .from("package_soal")
+          .delete({ count: "exact" })
+          .eq("soal_id", numericSoalId)
+
+        console.log("DELETE package_soal (sebelum insert ulang) →", {
+          soalId, numericSoalId, delError, delCount,
+        })
+
+        if (delError) {
+          alert(
+            "Gagal menghapus relasi paket lama sebelum simpan ulang: " +
+            delError.message +
+            "\n\nKemungkinan besar ini masalah RLS policy DELETE di tabel package_soal untuk role guru."
+          )
+          return
+        }
+
         if (finalPackageIds.length > 0) {
-          const rows = finalPackageIds.map((pid) => ({ package_id: pid, soal_id: soalId }))
-          const { error: insertError } = await supabase.from("package_soal").insert(rows)
-          if (insertError) { alert("Gagal menyimpan relasi paket: " + insertError.message); return }
+          const rows = finalPackageIds.map((pid) => ({ package_id: pid, soal_id: numericSoalId }))
+
+          // Fallback ekstra: pakai upsert + ignoreDuplicates supaya walau ada baris
+          // yang somehow masih tersisa (race condition dsb), proses simpan tidak
+          // langsung gagal total karena duplicate key.
+          const { error: insertError } = await supabase
+            .from("package_soal")
+            .upsert(rows, { onConflict: "package_id,soal_id", ignoreDuplicates: true })
+
+          if (insertError) {
+            alert("Gagal menyimpan relasi paket: " + insertError.message)
+            return
+          }
         }
       }
 

@@ -28,6 +28,7 @@ import {
   Video,
   ArrowLeft,
   Pencil,
+  ListChecks,
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -210,20 +211,24 @@ type SoalRow = {
   gambar?: string | null
   video_url?: string | null
   pembahasan?: string | null
+  opsi_e?: string | null
   paket?: string | null
 }
 
-type KelengkapanKey = "pembahasan" | "gambar" | "video"
+// Tambah "opsi_e" sebagai salah satu dimensi kelengkapan yang bisa difilter,
+// sejajar dengan pembahasan/gambar/video yang sudah ada.
+type KelengkapanKey = "pembahasan" | "gambar" | "video" | "opsi_e"
 type StatusKey = "ada" | "belum"
 
 const TAB_CONFIG: Record<KelengkapanKey, { label: string; icon: any; color: string; bg: string; field: keyof SoalRow }> = {
   pembahasan: { label: "Pembahasan", icon: CircleCheckBig, color: palette.tealText, bg: palette.tealSoft, field: "pembahasan" },
   gambar: { label: "Gambar", icon: ImageIcon, color: "#185FA5", bg: "#E6F1FB", field: "gambar" },
   video: { label: "Video Pembahasan", icon: Video, color: palette.amberText, bg: palette.amberSoft, field: "video_url" },
+  opsi_e: { label: "Opsi E", icon: ListChecks, color: "#72243E", bg: "#FBEAF0", field: "opsi_e" },
 }
 
 function isValidKelengkapan(v: string | null): v is KelengkapanKey {
-  return v === "pembahasan" || v === "gambar" || v === "video"
+  return v === "pembahasan" || v === "gambar" || v === "video" || v === "opsi_e"
 }
 function isValidStatus(v: string | null): v is StatusKey {
   return v === "ada" || v === "belum"
@@ -273,9 +278,10 @@ function KelengkapanKontenInner() {
 
   async function loadData() {
     setLoadingData(true)
+    // Tambah kolom opsi_e ke select supaya bisa dicek kelengkapannya juga
     const { data } = await supabase
       .from("soal")
-      .select("id, kategori, pertanyaan, created_at, is_active, gambar, video_url, pembahasan, paket")
+      .select("id, kategori, pertanyaan, created_at, is_active, gambar, video_url, pembahasan, opsi_e, paket")
       .order("id", { ascending: false })
     setSoal((data || []) as SoalRow[])
     setLoadingData(false)
@@ -293,6 +299,7 @@ function KelengkapanKontenInner() {
       pembahasan: { ada: 0, belum: 0 },
       gambar: { ada: 0, belum: 0 },
       video: { ada: 0, belum: 0 },
+      opsi_e: { ada: 0, belum: 0 },
     }
     soal.forEach((s) => {
       ;(Object.keys(TAB_CONFIG) as KelengkapanKey[]).forEach((key) => {
