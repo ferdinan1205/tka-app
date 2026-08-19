@@ -277,25 +277,21 @@ export default function RekapPage() {
         flex flex-col transition-transform duration-300 ease-in-out
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
       `}>
-        <div className="px-6 pt-7 pb-6 flex items-start justify-between">
-          <div className="flex items-center gap-2.5">
-            <img
-              src="/logo-lampung-cerdas.png"
-              alt="Lampung Cerdas"
-              className="h-10 w-auto object-contain shrink-0"
-            />
-            <div>
-              <p className="text-white font-bold text-lg tracking-tight leading-tight">Lampung Cerdas</p>
-              <p className="text-xs mt-0.5 text-blue-300">Portal Belajar Siswa</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden w-7 h-7 rounded-lg bg-white/10 text-blue-200 flex items-center justify-center shrink-0"
-          >
-            <X size={14} />
-          </button>
-        </div>
+<div className="px-6 pt-7 pb-6 flex items-center justify-between">
+  <div className="flex-1 flex items-center justify-center">
+    <img
+      src="/logo-lampung-cerdas.png"
+      alt="Lampung Cerdas"
+      className="h-14 w-auto object-contain shrink-0"
+    />
+  </div>
+  <button
+    onClick={() => setSidebarOpen(false)}
+    className="lg:hidden w-7 h-7 rounded-lg bg-white/10 text-blue-200 flex items-center justify-center shrink-0"
+  >
+    <X size={14} />
+  </button>
+</div>
 
         <div className="px-4 mb-2">
           <button

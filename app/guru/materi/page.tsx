@@ -319,12 +319,9 @@ loadNotifikasi()
     <div className="h-screen w-full flex overflow-hidden" style={{ background: palette.paper, fontFamily: "Inter, ui-sans-serif, system-ui" }}>
       {/* SIDEBAR */}
       <aside className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 overflow-y-auto" style={{ width: "260px", background: palette.navy }}>
-        <div className="px-6 pt-7 pb-6">
-          <p className="text-white font-bold text-lg tracking-tight" style={{ fontFamily: "Georgia, serif" }}>
-            Lampung Cerdas
-          </p>
-          <p className="text-xs mt-1" style={{ color: "#AEB8CC" }}>Portal Bank Soal TKA</p>
-        </div>
+     <div className="px-6 pt-7 pb-6 flex items-center justify-center">
+  <img src="/logo-lampung-cerdas.png" alt="Logo" className="h-14 w-auto" />
+</div>
 
         <nav className="px-3 mt-2 flex-1">
           <p className="px-3 text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: "#7C88A6" }}>

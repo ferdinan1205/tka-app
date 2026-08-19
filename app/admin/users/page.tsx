@@ -27,7 +27,7 @@ const MENU = [
   { label: "Ranking",        icon: "◎",  path: "/admin/ranking" },
   { label: "Rekap Nilai",    icon: "≋",  path: "/admin/rekap"   },
   { label: "Manajemen User", icon: "◉",  path: "/admin/users"   },
-  { label: "Token Ujian",    icon: "⟐",  path: "/admin/token"   },
+  { label: "Manajemen Token", icon: "⟐",  path: "/admin/token"   },
 ]
 
 const G = {
@@ -276,21 +276,14 @@ export default function AdminUsersPage() {
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
-        {/* Brand */}
-        <div className="px-5 pt-6 pb-4" style={{ borderBottom: "1px solid rgba(56,189,248,.1)" }}>
-          <div className="flex items-center gap-3">
-            <div style={{ background: "linear-gradient(135deg,#38bdf8,#818cf8)", boxShadow: "0 4px 14px rgba(56,189,248,.4)" }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-base shadow-lg">
-              🎓
-            </div>
-            <div>
-              <p style={{ fontFamily: "'Inter',sans-serif", letterSpacing: "0.04em", color: "#f8fafc" }}
-                className="font-semibold text-[13px] leading-none">LAMPUNG</p>
-              <p style={{ color: "#7dd3fc", letterSpacing: "1.5px" }}
-                className="text-[10px] mt-1 font-normal">Smart Education</p>
-            </div>
-          </div>
-        </div>
+{/* Brand */}
+<div className="px-5 pt-6 pb-4 flex items-center justify-center" style={{ borderBottom: "1px solid rgba(56,189,248,.1)" }}>
+  <img
+    src="/logo-lampung-cerdas.png"
+    alt="Lampung Cerdas"
+    className="h-12 w-auto object-contain"
+  />
+</div>
 
         {/* Admin badge */}
         <div className="px-3 pt-4 pb-2">
