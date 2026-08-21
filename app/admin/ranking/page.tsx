@@ -19,6 +19,11 @@ type Package = {
   nama_paket: string
 }
 
+type Kelas = {
+  id: number
+  nama_kelas: string
+}
+
 const MENU = [
   { label: "Dashboard",      icon: "⌂",  path: "/admin"         },
   { label: "Kelola Soal",    icon: "✎",  path: "/admin/soal"    },
@@ -55,9 +60,13 @@ export default function RankingAdmin() {
 
   const [ranking,         setRanking        ] = useState<Ranking[]>([])
   const [packages,        setPackages       ] = useState<Package[]>([])
+  const [kelasList,       setKelasList      ] = useState<Kelas[]>([])
+  const [kelasPaketMap,   setKelasPaketMap  ] = useState<Record<string, string[]>>({}) // kelas_id -> package_id[]
+  const [userKelasMap,    setUserKelasMap   ] = useState<Record<string, string[]>>({}) // user_id  -> kelas_id[]
   const [loading,         setLoading        ] = useState(true)
   const [search,          setSearch         ] = useState("")
   const [selectedPackage, setSelectedPackage] = useState<string>("all")
+  const [selectedKelas,   setSelectedKelas  ] = useState<string>("all")
   const [adminName,       setAdminName      ] = useState("Admin")
   const [sidebarOpen,     setSidebarOpen    ] = useState(false)
 
@@ -97,9 +106,41 @@ export default function RankingAdmin() {
     const { data: packagesData } = await supabase
       .from("packages").select("id, nama_paket").order("id", { ascending: true })
 
-    const profiles    = (profileData  || []) as any[]
-    const pkgs        = (packagesData || []) as Package[]
+    const { data: kelasData } = await supabase
+      .from("kelas").select("id, nama_kelas").order("nama_kelas", { ascending: true })
+
+    const { data: aksesKelasData } = await supabase
+      .from("akses_kelas").select("user_id, kelas_id")
+
+    const { data: kelasPaketData } = await supabase
+      .from("kelas_paket").select("kelas_id, package_id")
+
+    const profiles = (profileData || []) as any[]
+    const pkgs      = (packagesData || []) as Package[]
+    const kelas     = (kelasData    || []) as Kelas[]
+
     setPackages(pkgs)
+    setKelasList(kelas)
+
+    // user_id -> [kelas_id, ...]
+    const uKelasMap: Record<string, string[]> = {}
+    ;(aksesKelasData || []).forEach((row: any) => {
+      const uid = String(row.user_id)
+      const kid = String(row.kelas_id)
+      if (!uKelasMap[uid]) uKelasMap[uid] = []
+      uKelasMap[uid].push(kid)
+    })
+    setUserKelasMap(uKelasMap)
+
+    // kelas_id -> [package_id, ...]
+    const kPaketMap: Record<string, string[]> = {}
+    ;(kelasPaketData || []).forEach((row: any) => {
+      const kid = String(row.kelas_id)
+      const pid = String(row.package_id)
+      if (!kPaketMap[kid]) kPaketMap[kid] = []
+      kPaketMap[kid].push(pid)
+    })
+    setKelasPaketMap(kPaketMap)
 
     const finalRanking = (rankingData || []).map((item: any) => {
       const user  = profiles.find((p) => p.id === item.user_id)
@@ -123,7 +164,15 @@ export default function RankingAdmin() {
     router.push("/login")
   }
 
+  // paket yang ditampilkan sbg chip filter → kalau kelas dipilih, cuma paket yg terdaftar di kelas itu
+  const visiblePackages = selectedKelas === "all"
+    ? packages
+    : packages.filter((pkg) => (kelasPaketMap[selectedKelas] || []).includes(String(pkg.id)))
+
   const filtered = ranking
+    .filter((item) =>
+      selectedKelas === "all" ? true : (userKelasMap[item.user_id] || []).includes(selectedKelas)
+    )
     .filter((item) =>
       selectedPackage === "all" ? true : item.package_id === selectedPackage
     )
@@ -302,22 +351,53 @@ export default function RankingAdmin() {
             </span>
           </div>
 
+          {/* ── FILTER KELAS ── */}
+          {kelasList.length > 0 && (
+            <div className="fade-up d2 space-y-1.5">
+              <p style={{ color: "#94a3b8", letterSpacing: "1px", fontSize: "10px" }}
+                className="font-medium uppercase px-0.5">Kelas</p>
+              <div className="flex flex-wrap gap-2">
+                <FilterBtn
+                  label="Semua kelas"
+                  active={selectedKelas === "all"}
+                  onClick={() => { setSelectedKelas("all"); setSelectedPackage("all") }}
+                  variant="kelas"
+                />
+                {kelasList.map((k) => (
+                  <FilterBtn
+                    key={k.id}
+                    label={k.nama_kelas}
+                    active={selectedKelas === String(k.id)}
+                    onClick={() => { setSelectedKelas(String(k.id)); setSelectedPackage("all") }}
+                    variant="kelas"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── FILTER PAKET ── */}
-          <div className="fade-up d2 flex flex-wrap gap-2">
-            <FilterBtn
-              label="Semua paket"
-              active={selectedPackage === "all"}
-              onClick={() => setSelectedPackage("all")}
-            />
-            {packages.map((pkg) => (
-              <FilterBtn
-                key={pkg.id}
-                label={pkg.nama_paket}
-                active={selectedPackage === String(pkg.id)}
-                onClick={() => setSelectedPackage(String(pkg.id))}
-              />
-            ))}
-          </div>
+          {visiblePackages.length > 0 && (
+            <div className="fade-up d2 space-y-1.5">
+              <p style={{ color: "#94a3b8", letterSpacing: "1px", fontSize: "10px" }}
+                className="font-medium uppercase px-0.5">Paket</p>
+              <div className="flex flex-wrap gap-2">
+                <FilterBtn
+                  label="Semua paket"
+                  active={selectedPackage === "all"}
+                  onClick={() => setSelectedPackage("all")}
+                />
+                {visiblePackages.map((pkg) => (
+                  <FilterBtn
+                    key={pkg.id}
+                    label={pkg.nama_paket}
+                    active={selectedPackage === String(pkg.id)}
+                    onClick={() => setSelectedPackage(String(pkg.id))}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── SEARCH ── */}
           <div className="fade-up d2 relative">
@@ -335,9 +415,13 @@ export default function RankingAdmin() {
 
           {/* ── SECTION LABEL ── */}
           <p className="fade-up d3 text-sm font-medium text-slate-600">
-            {selectedPackage === "all"
-              ? "Semua paket — leaderboard gabungan"
-              : packages.find((p) => String(p.id) === selectedPackage)?.nama_paket
+            {selectedKelas === "all"
+              ? (selectedPackage === "all"
+                  ? "Semua kelas & paket — leaderboard gabungan"
+                  : `Semua kelas — ${packages.find((p) => String(p.id) === selectedPackage)?.nama_paket}`)
+              : `${kelasList.find((k) => String(k.id) === selectedKelas)?.nama_kelas}${
+                  selectedPackage === "all" ? "" : " — " + packages.find((p) => String(p.id) === selectedPackage)?.nama_paket
+                }`
             }
           </p>
 
@@ -367,9 +451,9 @@ export default function RankingAdmin() {
                   <div className="text-4xl mb-3">🏆</div>
                   <p className="text-sm font-medium text-slate-700">Ranking belum tersedia</p>
                   <p className="text-xs text-slate-400 mt-1">
-                    {selectedPackage === "all"
+                    {selectedKelas === "all" && selectedPackage === "all"
                       ? "Data ranking siswa belum ada"
-                      : "Belum ada siswa yang selesai di paket ini"}
+                      : "Belum ada siswa yang selesai untuk filter ini"}
                   </p>
                 </div>
               )}
@@ -385,14 +469,18 @@ export default function RankingAdmin() {
 // ── sub-components ────────────────────────────────────────────
 
 function FilterBtn({
-  label, active, onClick
-}: { label: string; active: boolean; onClick: () => void }) {
+  label, active, onClick, variant = "paket"
+}: { label: string; active: boolean; onClick: () => void; variant?: "paket" | "kelas" }) {
+  const activeStyle = variant === "kelas"
+    ? { background: "linear-gradient(135deg,#7c3aed,#4f46e5)", color: "#fff", boxShadow: "0 4px 12px rgba(124,58,237,.28)" }
+    : { background: "linear-gradient(135deg,#0ea5e9,#0d9488)", color: "#fff", boxShadow: "0 4px 12px rgba(14,165,233,.28)" }
+
   return (
     <button
       onClick={onClick}
       className="rk-chip h-8 px-4 rounded-full text-xs font-medium"
       style={active
-        ? { background: "linear-gradient(135deg,#0ea5e9,#0d9488)", color: "#fff", boxShadow: "0 4px 12px rgba(14,165,233,.28)" }
+        ? activeStyle
         : { background: "#fff", color: "#475569", border: "1px solid rgba(15,23,42,.08)" }
       }
     >
