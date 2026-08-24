@@ -22,6 +22,13 @@ function stripHtml(html: string): string {
     .trim()
 }
 
+// Bersihkan HTML & newline dari satu opsi jawaban, supaya jadi teks 1 baris rapi
+// (mencegah "A." dan isinya terpisah baris, atau tanda kurung kepotong)
+function cleanOption(html: string): string {
+  if (!html) return ""
+  return stripHtml(html).replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim()
+}
+
 async function urlToBase64(url: string): Promise<{ base64: string; mediaType: string } | null> {
   try {
     const res = await fetch(url)
@@ -47,11 +54,11 @@ async function urlToBase64(url: string): Promise<{ base64: string; mediaType: st
 async function readImageWithVision(imageUrls: string[]): Promise<string> {
   if (!imageUrls || imageUrls.length === 0) return ""
 
-  const apiKey = process.env.OPENROUTER_API_KEY
-  console.log("[AI] OPENROUTER_API_KEY:", apiKey ? apiKey.slice(0, 15) + "..." : "UNDEFINED / KOSONG")
+  const apiKey = process.env.SUMOPOD_API_KEY
+  console.log("[AI] SUMOPOD_API_KEY:", apiKey ? apiKey.slice(0, 15) + "..." : "UNDEFINED / KOSONG")
 
   if (!apiKey) {
-    console.warn("[AI] OPENROUTER_API_KEY tidak ada — skip Vision")
+    console.warn("[AI] SUMOPOD_API_KEY tidak ada — skip Vision")
     return ""
   }
 
@@ -63,7 +70,7 @@ async function readImageWithVision(imageUrls: string[]): Promise<string> {
     return ""
   }
 
-  console.log(`[AI] Mengirim ${validImages.length} gambar ke OpenRouter Vision`)
+  console.log(`[AI] Mengirim ${validImages.length} gambar ke Sumopod Vision`)
 
   const content: any[] = validImages.map((img) => ({
     type: "image_url",
@@ -72,56 +79,54 @@ async function readImageWithVision(imageUrls: string[]): Promise<string> {
 
   content.push({
     type: "text",
-    text: "Ekstrak semua data dari gambar/tabel ini. Tuliskan isinya secara lengkap dan terstruktur dalam teks biasa. Sertakan semua angka, label, persentase, atau data lain yang terlihat.",
+    text: "Ekstrak SEMUA data dari gambar/tabel ini secara lengkap dan presisi, baris per baris. Kalau ini tabel, tuliskan ulang setiap baris data secara eksplisit (misal: 'Siswa 1: Jam Belajar=5, Nilai=65'), jangan dirangkum atau digeneralisir jadi rentang. Sertakan semua angka, label, persentase, atau data lain yang terlihat persis seperti aslinya.",
   })
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetch("https://ai.sumopod.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://localhost:3000",
-      "X-Title": "TKA App",
     },
     body: JSON.stringify({
-      model: "openrouter/auto",
+      model: "gpt-4.1-nano",
       messages: [{ role: "user", content }],
     }),
   })
 
   const data = await response.json()
-  console.log("[AI] OpenRouter response status:", response.status)
+  console.log("[AI] Sumopod Vision response status:", response.status)
 
   if (data?.error) {
-    console.warn("[AI] OpenRouter Vision error:", data.error)
+    console.warn("[AI] Sumopod Vision error:", data.error)
     return ""
   }
 
   const result = data?.choices?.[0]?.message?.content || ""
-  console.log("[AI] Hasil Vision OpenRouter:", result.slice(0, 200))
+  console.log("[AI] Hasil Vision Sumopod:", result.slice(0, 200))
   return result
 }
 
 export async function POST(req: Request) {
   try {
-   const {
-  soal,
-  jawaban_benar,
-  jawaban_user,
+    const {
+      soal,
+      jawaban_benar,
+      jawaban_user,
 
-  jawaban_benar_huruf,
-  jawaban_user_huruf,
+      jawaban_benar_huruf,
+      jawaban_user_huruf,
 
-  pertanyaan,
-  images,
-  opsi,
-  opsi_raw
-} = await req.json()
+      pertanyaan,
+      images,
+      opsi,
+      opsi_raw,
+    } = await req.json()
 
     console.log("[AI] POST diterima — images:", images)
 
-    const apiKey = process.env.GROQ_API_KEY
-    if (!apiKey) return NextResponse.json({ text: "GROQ API KEY belum diisi" })
+    const apiKey = process.env.SUMOPOD_API_KEY
+    if (!apiKey) return NextResponse.json({ text: "SUMOPOD API KEY belum diisi" })
 
     let imageData = ""
     if (images && images.length > 0) {
@@ -155,8 +160,8 @@ ${opsi ? `\nPilihan jawaban:\nA. ${opsi.a}\nB. ${opsi.b}\nC. ${opsi.c}\nD. ${ops
 
 Pertanyaan siswa: ${pertanyaan}
 `
-} else {
-  systemPrompt = `
+    } else {
+      systemPrompt = `
 Kamu adalah guru TKA profesional.
 Buat pembahasan yang rapi, jelas, step by step, mudah dipahami siswa.
 ${imageData ? "Gunakan data dari gambar yang sudah diekstrak untuk membuat pembahasan yang akurat dan spesifik." : ""}
@@ -170,6 +175,12 @@ INSTRUKSI PENTING:
 6. Jelaskan MENGAPA jawaban siswa salah (jika salah)
 7. Berikan TIPS untuk mengerjakan soal serupa
 
+ATURAN KEDALAMAN ANALISIS (WAJIB, JANGAN DILANGGAR):
+- Kalau ada data mentah (tabel/angka) dari soal atau dari hasil ekstraksi gambar, WAJIB kutip data itu SECARA SPESIFIK per-item/per-baris (misal: "Siswa 4 belajar 10 jam → nilai 90", "Siswa 3 belajar 3 jam → nilai 60"), BUKAN cuma rentang umum seperti "jam belajar rendah nilai 60-70".
+- Urutkan atau kelompokkan data itu sedemikian rupa sehingga polanya kelihatan jelas dan bisa dibuktikan dari angka aslinya, bukan cuma diklaim.
+- Kalau relevan (misal soal tentang korelasi/asosiasi/tren), jelaskan pola itu dengan membandingkan minimal 3 pasang data konkret, bukan generalisasi.
+- Jangan mengarang angka. Kalau data mentahnya tidak lengkap/tidak ada, katakan itu dengan jujur, jangan menebak.
+
 ATURAN FORMAT WAJIB (PENTING, JANGAN DILANGGAR):
 - Huruf opsi dan isinya harus SELALU berada di baris yang SAMA. Contoh yang BENAR: "A. 10°". Contoh yang SALAH: "A." lalu baris baru "10°".
 - Jangan pernah menaruh baris kosong di antara huruf opsi dan isi opsi, atau di antara label (misalnya "JAWABAN SISWA:") dan isinya.
@@ -179,6 +190,7 @@ ATURAN FORMAT WAJIB (PENTING, JANGAN DILANGGAR):
   - C. 45°
   - D. 60°
 - "JAWABAN SISWA: A. 10°" dan "JAWABAN BENAR: D. 60°" masing-masing HARUS satu baris utuh, jangan dipecah.
+- Judul section seperti "### ❌ Jawaban Siswa (...)" HARUS ditutup dalam baris yang sama, jangan biarkan tanda kurung penutup ")" turun ke baris berikutnya sendirian.
 
 Gunakan format MARKDOWN dengan:
 - **teks tebal** untuk poin penting
@@ -186,46 +198,50 @@ Gunakan format MARKDOWN dengan:
 - > untuk kutipan
 - ### untuk subjudul
 `
-  
-  // Format jawaban user dan jawaban benar dengan opsi lengkap
-  let jawabanUserText = jawaban_user || ""
-  let jawabanBenarText = jawaban_benar || ""
-  
-  // Jika ada opsi_raw, tampilkan teks lengkap dari opsi yang dipilih
-if (opsi_raw && jawaban_user_huruf) {
-  const userText =
-    opsi_raw[jawaban_user_huruf.toLowerCase()] || ""
 
-  jawabanUserText =
-    `${jawaban_user_huruf.toUpperCase()}. ${userText}`
-}
+      // Bersihkan opsi (hapus HTML, satukan jadi 1 baris) sebelum dipakai di prompt
+      const opsiClean = opsi_raw
+        ? {
+            a: cleanOption(opsi_raw.a),
+            b: cleanOption(opsi_raw.b),
+            c: cleanOption(opsi_raw.c),
+            d: cleanOption(opsi_raw.d),
+            e: cleanOption(opsi_raw.e),
+          }
+        : null
 
-if (opsi_raw && jawaban_benar_huruf) {
-  const benarText =
-    opsi_raw[jawaban_benar_huruf.toLowerCase()] || ""
+      // Format jawaban user dan jawaban benar dengan opsi lengkap (sudah bersih)
+      let jawabanUserText = jawaban_user || ""
+      let jawabanBenarText = jawaban_benar || ""
 
-  jawabanBenarText =
-    `${jawaban_benar_huruf.toUpperCase()}. ${benarText}`
-}
-  
-  // Format opsi jawaban dengan rapi
-  let opsiFormatted = ""
-  if (opsi_raw) {
-    opsiFormatted = `
-A. ${opsi_raw.a || ""}
-B. ${opsi_raw.b || ""}
-C. ${opsi_raw.c || ""}
-D. ${opsi_raw.d || ""}
-${opsi_raw.e ? `E. ${opsi_raw.e}` : ""}
-`
-  } else if (opsi) {
-    opsiFormatted = opsi
-  }
+      if (opsiClean && jawaban_user_huruf) {
+        const key = jawaban_user_huruf.toLowerCase() as "a" | "b" | "c" | "d" | "e"
+        const userText = opsiClean[key] || ""
+        jawabanUserText = `${jawaban_user_huruf.toUpperCase()}. ${userText}`
+      }
 
-  userPrompt = `
+      if (opsiClean && jawaban_benar_huruf) {
+        const key = jawaban_benar_huruf.toLowerCase() as "a" | "b" | "c" | "d" | "e"
+        const benarText = opsiClean[key] || ""
+        jawabanBenarText = `${jawaban_benar_huruf.toUpperCase()}. ${benarText}`
+      }
+
+      // Format opsi jawaban dengan rapi (sudah bersih, satu baris per opsi)
+      let opsiFormatted = ""
+      if (opsiClean) {
+        opsiFormatted = `A. ${opsiClean.a}
+B. ${opsiClean.b}
+C. ${opsiClean.c}
+D. ${opsiClean.d}
+${opsiClean.e ? `E. ${opsiClean.e}` : ""}`
+      } else if (opsi) {
+        opsiFormatted = opsi
+      }
+
+      userPrompt = `
 SOAL:
 ${soalBersih}
-${imageData ? `\nDATA DARI GAMBAR/TABEL:\n${imageData}` : ""}
+${imageData ? `\nDATA MENTAH DARI GAMBAR/TABEL (WAJIB dikutip spesifik per-baris di pembahasan, jangan dirangkum jadi rentang umum):\n${imageData}` : ""}
 
 OPSI JAWABAN:
 ${opsiFormatted || "Tidak tersedia"}
@@ -233,26 +249,27 @@ ${opsiFormatted || "Tidak tersedia"}
 JAWABAN SISWA: ${jawabanUserText}
 JAWABAN BENAR: ${jawabanBenarText}
 
-BUAT PEMBAHASAN LENGKAP MENGGUNAKAN FORMAT MARKDOWN, dengan struktur berikut (ingat: huruf opsi dan isinya dalam SATU baris, contoh "A. 10°", jangan dipisah baris):
+BUAT PEMBAHASAN LENGKAP MENGGUNAKAN FORMAT MARKDOWN, dengan struktur berikut (ingat: huruf opsi dan isinya dalam SATU baris, contoh "A. 10°", jangan dipisah baris; dan tanda kurung penutup harus tetap satu baris dengan judulnya):
 ### 📝 Ringkasan Soal
 ### 📋 Opsi Jawaban
 ### ❌ Jawaban Siswa (${jawabanUserText})
 ### ✅ Jawaban Benar (${jawabanBenarText})
 ### 📚 Langkah Penyelesaian
+(WAJIB kutip data spesifik per-item/per-baris di sini, bandingkan minimal 3 pasang data konkret untuk membuktikan pola)
 ### 💡 Penjelasan Mengapa Jawaban Benar
 ### 🔍 Mengapa Jawaban Siswa ${jawaban_user && jawaban_user !== jawaban_benar ? "Salah" : "Benar"}
 ### 🎯 Tips Mengerjakan
 `
-}
+    }
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const response = await fetch("https://ai.sumopod.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "gpt-4.1-nano",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -263,11 +280,23 @@ BUAT PEMBAHASAN LENGKAP MENGGUNAKAN FORMAT MARKDOWN, dengan struktur berikut (in
     })
 
     const data = await response.json()
+
+    // Log lengkap supaya kelihatan di terminal kalau ada masalah
+    console.log("[AI] Sumopod status:", response.status)
+    console.log("[AI] Sumopod raw response:", JSON.stringify(data))
+
+    if (data?.error) {
+      // Provider balikin error eksplisit (key invalid, model tidak ada, rate limit, dll)
+      return NextResponse.json({
+        text: `AI Error: ${data.error.message || JSON.stringify(data.error)}`,
+      })
+    }
+
     const text = data?.choices?.[0]?.message?.content
 
-    return NextResponse.json({ text: text || "AI tidak merespon" })
+    return NextResponse.json({ text: text || `AI tidak merespon (status: ${response.status})` })
   } catch (error) {
-    console.log(error)
-    return NextResponse.json({ text: "Server Error" })
+    console.log("[AI] Exception:", error)
+    return NextResponse.json({ text: "Server Error: " + (error as Error).message })
   }
 }

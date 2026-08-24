@@ -170,6 +170,7 @@ const kategoriList = [
   "Sosiologi", "Sejarah", "Antropologi", "Bahasa Arab",
   "Bahasa Mandarin", "Bahasa Jepang", "Bahasa Korea",
   "Bahasa Jerman", "Bahasa Prancis", "PPKN", "PKK", "TPS", "Literasi",
+  "Matematika SMP", "Bahasa Indonesia SMP",
 ]
 
 const CARD_ACCENTS = ["#D98C2B", "#2F7A6D", "#1B2A4A", "#A32D2D", "#3B6D11", "#185FA5"]
