@@ -3,10 +3,10 @@
 import { useState, useEffect, Suspense } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Eye, EyeOff, GraduationCap, ShieldX } from "lucide-react"
+import { Eye, EyeOff, Mail, Lock, User, Loader2, ShieldX } from "lucide-react"
+import CustomAlert, { AlertState } from "@/components/CustomAlert"
 
 function RegisterForm() {
-
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -15,124 +15,143 @@ function RegisterForm() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [alert, setAlert] = useState<AlertState | null>(null)
 
-  // TEMPORARY: gerbang kode dinonaktifkan sementara — register terbuka untuk umum.
-  // Untuk mengunci lagi: ganti balik ke useState<boolean | null>(null) dan
-  // un-comment blok pengecekan kode di dalam useEffect di bawah.
+  // Gerbang kode saat ini terbuka untuk umum
   const [aksesDiizinkan, setAksesDiizinkan] = useState<boolean | null>(true)
 
+  const showAlert = (type: "success" | "error" | "warning" | "info", title: string, message: string) => {
+    setAlert({ type, title, message })
+  }
+
   useEffect(() => {
-
-    // TEMPORARY: gerbang kode dinonaktifkan sementara — register terbuka untuk umum.
-    // Untuk mengunci lagi, un-comment blok di bawah dan set aksesDiizinkan awal balik ke null.
-
-    /*
-    const kodeDariUrl = searchParams.get("kode")
-    const KODE_VALID = process.env.NEXT_PUBLIC_REGISTER_CODE
-
-    if (kodeDariUrl && kodeDariUrl === KODE_VALID) {
-      sessionStorage.setItem("register_access", "true")
-      setAksesDiizinkan(true)
-      window.history.replaceState({}, "", "/register")
-    } else {
-      const sudahAda = sessionStorage.getItem("register_access")
-      if (sudahAda === "true") {
-        setAksesDiizinkan(true)
-
-        // Auto isi form kalau datang dari SSO yang gagal
-        const ssoNama     = sessionStorage.getItem("sso_nama")
-        const ssoEmail    = sessionStorage.getItem("sso_email")
-        const ssoPassword = sessionStorage.getItem("sso_password")
-        if (ssoNama)     setNama(ssoNama)
-        if (ssoEmail)    setEmail(ssoEmail)
-        if (ssoPassword) setPassword(ssoPassword)
-
-      } else {
-        setAksesDiizinkan(false)
-      }
+    // Auto isi form kalau datang dari redirect SSO
+    if (typeof window !== "undefined") {
+      const ssoNama = sessionStorage.getItem("sso_nama")
+      const ssoEmail = sessionStorage.getItem("sso_email")
+      const ssoPassword = sessionStorage.getItem("sso_password")
+      if (ssoNama) setNama(ssoNama)
+      if (ssoEmail) setEmail(ssoEmail)
+      if (ssoPassword) setPassword(ssoPassword)
     }
-    */
-
   }, [])
 
-  async function handleRegister() {
+  async function handleRegister(e?: React.FormEvent) {
+    if (e) e.preventDefault()
 
-    if (!nama || !email || !password) {
-      alert("Nama, email dan password wajib diisi")
+    if (!nama.trim() || !email.trim() || !password) {
+      showAlert("warning", "Data Belum Lengkap", "Silakan lengkapi nama lengkap, email, dan kata sandi.")
+      return
+    }
+
+    if (password.length < 6) {
+      showAlert("warning", "Kata Sandi Kurang", "Kata sandi minimal harus terdiri dari 6 karakter.")
       return
     }
 
     setLoading(true)
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    try {
+      // 1. Supabase Auth Sign Up
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password,
+      })
 
-    if (error) {
-      setLoading(false)
-      alert("Register gagal: " + error.message)
-      return
-    }
-
-    const user = data.user
-
-    if (user) {
-
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert([{
-          id: user.id,
-          nama: nama,
-          email: email,
-          role: "siswa",
-        }])
-
-      if (profileError) {
+      if (error) {
         setLoading(false)
-        alert("Gagal simpan profile: " + profileError.message)
+        showAlert("error", "Registrasi Gagal", error.message)
         return
       }
 
+      const user = data.user
+
+      // 2. Simpan Profil Siswa
+      if (user) {
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert([{
+            id: user.id,
+            nama: nama.trim(),
+            email: email.trim(),
+            role: "siswa",
+          }])
+
+        if (profileError) {
+          setLoading(false)
+          showAlert("error", "Gagal Menyimpan Profil", profileError.message)
+          return
+        }
+      }
+
+      // 3. Otomatis masuk (Auto Sign-In jika diperlukan)
+      if (!data.session) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: password,
+        })
+
+        if (signInError) {
+          setLoading(false)
+          showAlert("info", "Pendaftaran Berhasil", "Akun berhasil dibuat. Silakan login dengan akun Anda.")
+          setTimeout(() => {
+            router.push("/login")
+          }, 1500)
+          return
+        }
+      }
+
+      // Bersihkan session storage
+      sessionStorage.removeItem("register_access")
+      sessionStorage.removeItem("sso_nama")
+      sessionStorage.removeItem("sso_email")
+      sessionStorage.removeItem("sso_password")
+
+      showAlert("success", "Registrasi Berhasil!", "Selamat datang! Mengalihkan ke dashboard...")
+
+      // Langsung arahkan ke dashboard
+      setTimeout(() => {
+        setLoading(false)
+        router.push("/dashboard")
+      }, 1000)
+
+    } catch (err: any) {
+      setLoading(false)
+      showAlert("error", "Terjadi Kesalahan", err?.message || "Gagal menghubungkan ke server.")
     }
-
-    // Bersihkan semua sessionStorage
-    sessionStorage.removeItem("register_access")
-    sessionStorage.removeItem("sso_nama")
-    sessionStorage.removeItem("sso_email")
-    sessionStorage.removeItem("sso_password")
-
-    setLoading(false)
-    alert("Akun berhasil dibuat, silakan login")
-    router.push("/login")
-
   }
 
   if (aksesDiizinkan === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200">
-        <p className="text-gray-600 text-lg">Memverifikasi akses...</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <p className="text-slate-500 text-sm">Memverifikasi akses...</p>
+        </div>
       </div>
     )
   }
 
   if (aksesDiizinkan === false) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 p-6">
-        <div className="w-full max-w-md bg-white/90 backdrop-blur-lg rounded-[35px] shadow-2xl border border-white/40 p-8 text-center">
-          <div className="flex justify-center mb-5">
-            <div className="bg-red-100 w-20 h-20 rounded-full flex items-center justify-center">
-              <ShieldX size={38} className="text-red-500" />
+      <div className="min-h-screen flex items-center justify-center bg-white p-4 sm:p-6">
+        <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-3xl shadow-xl shadow-blue-500/5 p-8 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="bg-rose-50 text-rose-500 w-14 h-14 rounded-2xl flex items-center justify-center">
+              <ShieldX size={28} />
             </div>
           </div>
-          <h1 className="text-2xl font-black text-red-600 mb-3">
-            Akses Ditolak
+          <h1 className="text-xl font-bold text-slate-900 mb-2">
+            Akses Dibatasi
           </h1>
-          <p className="text-gray-600 text-sm mb-6">
-            Halaman ini hanya bisa diakses melalui link resmi. Silakan hubungi pihak bimbel untuk mendapatkan akses.
+          <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+            Halaman ini hanya bisa diakses melalui tautan resmi Lampung Cerdas.
           </p>
-          <a href="/login" className="text-blue-600 font-semibold hover:underline text-sm">
-            Kembali ke Login
+          <a
+            href="/login"
+            className="inline-flex items-center justify-center w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl text-sm font-semibold transition"
+          >
+            Kembali ke Halaman Login
           </a>
         </div>
       </div>
@@ -140,105 +159,155 @@ function RegisterForm() {
   }
 
   return (
+    <div className="min-h-screen flex flex-col justify-center items-center bg-blue-50 p-4 sm:p-6">
 
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 p-6">
+      {/* Floating Alert */}
+      <CustomAlert alert={alert} onClose={() => setAlert(null)} />
 
-      <div className="w-full max-w-md bg-white/90 backdrop-blur-lg rounded-[35px] shadow-2xl border border-white/40 p-8">
+      {/* Main Register Card */}
+      <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-3xl shadow-xl shadow-blue-500/5 p-7 sm:p-9 my-4">
 
-        <div className="flex justify-center mb-5">
-          <div className="bg-blue-600 w-20 h-20 rounded-full flex items-center justify-center shadow-lg">
-            <GraduationCap size={38} className="text-white" />
-          </div>
-        </div>
-
-        <h1 className="text-4xl font-black text-center text-blue-700 mb-2">
-          Lampung Cerdas
-        </h1>
-
-        <p className="text-center text-gray-600 mb-8 text-sm">
-          Buat Akun Baru
-        </p>
-
-        <div className="mb-4">
-          <label className="text-gray-700 font-semibold text-sm mb-2 block">
-            Nama Lengkap
-          </label>
-          <input
-            type="text"
-            placeholder="Masukkan nama lengkap"
-            className="w-full bg-gray-100 border border-gray-200 rounded-2xl p-4 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-            value={nama}
-            onChange={(e) => setNama(e.target.value)}
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="text-gray-700 font-semibold text-sm mb-2 block">
-            Email
-          </label>
-          <input
-            type="email"
-            placeholder="Masukkan email"
-            className="w-full bg-gray-100 border border-gray-200 rounded-2xl p-4 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-
-        <div className="mb-6">
-          <label className="text-gray-700 font-semibold text-sm mb-2 block">
-            Password
-          </label>
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Masukkan password"
-              className="w-full bg-gray-100 border border-gray-200 rounded-2xl p-4 pr-14 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+        {/* Logo & Heading */}
+        <div className="text-center mb-8">
+          <div className="inline-block mb-3">
+            <img
+              src="/logo-lampung-cerdas.png"
+              alt="Lampung Cerdas"
+              className="h-16 w-auto object-contain mx-auto"
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-green-600 transition"
-            >
-              {showPassword ? <EyeOff size={22} /> : <Eye size={22} />}
-            </button>
           </div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            Daftar Akun Baru
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Buat akun untuk mulai belajar dan tryout
+          </p>
         </div>
 
-        <button
-          onClick={handleRegister}
-          disabled={loading}
-          className="w-full bg-green-500 hover:bg-green-600 text-white p-4 rounded-2xl font-bold text-lg shadow-lg transition hover:scale-[1.02] disabled:opacity-60 mb-4"
-        >
-          {loading ? "Loading..." : "Register"}
-        </button>
+        {/* Form */}
+        <form onSubmit={handleRegister} className="space-y-4">
 
-        <p className="text-center text-gray-600 text-sm">
-          Sudah punya akun?{" "}
-          <a href="/login" className="text-blue-600 font-semibold hover:underline">
-            Login di sini
-          </a>
-        </p>
+          {/* Nama Field */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              Nama Lengkap
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <User className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                required
+                placeholder="Nama lengkap Anda"
+                className="w-full bg-slate-50/70 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-50 transition"
+                value={nama}
+                onChange={(e) => setNama(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+          </div>
 
-        <p className="text-center text-gray-500 text-sm mt-6">
-          © 2026 Lampung Cerdas
-        </p>
+          {/* Email Field */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              Email
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Mail className="w-4 h-4" />
+              </div>
+              <input
+                type="email"
+                required
+                placeholder="nama@email.com"
+                className="w-full bg-slate-50/70 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-50 transition"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          {/* Password Field */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              Password
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Lock className="w-4 h-4" />
+              </div>
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                placeholder="Minimal 6 karakter"
+                className="w-full bg-slate-50/70 border border-slate-200 rounded-xl pl-10 pr-11 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-50 transition"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition"
+                tabIndex={-1}
+                aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 transition duration-150 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Mendaftarkan...</span>
+              </>
+            ) : (
+              <span>Daftar Akun</span>
+            )}
+          </button>
+        </form>
+
+        {/* Footer Link */}
+        <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+          <p className="text-sm text-slate-500">
+            Sudah punya akun?{" "}
+            <a
+              href="/login"
+              className="text-blue-600 font-semibold hover:text-blue-700 hover:underline transition"
+            >
+              Masuk di sini
+            </a>
+          </p>
+        </div>
 
       </div>
 
+      {/* Copyright */}
+      <p className="text-xs text-slate-400 mt-4 mb-2">
+        © {new Date().getFullYear()} Lampung Cerdas
+      </p>
+
     </div>
-
   )
-
 }
 
 export default function Register() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200">
-        <p className="text-gray-600 text-lg">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <p className="text-slate-500 text-sm">Memuat...</p>
+        </div>
       </div>
     }>
       <RegisterForm />

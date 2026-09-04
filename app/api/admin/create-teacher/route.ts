@@ -41,8 +41,28 @@ export async function POST(req: NextRequest) {
   let userId: string
 
   if (existingUser) {
-    // User sudah ada, tinggal pakai id-nya
+    // User sudah ada → update password sesuai request dari body
     userId = existingUser.id
+
+    const { error: updateError } = await supabase.auth.admin.updateUserById(
+      userId,
+      { password }
+    )
+
+    if (updateError) {
+      return NextResponse.json(
+        { error: `Gagal memperbarui password: ${updateError.message}` },
+        { status: 500 }
+      )
+    }
+
+    // Opsional: perbarui nama jika ada perubahan
+    if (nama) {
+      await supabase
+        .from("profiles")
+        .update({ nama })
+        .eq("id", userId)
+    }
   } else {
     // Belum ada → auto register via admin
     const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
