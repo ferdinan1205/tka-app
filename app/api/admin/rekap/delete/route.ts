@@ -33,8 +33,68 @@ export async function POST(req: NextRequest) {
 
     // 2. Parse body
     const body = await req.json()
-    const { ids } = body as { ids?: number[] }
+    const { ids, target = "hasil", items } = body as {
+      ids?: (number | string)[]
+      target?: "hasil" | "token_used"
+      items?: { id?: number | string; user_id?: string; kategori?: string; package_id?: number | null }[]
+    }
 
+    // ── TARGET: TOKEN_USED ─────────────────────────────────────
+    if (target === "token_used") {
+      if ((!ids || ids.length === 0) && (!items || items.length === 0)) {
+        return NextResponse.json({ error: "Daftar ID token_used tidak boleh kosong" }, { status: 400 })
+      }
+
+      let deletedCount = 0
+
+      if (ids && ids.length > 0) {
+        // Coba hapus berdasarkan ID primary key
+        const { data: deletedData, error: delError } = await supabaseAdmin
+          .from("token_used")
+          .delete()
+          .in("id", ids)
+          .select("id")
+
+        if (delError) {
+          // Jika penghapusan by ID gagal (misal skema tidak punya kolom id terpisah), hapus by items
+          if (items && items.length > 0) {
+            for (const it of items) {
+              if (it.user_id && it.kategori) {
+                let q = supabaseAdmin.from("token_used").delete().eq("user_id", it.user_id).eq("kategori", it.kategori)
+                if (it.package_id) {
+                  q = q.eq("package_id", it.package_id)
+                }
+                await q
+                deletedCount++
+              }
+            }
+          } else {
+            return NextResponse.json({ error: delError.message }, { status: 500 })
+          }
+        } else {
+          deletedCount = deletedData?.length || ids.length
+        }
+      } else if (items && items.length > 0) {
+        for (const it of items) {
+          if (it.user_id && it.kategori) {
+            let q = supabaseAdmin.from("token_used").delete().eq("user_id", it.user_id).eq("kategori", it.kategori)
+            if (it.package_id) {
+              q = q.eq("package_id", it.package_id)
+            }
+            await q
+            deletedCount++
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        count: deletedCount,
+        message: `Berhasil menghapus ${deletedCount} data status token_used`,
+      })
+    }
+
+    // ── TARGET: HASIL (DEFAULT) ────────────────────────────────
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: "Daftar ID data tidak boleh kosong" }, { status: 400 })
     }
@@ -53,7 +113,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, count: 0, message: "Data tidak ditemukan atau sudah terhapus" })
     }
 
-    // 4. Hapus token_used terkait (jika ada) agar status pengerjaan sinkron
+    // 4. Hapus token_used terkait agar status pengerjaan sinkron & siswa bisa ujian ulang jika diinginkan
     for (const h of hasilList) {
       let query = supabaseAdmin.from("token_used").delete().eq("user_id", h.user_id).eq("kategori", h.kategori)
       if (h.package_id) {
@@ -72,7 +132,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: deleteError.message }, { status: 500 })
     }
 
-    // 6. Sinkronisasi ranking_tka untuk paket yang terdampak
+    // 6. Sinkronisasi ranking_tka & pilihan_pendamping untuk paket yang terdampak
     const affectedUserPackages = new Map<string, { user_id: string; package_id: number }>()
     for (const h of hasilList) {
       if (h.package_id && h.user_id) {
@@ -95,6 +155,13 @@ export async function POST(req: NextRequest) {
           .delete()
           .eq("user_id", user_id)
           .eq("package_id", package_id)
+
+        // Reset juga pilihan_pendamping jika seluruh paket dihapus
+        await supabaseAdmin
+          .from("pilihan_pendamping")
+          .delete()
+          .eq("user_id", user_id)
+          .eq("package_id", package_id)
       } else {
         // Perbarui total skor & jumlah ujian pada ranking_tka
         const total = remainingHasil.reduce((sum, item) => sum + (item.skor || 0), 0)
@@ -114,7 +181,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       count: hasilList.length,
-      message: `Berhasil menghapus ${hasilList.length} data hasil simulasi`,
+      message: `Berhasil menghapus ${hasilList.length} data hasil simulasi & token_used terkait`,
     })
   } catch (err: any) {
     console.error("API /api/admin/rekap/delete error:", err)
