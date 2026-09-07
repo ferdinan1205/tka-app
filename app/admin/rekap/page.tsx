@@ -29,6 +29,20 @@ type Rekap = {
   }
 }
 
+type TokenUsedItem = {
+  id: number | string
+  user_id: string
+  kategori: string
+  package_id?: number | null
+  paket_nama?: string
+  created_at?: string
+  profiles: {
+    nama: string
+    email: string
+    foto?: string
+  }
+}
+
 type PaketSummary = {
   paket: string
   package_id?: number
@@ -43,6 +57,7 @@ type PaketSummary = {
   foto?: string
 }
 
+type MainTab = "hasil" | "token_used"
 type ViewMode = "table" | "paket"
 
 type DeleteModalState = {
@@ -50,7 +65,9 @@ type DeleteModalState = {
   title: string
   desc: string
   count: number
-  ids: number[]
+  ids: (number | string)[]
+  target: "hasil" | "token_used"
+  items?: { id?: number | string; user_id?: string; kategori?: string; package_id?: number | null }[]
   isDeleting: boolean
 }
 
@@ -60,7 +77,7 @@ const MENU = [
   { label: "Dashboard",      icon: "⌂",  path: "/admin"         },
   { label: "Kelola Soal",    icon: "✎",  path: "/admin/soal"    },
   { label: "Materi",         icon: "◈",  path: "/admin/materi"  },
-  { label: "Kelas",          icon: "▤",  path: "/admin/kelas"   },   // ← tambahin ini
+  { label: "Kelas",          icon: "▤",  path: "/admin/kelas"   },
   { label: "Ranking",        icon: "◎",  path: "/admin/ranking" },
   { label: "Rekap Nilai",    icon: "≋",  path: "/admin/rekap"   },
   { label: "Manajemen User", icon: "◉",  path: "/admin/users"   },
@@ -101,8 +118,15 @@ export default function AdminRekapPage() {
   const pathname = usePathname()
   const printRef = useRef<HTMLDivElement>(null)
 
+  // ── main tab state ──
+  const [mainTab,       setMainTab      ] = useState<MainTab>("hasil")
+
+  // ── data states ──
   const [data,          setData         ] = useState<Rekap[]>([])
+  const [tokenUsedList, setTokenUsedList] = useState<TokenUsedItem[]>([])
   const [loading,       setLoading      ] = useState(true)
+
+  // ── filters ──
   const [search,        setSearch       ] = useState("")
   const [filterMapel,   setFilterMapel  ] = useState("Semua")
   const [filterPaket,   setFilterPaket  ] = useState("Semua")
@@ -112,8 +136,13 @@ export default function AdminRekapPage() {
   const [sidebarOpen,   setSidebarOpen  ] = useState(false)
   const [pdfLoading,    setPdfLoading   ] = useState(false)
 
-  // ── delete & selection state ──
-  const [selectedIds,   setSelectedIds  ] = useState<Set<number>>(new Set())
+  // ── delete & selection state for HASIL ──
+  const [selectedIds,      setSelectedIds     ] = useState<Set<number>>(new Set())
+
+  // ── delete & selection state for TOKEN_USED ──
+  const [selectedTokenIds, setSelectedTokenIds] = useState<Set<string | number>>(new Set())
+
+  // ── common modal & toast ──
   const [deleteModal,   setDeleteModal  ] = useState<DeleteModalState | null>(null)
   const [toast,         setToast        ] = useState<{ text: string; type: "success" | "error" } | null>(null)
 
@@ -146,27 +175,66 @@ export default function AdminRekapPage() {
   async function getData() {
     setLoading(true)
 
-    const { data: hasilData, error } = await supabase
-      .from("hasil").select("*").order("id", { ascending: false })
+    try {
+      const [
+        { data: hasilData, error: hasilError },
+        { data: profilesData, error: profError },
+        { data: packagesData, error: pkgError },
+        { data: tokenUsedData, error: tokenError },
+      ] = await Promise.all([
+        supabase.from("hasil").select("*").order("id", { ascending: false }),
+        supabase.from("profiles").select("*"),
+        supabase.from("packages").select("id, nama_paket"),
+        supabase.from("token_used").select("*").order("id", { ascending: false }),
+      ])
 
-    if (error) { console.error(error); setLoading(false); return }
+      if (hasilError) console.error("Error fetching hasil:", hasilError)
+      if (profError) console.error("Error fetching profiles:", profError)
+      if (pkgError) console.error("Error fetching packages:", pkgError)
+      if (tokenError) console.error("Error fetching token_used:", tokenError)
 
-    const { data: profiles } = await supabase.from("profiles").select("*")
+      const profiles = profilesData || []
+      const packages = packagesData || []
 
-    const finalData = (hasilData || []).map((item: any) => {
-      const user = profiles?.find((p: any) => p.id === item.user_id)
-      return {
-        ...item,
-        profiles: {
-          nama:  user?.nama  || "Tanpa Nama",
-          email: user?.email || "-",
-          foto:  user?.foto  || "",
-        },
-      }
-    })
+      // Map Hasil
+      const finalHasil = (hasilData || []).map((item: any) => {
+        const user = profiles.find((p: any) => p.id === item.user_id)
+        return {
+          ...item,
+          profiles: {
+            nama:  user?.nama  || "Tanpa Nama",
+            email: user?.email || "-",
+            foto:  user?.foto  || "",
+          },
+        }
+      })
+      setData(finalHasil)
 
-    setData(finalData)
-    setLoading(false)
+      // Map Token Used
+      const finalTokens: TokenUsedItem[] = (tokenUsedData || []).map((item: any, idx: number) => {
+        const user = profiles.find((p: any) => p.id === item.user_id)
+        const pkg = packages.find((p: any) => p.id === item.package_id)
+        return {
+          id: item.id || `${item.user_id}_${item.kategori}_${item.package_id || "null"}_${idx}`,
+          user_id: item.user_id,
+          kategori: item.kategori,
+          package_id: item.package_id,
+          paket_nama: pkg?.nama_paket || (item.package_id ? `Paket #${item.package_id}` : "Ujian Mandiri"),
+          created_at: item.created_at || "",
+          profiles: {
+            nama:  user?.nama  || "Tanpa Nama",
+            email: user?.email || "-",
+            foto:  user?.foto  || "",
+          },
+        }
+      })
+      setTokenUsedList(finalTokens)
+    } catch (err) {
+      console.error("getData error:", err)
+      showToast("Gagal memuat sebagian data", "error")
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function logout() {
@@ -174,26 +242,52 @@ export default function AdminRekapPage() {
     router.push("/login")
   }
 
+  // ── Dropdown Filters ──
   const mapelList = useMemo(() => {
-    return ["Semua", ...Array.from(new Set(data.map((x) => x.kategori)))]
-  }, [data])
+    const list = mainTab === "hasil"
+      ? data.map((x) => x.kategori)
+      : tokenUsedList.map((x) => x.kategori)
+    return ["Semua", ...Array.from(new Set(list.filter(Boolean)))]
+  }, [data, tokenUsedList, mainTab])
 
   const paketList = useMemo(() => {
-    return ["Semua", ...Array.from(new Set(data.map((x) => x.paket).filter(Boolean)))]
-  }, [data])
+    const list = mainTab === "hasil"
+      ? data.map((x) => x.paket).filter(Boolean)
+      : tokenUsedList.map((x) => x.paket_nama).filter(Boolean)
+    return ["Semua", ...Array.from(new Set(list as string[]))]
+  }, [data, tokenUsedList, mainTab])
 
-  const filtered = useMemo(() => {
+  // ── Filtered Hasil ──
+  const filteredHasil = useMemo(() => {
     return data.filter((item) => {
       const key = search.toLowerCase()
       return (
         (item.profiles.nama.toLowerCase().includes(key) ||
-          item.profiles.email.toLowerCase().includes(key)) &&
+          item.profiles.email.toLowerCase().includes(key) ||
+          item.kategori.toLowerCase().includes(key) ||
+          (item.paket || "").toLowerCase().includes(key)) &&
         (filterMapel === "Semua" || item.kategori === filterMapel) &&
         (filterPaket === "Semua" || item.paket    === filterPaket)
       )
     })
   }, [data, search, filterMapel, filterPaket])
 
+  // ── Filtered Token Used ──
+  const filteredTokens = useMemo(() => {
+    return tokenUsedList.filter((item) => {
+      const key = search.toLowerCase()
+      return (
+        (item.profiles.nama.toLowerCase().includes(key) ||
+          item.profiles.email.toLowerCase().includes(key) ||
+          item.kategori.toLowerCase().includes(key) ||
+          (item.paket_nama || "").toLowerCase().includes(key)) &&
+        (filterMapel === "Semua" || item.kategori === filterMapel) &&
+        (filterPaket === "Semua" || item.paket_nama === filterPaket)
+      )
+    })
+  }, [tokenUsedList, search, filterMapel, filterPaket])
+
+  // ── Paket Summaries (Hasil) ──
   const paketSummaries = useMemo((): PaketSummary[] => {
     const map = new Map<string, PaketSummary>()
 
@@ -237,88 +331,160 @@ export default function AdminRekapPage() {
     )
   }, [data, search, filterPaket])
 
-  const totalUjian      = filtered.length
-  const totalSiswa      = new Set(filtered.map((x) => x.user_id)).size
-  const rataNilai       = filtered.length === 0 ? 0 : Math.round(filtered.reduce((a, b) => a + b.skor, 0) / filtered.length)
-  const nilaiTertinggi  = filtered.length === 0 ? 0 : Math.max(...filtered.map((x) => x.skor))
+  // ── Stats Hasil ──
+  const totalUjianHasil     = filteredHasil.length
+  const totalSiswaHasil     = new Set(filteredHasil.map((x) => x.user_id)).size
+  const rataNilaiHasil      = filteredHasil.length === 0 ? 0 : Math.round(filteredHasil.reduce((a, b) => a + b.skor, 0) / filteredHasil.length)
+  const nilaiTertinggiHasil = filteredHasil.length === 0 ? 0 : Math.max(...filteredHasil.map((x) => x.skor))
 
-  // ── Selection & Deletion Handlers ──
-  const isAllFilteredSelected = filtered.length > 0 && filtered.every((item) => selectedIds.has(item.id))
-  const isSomeFilteredSelected = filtered.some((item) => selectedIds.has(item.id))
+  // ── Stats Token Used ──
+  const totalTokenUsedCount = filteredTokens.length
+  const totalTokenSiswa     = new Set(filteredTokens.map((x) => x.user_id)).size
+  const totalTokenMapel     = new Set(filteredTokens.map((x) => x.kategori)).size
+  const totalTokenPaket     = new Set(filteredTokens.map((x) => x.package_id).filter(Boolean)).size
 
-  const toggleSelectAll = () => {
-    if (isAllFilteredSelected) {
+  // ── Selection & Deletion for HASIL ──
+  const isAllHasilSelected = filteredHasil.length > 0 && filteredHasil.every((item) => selectedIds.has(item.id))
+  const isSomeHasilSelected = filteredHasil.some((item) => selectedIds.has(item.id))
+
+  const toggleSelectAllHasil = () => {
+    if (isAllHasilSelected) {
       const next = new Set(selectedIds)
-      filtered.forEach((item) => next.delete(item.id))
+      filteredHasil.forEach((item) => next.delete(item.id))
       setSelectedIds(next)
     } else {
       const next = new Set(selectedIds)
-      filtered.forEach((item) => next.add(item.id))
+      filteredHasil.forEach((item) => next.add(item.id))
       setSelectedIds(next)
     }
   }
 
-  const toggleSelectOne = (id: number) => {
+  const toggleSelectOneHasil = (id: number) => {
     const next = new Set(selectedIds)
-    if (next.has(id)) {
-      next.delete(id)
-    } else {
-      next.add(id)
-    }
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
     setSelectedIds(next)
   }
 
-  const promptDeleteSingle = (item: Rekap) => {
+  const promptDeleteSingleHasil = (item: Rekap) => {
     setDeleteModal({
       open: true,
       title: "Hapus Hasil Simulasi?",
-      desc: `Apakah Anda yakin ingin menghapus data hasil simulasi "${item.kategori}" untuk siswa "${item.profiles.nama}" (Skor: ${item.skor})? Data yang dihapus tidak dapat dikembalikan.`,
+      desc: `Apakah Anda yakin ingin menghapus data hasil simulasi "${item.kategori}" untuk siswa "${item.profiles.nama}" (Skor: ${item.skor})? Status token_used terkait juga akan otomatis dihapus agar siswa dapat kembali mengakses ujian.`,
       count: 1,
       ids: [item.id],
+      target: "hasil",
       isDeleting: false,
     })
   }
 
-  const promptDeleteBatch = () => {
+  const promptDeleteBatchHasil = () => {
     if (selectedIds.size === 0) return
     const ids = Array.from(selectedIds)
     setDeleteModal({
       open: true,
-      title: "Hapus Data Terpilih?",
-      desc: `Apakah Anda yakin ingin menghapus ${ids.length} data hasil simulasi yang dipilih? Tindakan ini permanen dan tidak dapat dibatalkan.`,
+      title: "Hapus Data Hasil Terpilih?",
+      desc: `Apakah Anda yakin ingin menghapus ${ids.length} data hasil simulasi yang dipilih? Status token_used terkait juga akan otomatis dibersihkan.`,
       count: ids.length,
       ids,
+      target: "hasil",
       isDeleting: false,
     })
   }
 
-  const promptDeletePaket = (summary: PaketSummary) => {
+  const promptDeletePaketHasil = (summary: PaketSummary) => {
     setDeleteModal({
       open: true,
       title: `Hapus Semua Hasil ${summary.paket}?`,
-      desc: `Apakah Anda yakin ingin menghapus seluruh (${summary.ids.length}) hasil ujian pada paket "${summary.paket}" milik "${summary.nama}"?`,
+      desc: `Apakah Anda yakin ingin menghapus seluruh (${summary.ids.length}) hasil ujian pada paket "${summary.paket}" milik "${summary.nama}"? Status token_used dan ranking pada paket ini akan dibersihkan.`,
       count: summary.ids.length,
       ids: summary.ids,
+      target: "hasil",
       isDeleting: false,
     })
   }
 
-  const promptDeletePaketItem = (mapelItem: { id: number; kategori: string; skor: number }, studentName: string, paketName: string) => {
+  const promptDeletePaketItemHasil = (mapelItem: { id: number; kategori: string; skor: number }, studentName: string, paketName: string) => {
     setDeleteModal({
       open: true,
       title: `Hapus Hasil ${mapelItem.kategori}?`,
-      desc: `Apakah Anda yakin ingin menghapus hasil mapel "${mapelItem.kategori}" (skor: ${mapelItem.skor}) pada "${paketName}" milik "${studentName}"?`,
+      desc: `Apakah Anda yakin ingin menghapus hasil mapel "${mapelItem.kategori}" (skor: ${mapelItem.skor}) pada "${paketName}" milik "${studentName}"? Status token_used terkait juga akan dihapus.`,
       count: 1,
       ids: [mapelItem.id],
+      target: "hasil",
       isDeleting: false,
     })
   }
 
+  // ── Selection & Deletion for TOKEN_USED ──
+  const isAllTokensSelected = filteredTokens.length > 0 && filteredTokens.every((item) => selectedTokenIds.has(item.id))
+  const isSomeTokensSelected = filteredTokens.some((item) => selectedTokenIds.has(item.id))
+
+  const toggleSelectAllTokens = () => {
+    if (isAllTokensSelected) {
+      const next = new Set(selectedTokenIds)
+      filteredTokens.forEach((item) => next.delete(item.id))
+      setSelectedTokenIds(next)
+    } else {
+      const next = new Set(selectedTokenIds)
+      filteredTokens.forEach((item) => next.add(item.id))
+      setSelectedTokenIds(next)
+    }
+  }
+
+  const toggleSelectOneToken = (id: string | number) => {
+    const next = new Set(selectedTokenIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedTokenIds(next)
+  }
+
+  const promptDeleteSingleToken = (item: TokenUsedItem) => {
+    setDeleteModal({
+      open: true,
+      title: "Hapus Status Token Digunakan?",
+      desc: `Hapus status token digunakan untuk mapel "${item.kategori}" (${item.paket_nama}) siswa "${item.profiles.nama}"? Siswa bersangkutan akan dapat kembali memasukkan token dan mengerjakan ujian kategori ini.`,
+      count: 1,
+      ids: [item.id],
+      target: "token_used",
+      items: [{
+        id: item.id,
+        user_id: item.user_id,
+        kategori: item.kategori,
+        package_id: item.package_id,
+      }],
+      isDeleting: false,
+    })
+  }
+
+  const promptDeleteBatchTokens = () => {
+    if (selectedTokenIds.size === 0) return
+    const ids = Array.from(selectedTokenIds)
+    const selectedItems = tokenUsedList.filter((item) => selectedTokenIds.has(item.id))
+
+    setDeleteModal({
+      open: true,
+      title: "Hapus Status Token Terpilih?",
+      desc: `Apakah Anda yakin ingin menghapus ${ids.length} status token_used yang dipilih? Status pengerjaan siswa akan direset sehingga mereka dapat kembali mengakses ujian terkait.`,
+      count: ids.length,
+      ids,
+      target: "token_used",
+      items: selectedItems.map((it) => ({
+        id: it.id,
+        user_id: it.user_id,
+        kategori: it.kategori,
+        package_id: it.package_id,
+      })),
+      isDeleting: false,
+    })
+  }
+
+  // ── Unified Delete Execution ──
   const executeDelete = async () => {
     if (!deleteModal || deleteModal.ids.length === 0) return
     setDeleteModal((prev) => (prev ? { ...prev, isDeleting: true } : null))
 
-    const idsToDelete = deleteModal.ids
+    const { ids, target, items } = deleteModal
 
     try {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -330,7 +496,11 @@ export default function AdminRekapPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token || ""}`,
         },
-        body: JSON.stringify({ ids: idsToDelete }),
+        body: JSON.stringify({
+          target,
+          ids,
+          items,
+        }),
       })
 
       const result = await res.json()
@@ -339,14 +509,30 @@ export default function AdminRekapPage() {
         throw new Error(result.error || "Gagal menghapus data di database")
       }
 
-      setData((prev) => prev.filter((item) => !idsToDelete.includes(item.id)))
-      setSelectedIds((prev) => {
-        const next = new Set(prev)
-        idsToDelete.forEach((id) => next.delete(id))
-        return next
-      })
+      if (target === "token_used") {
+        // Hapus token_used dari local state
+        setTokenUsedList((prev) => prev.filter((item) => !ids.includes(item.id)))
+        setSelectedTokenIds((prev) => {
+          const next = new Set(prev)
+          ids.forEach((id) => next.delete(id))
+          return next
+        })
+        showToast(`Berhasil menghapus ${result.count ?? ids.length} data status token_used`, "success")
+      } else {
+        // Hapus hasil dari local state
+        const numIds = ids as number[]
+        setData((prev) => prev.filter((item) => !numIds.includes(item.id)))
+        setSelectedIds((prev) => {
+          const next = new Set(prev)
+          numIds.forEach((id) => next.delete(id))
+          return next
+        })
 
-      showToast(`Berhasil menghapus ${result.count ?? idsToDelete.length} data hasil simulasi`, "success")
+        // Sinkronkan token_used list di frontend juga
+        await getData()
+
+        showToast(`Berhasil menghapus ${result.count ?? ids.length} data hasil simulasi & token_used terkait`, "success")
+      }
     } catch (err: any) {
       console.error("Gagal menghapus data:", err)
       showToast("Gagal menghapus data: " + (err?.message || "Terjadi kesalahan"), "error")
@@ -355,9 +541,7 @@ export default function AdminRekapPage() {
     }
   }
 
-  // ─── PDF asli (vector, digambar langsung pakai jsPDF) ───────────────
-  // Menyamai pendekatan halaman siswa: bukan lagi HTML yang didownload,
-  // tapi PDF beneran dengan tabel, warna, dan pagination otomatis.
+  // ─── PDF Export (Vector jsPDF) ──────────────────────────────────
   function exportPDF() {
     try {
       setPdfLoading(true)
@@ -370,17 +554,18 @@ export default function AdminRekapPage() {
       const totalW = pageW - marginX * 2
       let y = 0
 
-      const infoCount = viewMode === "table" ? `${filtered.length} data` : `${paketSummaries.length} paket`
+      const isTokenTab = mainTab === "token_used"
+      const infoCount = isTokenTab
+        ? `${filteredTokens.length} token digunakan`
+        : viewMode === "table" ? `${filteredHasil.length} data` : `${paketSummaries.length} paket`
 
-      // Banner biru + judul — digambar di ATAS setiap halaman (halaman
-      // pertama maupun halaman lanjutan), bukan cuma sekali di awal.
       const drawPageHeader = () => {
         pdf.setFillColor(30, 58, 138) // #1E3A8A
         pdf.rect(0, 0, pageW, 20, "F")
         pdf.setTextColor(255, 255, 255)
         pdf.setFont("helvetica", "bold")
         pdf.setFontSize(13)
-        pdf.text("Rekap Nilai", marginX, 9)
+        pdf.text(isTokenTab ? "Rekap Status Token Digunakan" : "Rekap Nilai Simulasi", marginX, 9)
         pdf.setFont("helvetica", "normal")
         pdf.setFontSize(8)
         pdf.text("Admin Panel — Lampung Cerdas", marginX, 15)
@@ -401,11 +586,84 @@ export default function AdminRekapPage() {
         return false
       }
 
-      // ── Header halaman pertama ──
       drawPageHeader()
 
-      if (viewMode === "table") {
-        // ── kolom: No | Siswa | Paket | Mapel | Nilai | Tanggal ──
+      if (isTokenTab) {
+        // PDF untuk TOKEN_USED
+        const colNo = 12, colSiswa = 90, colPaket = 50, colMapel = 60
+        const colStatus = totalW - (colNo + colSiswa + colPaket + colMapel)
+        const colX = {
+          no:     marginX,
+          siswa:  marginX + colNo,
+          paket:  marginX + colNo + colSiswa,
+          mapel:  marginX + colNo + colSiswa + colPaket,
+          status: marginX + colNo + colSiswa + colPaket + colMapel,
+        }
+
+        const drawHeader = () => {
+          checkPageBreak(14)
+          pdf.setFillColor(238, 242, 255)
+          pdf.rect(marginX, y, totalW, 7, "F")
+          pdf.setDrawColor(199, 210, 254)
+          pdf.setLineWidth(0.2)
+          pdf.rect(marginX, y, totalW, 7)
+          pdf.setTextColor(67, 56, 202)
+          pdf.setFont("helvetica", "bold")
+          pdf.setFontSize(7.5)
+          pdf.text("No",       colX.no + 2, y + 4.8)
+          pdf.text("Siswa",    colX.siswa + 2, y + 4.8)
+          pdf.text("Paket",    colX.paket + 2, y + 4.8)
+          pdf.text("Mapel",    colX.mapel + 2, y + 4.8)
+          pdf.text("Status",   colX.status + 2, y + 4.8)
+          y += 7
+        }
+        drawHeader()
+
+        if (filteredTokens.length === 0) {
+          pdf.setTextColor(148, 163, 184)
+          pdf.setFont("helvetica", "normal")
+          pdf.setFontSize(10)
+          pdf.text("Tidak ada data token digunakan.", pageW / 2, y + 12, { align: "center" })
+          y += 20
+        }
+
+        filteredTokens.forEach((item, i) => {
+          const rowH = 10
+          const broke = checkPageBreak(rowH)
+          if (broke) drawHeader()
+
+          pdf.setDrawColor(226, 232, 240)
+          pdf.setLineWidth(0.15)
+          pdf.line(marginX, y + rowH, marginX + totalW, y + rowH)
+
+          pdf.setFont("helvetica", "normal")
+          pdf.setFontSize(8)
+          pdf.setTextColor(148, 163, 184)
+          pdf.text(String(i + 1), colX.no + 2, y + 6)
+
+          pdf.setTextColor(30, 41, 59)
+          pdf.setFont("helvetica", "bold")
+          pdf.setFontSize(8)
+          pdf.text(item.profiles.nama, colX.siswa + 2, y + 4.5)
+          pdf.setFont("helvetica", "normal")
+          pdf.setFontSize(7)
+          pdf.setTextColor(148, 163, 184)
+          pdf.text(item.profiles.email, colX.siswa + 2, y + 8.5)
+
+          pdf.setFontSize(7.5)
+          pdf.setTextColor(100, 116, 139)
+          pdf.text(item.paket_nama || "Ujian Mandiri", colX.paket + 2, y + 6)
+          pdf.text(item.kategori, colX.mapel + 2, y + 6)
+
+          pdf.setFont("helvetica", "bold")
+          pdf.setFontSize(7.5)
+          pdf.setTextColor(5, 150, 105)
+          pdf.text("Token Digunakan", colX.status + 2, y + 6)
+
+          y += rowH
+        })
+      } else if (viewMode === "table") {
+        // PDF HASIL TABLE
         const colNo = 10, colSiswa = 80, colPaket = 30, colMapel = 55, colNilai = 22
         const colTgl = totalW - (colNo + colSiswa + colPaket + colMapel + colNilai)
         const colX = {
@@ -437,7 +695,7 @@ export default function AdminRekapPage() {
         }
         drawHeader()
 
-        if (filtered.length === 0) {
+        if (filteredHasil.length === 0) {
           pdf.setTextColor(148, 163, 184)
           pdf.setFont("helvetica", "normal")
           pdf.setFontSize(10)
@@ -445,7 +703,7 @@ export default function AdminRekapPage() {
           y += 20
         }
 
-        filtered.forEach((item, i) => {
+        filteredHasil.forEach((item, i) => {
           const rowH = 10
           const broke = checkPageBreak(rowH)
           if (broke) drawHeader()
@@ -491,9 +749,8 @@ export default function AdminRekapPage() {
 
           y += rowH
         })
-
       } else {
-        // ── kolom: No | Siswa | Paket | Mapel & Skor | Rata-rata | Tanggal ──
+        // PDF HASIL PER PAKET
         const colNo = 10, colSiswa = 65, colPaket = 28, colRata = 22, colTgl = 35
         const colMapel = totalW - (colNo + colSiswa + colPaket + colRata + colTgl)
         const colX = {
@@ -585,7 +842,7 @@ export default function AdminRekapPage() {
         })
       }
 
-      // ── Footer + nomor halaman di tiap page ──
+      // ── Footer + nomor halaman ──
       const pageCount = pdf.getNumberOfPages()
       for (let pNum = 1; pNum <= pageCount; pNum++) {
         pdf.setPage(pNum)
@@ -596,7 +853,11 @@ export default function AdminRekapPage() {
         pdf.text(`Hal. ${pNum}/${pageCount}`, pageW - marginX, pageH - 8, { align: "right" })
       }
 
-      pdf.save(viewMode === "table" ? "rekap_nilai.pdf" : "rekap_per_paket.pdf")
+      const fileName = isTokenTab
+        ? "rekap_token_used.pdf"
+        : viewMode === "table" ? "rekap_nilai.pdf" : "rekap_per_paket.pdf"
+
+      pdf.save(fileName)
     } catch (err: any) {
       console.error("Gagal membuat PDF:", err)
       alert("Gagal membuat PDF" + (err?.message ? `: ${err.message}` : ""))
@@ -605,7 +866,7 @@ export default function AdminRekapPage() {
     }
   }
 
-  /* ─── Sidebar (identik dengan dashboard admin) ─── */
+  /* ─── Sidebar ─── */
   const Sidebar = () => (
     <>
       <style>{`
@@ -763,13 +1024,13 @@ export default function AdminRekapPage() {
               <p style={{ color: "#0284c7", letterSpacing: "1px", fontSize: "10px" }}
                 className="font-medium uppercase">Admin</p>
               <h1 style={{ fontFamily: "'Inter',sans-serif", fontSize: "19px" }}
-                className="font-semibold text-slate-900 mt-0.5">Rekap Nilai</h1>
+                className="font-semibold text-slate-900 mt-0.5">Rekap Nilai & Status Token</h1>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={exportPDF}
                 disabled={pdfLoading}
-                className="rk-btn h-9 px-4 rounded-xl text-[13px] font-medium text-white disabled:opacity-60 flex items-center gap-1.5"
+                className="rk-btn h-9 px-4 rounded-xl text-[13px] font-medium text-white disabled:opacity-60 flex items-center gap-1.5 shadow-sm"
                 style={{ background: G.amber, boxShadow: "0 4px 12px rgba(245,158,11,.28)" }}
               >
                 {pdfLoading
@@ -779,383 +1040,624 @@ export default function AdminRekapPage() {
             </div>
           </div>
 
-          {/* ── STAT CARDS ── */}
-          <div className="fade-up d2 grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="Total ujian"     value={totalUjian}     grad={G.teal}    glow="#0ea5e9" />
-            <StatCard label="Total siswa"     value={totalSiswa}     grad={G.violet}  glow="#7c3aed" />
-            <StatCard label="Rata-rata nilai" value={rataNilai}      grad={G.amber}   glow="#f59e0b" />
-            <StatCard label="Nilai tertinggi" value={nilaiTertinggi} grad={G.emerald} glow="#10b981" />
-          </div>
-
-          {/* ── FILTER ROW ── */}
-          <div className="fade-up d2 bg-white rounded-2xl px-4 py-3 flex flex-col lg:flex-row gap-3"
-            style={{ border: "1px solid rgba(15,23,42,.08)" }}>
-            <div className="relative flex-1">
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari nama atau email siswa..."
-                className="w-full h-10 rounded-xl px-4 pr-10 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition"
-                style={{ border: "1px solid rgba(15,23,42,.08)" }}
-                onFocus={e => { e.currentTarget.style.border = "1px solid rgba(14,165,233,.4)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(14,165,233,.1)" }}
-                onBlur={e => { e.currentTarget.style.border = "1px solid rgba(15,23,42,.08)"; e.currentTarget.style.boxShadow = "none" }}
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-            </div>
-
-            <select
-              value={filterPaket}
-              onChange={(e) => setFilterPaket(e.target.value)}
-              className="h-10 px-3 rounded-xl text-sm text-slate-700 outline-none transition bg-white"
-              style={{ border: "1px solid rgba(15,23,42,.08)" }}
-            >
-              {paketList.map((item) => <option key={item}>{item}</option>)}
-            </select>
-
-            {viewMode === "table" && (
-              <select
-                value={filterMapel}
-                onChange={(e) => setFilterMapel(e.target.value)}
-                className="h-10 px-3 rounded-xl text-sm text-slate-700 outline-none transition bg-white"
-                style={{ border: "1px solid rgba(15,23,42,.08)" }}
-              >
-                {mapelList.map((item) => <option key={item}>{item}</option>)}
-              </select>
-            )}
-
+          {/* ── MAIN TAB SWITCHER ── */}
+          <div className="fade-up d1 bg-slate-200/70 p-1 rounded-2xl flex gap-1 w-full max-w-md border border-slate-300/40">
             <button
-              onClick={getData}
-              className="rk-btn h-10 px-4 rounded-xl text-white text-sm font-medium"
-              style={{ background: G.teal, boxShadow: "0 4px 12px rgba(14,165,233,.28)" }}
+              onClick={() => { setMainTab("hasil"); setSearch("") }}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                mainTab === "hasil"
+                  ? "bg-white text-sky-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
             >
-              ↻ Refresh
+              <span>📊 Hasil Simulasi</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                mainTab === "hasil" ? "bg-sky-100 text-sky-700" : "bg-slate-300/60 text-slate-700"
+              }`}>
+                {data.length}
+              </span>
+            </button>
+            <button
+              onClick={() => { setMainTab("token_used"); setSearch("") }}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                mainTab === "token_used"
+                  ? "bg-white text-emerald-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <span>🎟️ Token Digunakan (token_used)</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                mainTab === "token_used" ? "bg-emerald-100 text-emerald-700" : "bg-slate-300/60 text-slate-700"
+              }`}>
+                {tokenUsedList.length}
+              </span>
             </button>
           </div>
 
-          {/* ── BATCH ACTION BAR (Table Mode) ── */}
-          {selectedIds.size > 0 && viewMode === "table" && (
-            <div className="fade-up bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 border border-slate-800">
-              <div className="flex items-center gap-2.5 text-xs font-medium">
-                <span className="w-6 h-6 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold">
-                  {selectedIds.size}
-                </span>
-                <span className="text-slate-200">data hasil simulasi dipilih</span>
+          {/* ═════════════════════════════════════════════════════════ */}
+          {/* ── TAB 1: HASIL NILAI SIMULASI ───────────────────────── */}
+          {/* ═════════════════════════════════════════════════════════ */}
+          {mainTab === "hasil" && (
+            <>
+              {/* ── STAT CARDS HASIL ── */}
+              <div className="fade-up d2 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard label="Total ujian"     value={totalUjianHasil}     grad={G.teal}    glow="#0ea5e9" />
+                <StatCard label="Total siswa"     value={totalSiswaHasil}     grad={G.violet}  glow="#7c3aed" />
+                <StatCard label="Rata-rata nilai" value={rataNilaiHasil}      grad={G.amber}   glow="#f59e0b" />
+                <StatCard label="Nilai tertinggi" value={nilaiTertinggiHasil} grad={G.emerald} glow="#10b981" />
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedIds(new Set())}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition"
+
+              {/* ── FILTER ROW HASIL ── */}
+              <div className="fade-up d2 bg-white rounded-2xl px-4 py-3 flex flex-col lg:flex-row gap-3"
+                style={{ border: "1px solid rgba(15,23,42,.08)" }}>
+                <div className="relative flex-1">
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Cari nama, email, mapel, atau paket..."
+                    className="w-full h-10 rounded-xl px-4 pr-10 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition"
+                    style={{ border: "1px solid rgba(15,23,42,.08)" }}
+                    onFocus={e => { e.currentTarget.style.border = "1px solid rgba(14,165,233,.4)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(14,165,233,.1)" }}
+                    onBlur={e => { e.currentTarget.style.border = "1px solid rgba(15,23,42,.08)"; e.currentTarget.style.boxShadow = "none" }}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                </div>
+
+                <select
+                  value={filterPaket}
+                  onChange={(e) => setFilterPaket(e.target.value)}
+                  className="h-10 px-3 rounded-xl text-sm text-slate-700 outline-none transition bg-white"
+                  style={{ border: "1px solid rgba(15,23,42,.08)" }}
                 >
-                  Batal
-                </button>
+                  {paketList.map((item) => <option key={item}>{item}</option>)}
+                </select>
+
+                {viewMode === "table" && (
+                  <select
+                    value={filterMapel}
+                    onChange={(e) => setFilterMapel(e.target.value)}
+                    className="h-10 px-3 rounded-xl text-sm text-slate-700 outline-none transition bg-white"
+                    style={{ border: "1px solid rgba(15,23,42,.08)" }}
+                  >
+                    {mapelList.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                )}
+
                 <button
-                  onClick={promptDeleteBatch}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-900/30 transition flex items-center gap-1.5"
+                  onClick={getData}
+                  className="rk-btn h-10 px-4 rounded-xl text-white text-sm font-medium"
+                  style={{ background: G.teal, boxShadow: "0 4px 12px rgba(14,165,233,.28)" }}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Hapus ({selectedIds.size}) Data
+                  ↻ Refresh
                 </button>
               </div>
-            </div>
-          )}
 
-          {/* ── VIEW TOGGLE ── */}
-          <div className="fade-up d3 flex gap-1.5 items-center">
-            {(["table", "paket"] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className="rk-chip h-8 px-4 rounded-full text-xs font-medium"
-                style={viewMode === mode
-                  ? { background: G.teal, color: "#fff", boxShadow: "0 4px 12px rgba(14,165,233,.28)" }
-                  : { background: "#fff", color: "#475569", border: "1px solid rgba(15,23,42,.08)" }
-                }
-              >
-                {mode === "table" ? "Tabel nilai" : "Per paket"}
-              </button>
-            ))}
-            <span className="ml-auto text-[11px] font-medium px-2.5 py-1 self-center rounded-full"
-              style={{ background: "rgba(14,165,233,.1)", color: "#0369a1" }}>
-              {viewMode === "table" ? `${filtered.length} baris` : `${paketSummaries.length} paket`}
-            </span>
-          </div>
-
-          {/* ── TABLE VIEW ── */}
-          {viewMode === "table" && (
-            <div className="fade-up d4 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(15,23,42,.08)" }}>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[780px]">
-                  <thead>
-                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid rgba(15,23,42,.08)" }}>
-                      <th className="w-10 px-4 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isAllFilteredSelected}
-                          ref={(input) => {
-                            if (input) {
-                              input.indeterminate = !isAllFilteredSelected && isSomeFilteredSelected
-                            }
-                          }}
-                          onChange={toggleSelectAll}
-                          className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
-                        />
-                      </th>
-                      {["No", "Siswa", "Paket", "Mapel", "Nilai", "Tanggal", "Aksi"].map((h) => (
-                        <th key={h} className={`px-4 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${h === "Aksi" ? "text-right" : "text-left"}`}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="px-4 py-14 text-center">
-                          <p className="text-3xl mb-2">📭</p>
-                          <p className="text-sm text-slate-500">Tidak ada data</p>
-                          <p className="text-xs text-slate-400 mt-1">
-                            {data.length === 0 ? "Belum ada hasil ujian" : `${data.length} data tersedia, coba ubah filter`}
-                          </p>
-                        </td>
-                      </tr>
-                    ) : (
-                      filtered.map((item, i) => (
-                        <tr key={item.id} className={`rk-card-row transition ${selectedIds.has(item.id) ? "bg-sky-50/50" : ""}`}>
-
-                          {/* Checkbox */}
-                          <td className="px-4 py-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(item.id)}
-                              onChange={() => toggleSelectOne(item.id)}
-                              className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
-                            />
-                          </td>
-
-                          {/* No */}
-                          <td className="px-4 py-3 text-xs text-slate-400 font-medium">
-                            #{i + 1}
-                          </td>
-
-                          {/* Siswa */}
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2.5">
-                              {item.profiles.foto ? (
-                                <img src={item.profiles.foto} className="w-8 h-8 rounded-lg object-cover shrink-0" style={{ border: "1px solid rgba(15,23,42,.08)" }} />
-                              ) : (
-                                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-                                  style={{ background: avatarGrad(item.profiles.nama) }}>
-                                  {item.profiles.nama.slice(0, 2).toUpperCase()}
-                                </div>
-                              )}
-                              <div>
-                                <p className="text-sm font-medium text-slate-800">{item.profiles.nama}</p>
-                                <p className="text-[11px] text-slate-400">{item.profiles.email}</p>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Paket */}
-                          <td className="px-4 py-3">
-                            <PaketBadge paket={item.paket} />
-                          </td>
-
-                          {/* Mapel */}
-                          <td className="px-4 py-3">
-                            <span className="text-sm text-slate-600">{item.kategori}</span>
-                          </td>
-
-                          {/* Nilai */}
-                          <td className="px-4 py-3">
-                            <NilaiBadge skor={item.skor} />
-                          </td>
-
-                          {/* Tanggal */}
-                          <td className="px-4 py-3 text-[11px] text-slate-400 whitespace-nowrap">
-                            {new Date(item.tanggal).toLocaleString("id-ID", {
-                              day: "numeric", month: "short", year: "numeric",
-                              hour: "2-digit", minute: "2-digit",
-                            })}
-                          </td>
-
-                          {/* Aksi */}
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => promptDeleteSingle(item)}
-                              title="Hapus data hasil ini"
-                              className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </td>
-
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── PER PAKET VIEW ── */}
-          {viewMode === "paket" && (
-            <div className="fade-up d4 space-y-3">
-              {paketSummaries.length === 0 && (
-                <div className="bg-white rounded-2xl p-14 text-center" style={{ border: "1px solid rgba(15,23,42,.08)" }}>
-                  <p className="text-3xl mb-2">📭</p>
-                  <p className="text-sm text-slate-500">Tidak ada data</p>
-                  <p className="text-xs text-slate-400 mt-1">Coba ubah filter pencarian</p>
+              {/* ── BATCH ACTION BAR (Hasil Table Mode) ── */}
+              {selectedIds.size > 0 && viewMode === "table" && (
+                <div className="fade-up bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 border border-slate-800">
+                  <div className="flex items-center gap-2.5 text-xs font-medium">
+                    <span className="w-6 h-6 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold">
+                      {selectedIds.size}
+                    </span>
+                    <span className="text-slate-200">data hasil simulasi dipilih (token_used otomatis terhapus)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedIds(new Set())}
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={promptDeleteBatchHasil}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-900/30 transition flex items-center gap-1.5"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Hapus ({selectedIds.size}) Hasil & Token
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {paketSummaries.map((summary, i) => {
-                const key        = `${summary.user_id}-${summary.paket}-${i}`
-                const isExpanded = expandedPaket === key
+              {/* ── VIEW TOGGLE ── */}
+              <div className="fade-up d3 flex gap-1.5 items-center">
+                {(["table", "paket"] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className="rk-chip h-8 px-4 rounded-full text-xs font-medium"
+                    style={viewMode === mode
+                      ? { background: G.teal, color: "#fff", boxShadow: "0 4px 12px rgba(14,165,233,.28)" }
+                      : { background: "#fff", color: "#475569", border: "1px solid rgba(15,23,42,.08)" }
+                    }
+                  >
+                    {mode === "table" ? "Tabel nilai" : "Per paket"}
+                  </button>
+                ))}
+                <span className="ml-auto text-[11px] font-medium px-2.5 py-1 self-center rounded-full"
+                  style={{ background: "rgba(14,165,233,.1)", color: "#0369a1" }}>
+                  {viewMode === "table" ? `${filteredHasil.length} baris` : `${paketSummaries.length} paket`}
+                </span>
+              </div>
 
-                return (
-                  <div key={key} className="bg-white rounded-2xl overflow-hidden transition"
-                    style={{ border: "1px solid rgba(15,23,42,.08)" }}>
+              {/* ── TABLE VIEW HASIL ── */}
+              {viewMode === "table" && (
+                <div className="fade-up d4 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(15,23,42,.08)" }}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[780px]">
+                      <thead>
+                        <tr style={{ background: "#f8fafc", borderBottom: "1px solid rgba(15,23,42,.08)" }}>
+                          <th className="w-10 px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isAllHasilSelected}
+                              ref={(input) => {
+                                if (input) {
+                                  input.indeterminate = !isAllHasilSelected && isSomeHasilSelected
+                                }
+                              }}
+                              onChange={toggleSelectAllHasil}
+                              className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
+                            />
+                          </th>
+                          {["No", "Siswa", "Paket", "Mapel", "Nilai", "Tanggal", "Aksi"].map((h) => (
+                            <th key={h} className={`px-4 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${h === "Aksi" ? "text-right" : "text-left"}`}>
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredHasil.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-14 text-center">
+                              <p className="text-3xl mb-2">📭</p>
+                              <p className="text-sm text-slate-500">Tidak ada data</p>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {data.length === 0 ? "Belum ada hasil ujian" : `${data.length} data tersedia, coba ubah filter`}
+                              </p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredHasil.map((item, i) => (
+                            <tr key={item.id} className={`rk-card-row transition ${selectedIds.has(item.id) ? "bg-sky-50/50" : ""}`}>
 
-                    {/* Card header */}
-                    <div
-                      className="rk-card-row flex items-center gap-3 px-4 py-3 cursor-pointer transition"
-                      onClick={() => setExpandedPaket(isExpanded ? null : key)}
-                    >
-                      {/* Avatar */}
-                      {summary.foto ? (
-                        <img src={summary.foto} className="w-9 h-9 rounded-xl object-cover shrink-0" style={{ border: "1px solid rgba(15,23,42,.08)" }} />
-                      ) : (
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0"
-                          style={{ background: avatarGrad(summary.nama) }}>
-                          {summary.nama.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
+                              {/* Checkbox */}
+                              <td className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(item.id)}
+                                  onChange={() => toggleSelectOneHasil(item.id)}
+                                  className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
+                                />
+                              </td>
 
-                      {/* Name + email */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium text-slate-800">{summary.nama}</p>
-                          <PaketBadge paket={summary.paket} />
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{summary.email}</p>
-                      </div>
+                              {/* No */}
+                              <td className="px-4 py-3 text-xs text-slate-400 font-medium">
+                                #{i + 1}
+                              </td>
 
-                      {/* Mapel pills (desktop) */}
-                      <div className="hidden md:flex gap-1.5 flex-wrap justify-end">
-                        {summary.mapel.map((m) => (
-                          <div key={m.id} className="flex items-center gap-1 rounded-lg px-2.5 py-1" style={{ background: "#f1f5f9" }}>
-                            <span className="text-[10px] text-slate-500">{m.kategori}</span>
-                            <span className="text-[10px] font-semibold" style={{ color: "#0369a1" }}>{m.skor}</span>
-                          </div>
-                        ))}
-                      </div>
+                              {/* Siswa */}
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2.5">
+                                  {item.profiles.foto ? (
+                                    <img src={item.profiles.foto} className="w-8 h-8 rounded-lg object-cover shrink-0" style={{ border: "1px solid rgba(15,23,42,.08)" }} />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                                      style={{ background: avatarGrad(item.profiles.nama) }}>
+                                      {item.profiles.nama.slice(0, 2).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <p className="text-sm font-medium text-slate-800">{item.profiles.nama}</p>
+                                    <p className="text-[11px] text-slate-400">{item.profiles.email}</p>
+                                  </div>
+                                </div>
+                              </td>
 
-                      {/* Rata-rata */}
-                      <div className="shrink-0 text-right ml-2">
-                        <p className="text-lg font-bold" style={{ color: "#0369a1" }}>{summary.rata}</p>
-                        <p className="text-[10px] text-slate-400">rata-rata</p>
-                      </div>
+                              {/* Paket */}
+                              <td className="px-4 py-3">
+                                <PaketBadge paket={item.paket} />
+                              </td>
 
-                      {/* Chevron */}
-                      <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 text-xs transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                        style={{ background: "#f1f5f9" }}>
-                        ▾
-                      </div>
+                              {/* Mapel */}
+                              <td className="px-4 py-3">
+                                <span className="text-sm text-slate-600">{item.kategori}</span>
+                              </td>
+
+                              {/* Nilai */}
+                              <td className="px-4 py-3">
+                                <NilaiBadge skor={item.skor} />
+                              </td>
+
+                              {/* Tanggal */}
+                              <td className="px-4 py-3 text-[11px] text-slate-400 whitespace-nowrap">
+                                {new Date(item.tanggal).toLocaleString("id-ID", {
+                                  day: "numeric", month: "short", year: "numeric",
+                                  hour: "2-digit", minute: "2-digit",
+                                })}
+                              </td>
+
+                              {/* Aksi */}
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  onClick={() => promptDeleteSingleHasil(item)}
+                                  title="Hapus data hasil dan token_used terkait"
+                                  className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </td>
+
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── PER PAKET VIEW HASIL ── */}
+              {viewMode === "paket" && (
+                <div className="fade-up d4 space-y-3">
+                  {paketSummaries.length === 0 && (
+                    <div className="bg-white rounded-2xl p-14 text-center" style={{ border: "1px solid rgba(15,23,42,.08)" }}>
+                      <p className="text-3xl mb-2">📭</p>
+                      <p className="text-sm text-slate-500">Tidak ada data</p>
+                      <p className="text-xs text-slate-400 mt-1">Coba ubah filter pencarian</p>
                     </div>
+                  )}
 
-                    {/* Expanded */}
-                    {isExpanded && (
-                      <div className="px-4 pb-4 pt-3" style={{ borderTop: "1px solid rgba(15,23,42,.06)" }}>
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                            Detail per mapel
-                          </p>
-                          <span className="text-[11px] text-slate-400">
-                            Arahkan kursor pada kartu mapel untuk menghapus per mapel
-                          </span>
-                        </div>
+                  {paketSummaries.map((summary, i) => {
+                    const key        = `${summary.user_id}-${summary.paket}-${i}`
+                    const isExpanded = expandedPaket === key
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                          {summary.mapel.map((m) => {
-                            const pct = Math.min(100, Math.round((m.skor / 40) * 100))
-                            const barColor =
-                              m.skor >= 30 ? "#10b981"
-                              : m.skor >= 20 ? "#0ea5e9"
-                              : m.skor >= 10 ? "#f59e0b"
-                              : "#f43f5e"
+                    return (
+                      <div key={key} className="bg-white rounded-2xl overflow-hidden transition"
+                        style={{ border: "1px solid rgba(15,23,42,.08)" }}>
 
-                            return (
-                              <div key={m.id} className="rounded-xl p-3 relative group" style={{ background: "#f8fafc", border: "1px solid rgba(15,23,42,.06)" }}>
-                                <div className="flex items-center justify-between gap-1 mb-1">
-                                  <p className="text-[11px] font-medium text-slate-500 truncate">{m.kategori}</p>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      promptDeletePaketItem(m, summary.nama, summary.paket)
-                                    }}
-                                    title="Hapus hasil mapel ini"
-                                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </button>
-                                </div>
-                                <p className="text-2xl font-bold mb-2" style={{ color: barColor }}>{m.skor}</p>
-                                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#e2e8f0" }}>
-                                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
+                        {/* Card header */}
+                        <div
+                          className="rk-card-row flex items-center gap-3 px-4 py-3 cursor-pointer transition"
+                          onClick={() => setExpandedPaket(isExpanded ? null : key)}
+                        >
+                          {/* Avatar */}
+                          {summary.foto ? (
+                            <img src={summary.foto} className="w-9 h-9 rounded-xl object-cover shrink-0" style={{ border: "1px solid rgba(15,23,42,.08)" }} />
+                          ) : (
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0"
+                              style={{ background: avatarGrad(summary.nama) }}>
+                              {summary.nama.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
 
-                        {/* Summary row */}
-                        <div className="mt-3 flex items-center justify-between flex-wrap gap-3 rounded-xl px-4 py-3"
-                          style={{ background: "rgba(14,165,233,.06)", border: "1px solid rgba(14,165,233,.15)" }}>
-                          <div className="flex gap-5 flex-wrap">
-                            {[
-                              { label: "Total skor",   val: summary.total        },
-                              { label: "Rata-rata",     val: summary.rata         },
-                              { label: "Jumlah mapel",  val: summary.mapel.length },
-                            ].map((s) => (
-                              <div key={s.label}>
-                                <p className="text-[10px]" style={{ color: "#0284c7" }}>{s.label}</p>
-                                <p className="text-lg font-bold" style={{ color: "#0369a1" }}>{s.val}</p>
+                          {/* Name + email */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-medium text-slate-800">{summary.nama}</p>
+                              <PaketBadge paket={summary.paket} />
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{summary.email}</p>
+                          </div>
+
+                          {/* Mapel pills (desktop) */}
+                          <div className="hidden md:flex gap-1.5 flex-wrap justify-end">
+                            {summary.mapel.map((m) => (
+                              <div key={m.id} className="flex items-center gap-1 rounded-lg px-2.5 py-1" style={{ background: "#f1f5f9" }}>
+                                <span className="text-[10px] text-slate-500">{m.kategori}</span>
+                                <span className="text-[10px] font-semibold" style={{ color: "#0369a1" }}>{m.skor}</span>
                               </div>
                             ))}
                           </div>
-                          <div className="flex items-center gap-3">
-                            <p className="text-[11px]" style={{ color: "#0284c7" }}>
-                              {new Date(summary.tanggal).toLocaleDateString("id-ID", {
-                                day: "numeric", month: "long", year: "numeric",
-                              })}
-                            </p>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                promptDeletePaket(summary)
-                              }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition flex items-center gap-1.5 shadow-sm"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                              Hapus Semua Hasil Paket Ini
-                            </button>
+
+                          {/* Rata-rata */}
+                          <div className="shrink-0 text-right ml-2">
+                            <p className="text-lg font-bold" style={{ color: "#0369a1" }}>{summary.rata}</p>
+                            <p className="text-[10px] text-slate-400">rata-rata</p>
+                          </div>
+
+                          {/* Chevron */}
+                          <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 text-xs transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                            style={{ background: "#f1f5f9" }}>
+                            ▾
                           </div>
                         </div>
+
+                        {/* Expanded */}
+                        {isExpanded && (
+                          <div className="px-4 pb-4 pt-3" style={{ borderTop: "1px solid rgba(15,23,42,.06)" }}>
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                                Detail per mapel
+                              </p>
+                              <span className="text-[11px] text-slate-400">
+                                Arahkan kursor pada kartu mapel untuk menghapus per mapel
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              {summary.mapel.map((m) => {
+                                const pct = Math.min(100, Math.round((m.skor / 40) * 100))
+                                const barColor =
+                                  m.skor >= 30 ? "#10b981"
+                                  : m.skor >= 20 ? "#0ea5e9"
+                                  : m.skor >= 10 ? "#f59e0b"
+                                  : "#f43f5e"
+
+                                return (
+                                  <div key={m.id} className="rounded-xl p-3 relative group" style={{ background: "#f8fafc", border: "1px solid rgba(15,23,42,.06)" }}>
+                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                      <p className="text-[11px] font-medium text-slate-500 truncate">{m.kategori}</p>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          promptDeletePaketItemHasil(m, summary.nama, summary.paket)
+                                        }}
+                                        title="Hapus hasil mapel ini & token_used terkait"
+                                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                    <p className="text-2xl font-bold mb-2" style={{ color: barColor }}>{m.skor}</p>
+                                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#e2e8f0" }}>
+                                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+
+                            {/* Summary row */}
+                            <div className="mt-3 flex items-center justify-between flex-wrap gap-3 rounded-xl px-4 py-3"
+                              style={{ background: "rgba(14,165,233,.06)", border: "1px solid rgba(14,165,233,.15)" }}>
+                              <div className="flex gap-5 flex-wrap">
+                                {[
+                                  { label: "Total skor",   val: summary.total        },
+                                  { label: "Rata-rata",     val: summary.rata         },
+                                  { label: "Jumlah mapel",  val: summary.mapel.length },
+                                ].map((s) => (
+                                  <div key={s.label}>
+                                    <p className="text-[10px]" style={{ color: "#0284c7" }}>{s.label}</p>
+                                    <p className="text-lg font-bold" style={{ color: "#0369a1" }}>{s.val}</p>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <p className="text-[11px]" style={{ color: "#0284c7" }}>
+                                  {new Date(summary.tanggal).toLocaleDateString("id-ID", {
+                                    day: "numeric", month: "long", year: "numeric",
+                                  })}
+                                </p>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    promptDeletePaketHasil(summary)
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition flex items-center gap-1.5 shadow-sm"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  Hapus Semua Hasil & Token Paket Ini
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════ */}
+          {/* ── TAB 2: TOKEN DIGUNAKAN (token_used) ─────────────────── */}
+          {/* ═════════════════════════════════════════════════════════ */}
+          {mainTab === "token_used" && (
+            <>
+              {/* ── STAT CARDS TOKEN ── */}
+              <div className="fade-up d2 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard label="Total token used"   value={totalTokenUsedCount} grad={G.emerald} glow="#10b981" />
+                <StatCard label="Total siswa ujian"  value={totalTokenSiswa}     grad={G.teal}    glow="#0ea5e9" />
+                <StatCard label="Mapel dikerjakan"   value={totalTokenMapel}     grad={G.violet}  glow="#7c3aed" />
+                <StatCard label="Paket terpakai"     value={totalTokenPaket}     grad={G.amber}   glow="#f59e0b" />
+              </div>
+
+              {/* ── FILTER ROW TOKEN ── */}
+              <div className="fade-up d2 bg-white rounded-2xl px-4 py-3 flex flex-col lg:flex-row gap-3"
+                style={{ border: "1px solid rgba(15,23,42,.08)" }}>
+                <div className="relative flex-1">
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Cari siswa, email, mapel, atau paket token..."
+                    className="w-full h-10 rounded-xl px-4 pr-10 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition"
+                    style={{ border: "1px solid rgba(15,23,42,.08)" }}
+                    onFocus={e => { e.currentTarget.style.border = "1px solid rgba(16,185,129,.4)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(16,185,129,.1)" }}
+                    onBlur={e => { e.currentTarget.style.border = "1px solid rgba(15,23,42,.08)"; e.currentTarget.style.boxShadow = "none" }}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                </div>
+
+                <select
+                  value={filterPaket}
+                  onChange={(e) => setFilterPaket(e.target.value)}
+                  className="h-10 px-3 rounded-xl text-sm text-slate-700 outline-none transition bg-white"
+                  style={{ border: "1px solid rgba(15,23,42,.08)" }}
+                >
+                  {paketList.map((item) => <option key={item}>{item}</option>)}
+                </select>
+
+                <select
+                  value={filterMapel}
+                  onChange={(e) => setFilterMapel(e.target.value)}
+                  className="h-10 px-3 rounded-xl text-sm text-slate-700 outline-none transition bg-white"
+                  style={{ border: "1px solid rgba(15,23,42,.08)" }}
+                >
+                  {mapelList.map((item) => <option key={item}>{item}</option>)}
+                </select>
+
+                <button
+                  onClick={getData}
+                  className="rk-btn h-10 px-4 rounded-xl text-white text-sm font-medium"
+                  style={{ background: G.emerald, boxShadow: "0 4px 12px rgba(16,185,129,.28)" }}
+                >
+                  ↻ Refresh
+                </button>
+              </div>
+
+              {/* ── BATCH ACTION BAR (Token Mode) ── */}
+              {selectedTokenIds.size > 0 && (
+                <div className="fade-up bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 border border-slate-800">
+                  <div className="flex items-center gap-2.5 text-xs font-medium">
+                    <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                      {selectedTokenIds.size}
+                    </span>
+                    <span className="text-slate-200">data status token_used dipilih</span>
                   </div>
-                )
-              })}
-            </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedTokenIds(new Set())}
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={promptDeleteBatchTokens}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-900/30 transition flex items-center gap-1.5"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Hapus ({selectedTokenIds.size}) Token Digunakan
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── TABLE TOKEN_USED ── */}
+              <div className="fade-up d4 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(15,23,42,.08)" }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[780px]">
+                    <thead>
+                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid rgba(15,23,42,.08)" }}>
+                        <th className="w-10 px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isAllTokensSelected}
+                            ref={(input) => {
+                              if (input) {
+                                input.indeterminate = !isAllTokensSelected && isSomeTokensSelected
+                              }
+                            }}
+                            onChange={toggleSelectAllTokens}
+                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                          />
+                        </th>
+                        {["No", "Siswa", "Paket", "Mapel", "Status Token", "Aksi"].map((h) => (
+                          <th key={h} className={`px-4 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${h === "Aksi" ? "text-right" : "text-left"}`}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredTokens.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-14 text-center">
+                            <p className="text-3xl mb-2">🎟️</p>
+                            <p className="text-sm text-slate-500">Tidak ada data token digunakan</p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {tokenUsedList.length === 0 ? "Belum ada riwayat pengerjaan / token terpakai" : `${tokenUsedList.length} data tersedia, coba ubah filter`}
+                            </p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredTokens.map((item, i) => (
+                          <tr key={item.id} className={`rk-card-row transition ${selectedTokenIds.has(item.id) ? "bg-emerald-50/50" : ""}`}>
+
+                            {/* Checkbox */}
+                            <td className="px-4 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedTokenIds.has(item.id)}
+                                onChange={() => toggleSelectOneToken(item.id)}
+                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                              />
+                            </td>
+
+                            {/* No */}
+                            <td className="px-4 py-3 text-xs text-slate-400 font-medium">
+                              #{i + 1}
+                            </td>
+
+                            {/* Siswa */}
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2.5">
+                                {item.profiles.foto ? (
+                                  <img src={item.profiles.foto} className="w-8 h-8 rounded-lg object-cover shrink-0" style={{ border: "1px solid rgba(15,23,42,.08)" }} />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                                    style={{ background: avatarGrad(item.profiles.nama) }}>
+                                    {item.profiles.nama.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-sm font-medium text-slate-800">{item.profiles.nama}</p>
+                                  <p className="text-[11px] text-slate-400">{item.profiles.email}</p>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Paket */}
+                            <td className="px-4 py-3">
+                              <PaketBadge paket={item.paket_nama} />
+                            </td>
+
+                            {/* Mapel */}
+                            <td className="px-4 py-3">
+                              <span className="text-sm font-medium text-slate-700">{item.kategori}</span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Token Terpakai
+                              </span>
+                            </td>
+
+                            {/* Aksi */}
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => promptDeleteSingleToken(item)}
+                                title="Hapus status token digunakan ini (buka akses ujian siswa)"
+                                className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </td>
+
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
           )}
 
         </div>
@@ -1204,7 +1706,7 @@ export default function AdminRekapPage() {
 
       {/* ── TOAST NOTIFICATION ── */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border bg-slate-900 text-white text-xs font-medium">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border bg-slate-900 text-white text-xs font-medium animate-bounce-once">
           <span>{toast.type === "success" ? "✅" : "⚠️"}</span>
           <span>{toast.text}</span>
         </div>
@@ -1263,4 +1765,4 @@ function NilaiBadge({ skor }: { skor: number }) {
       {skor}
     </span>
   )
-}
+}
