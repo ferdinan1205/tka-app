@@ -31,7 +31,9 @@ type Rekap = {
 
 type PaketSummary = {
   paket: string
-  mapel: { kategori: string; skor: number }[]
+  package_id?: number
+  ids: number[]
+  mapel: { id: number; kategori: string; skor: number }[]
   total: number
   rata: number
   tanggal: string
@@ -43,6 +45,15 @@ type PaketSummary = {
 
 type ViewMode = "table" | "paket"
 
+type DeleteModalState = {
+  open: boolean
+  title: string
+  desc: string
+  count: number
+  ids: number[]
+  isDeleting: boolean
+}
+
 // ── nav & theme (sama seperti dashboard admin) ──────────────────
 
 const MENU = [
@@ -53,7 +64,7 @@ const MENU = [
   { label: "Ranking",        icon: "◎",  path: "/admin/ranking" },
   { label: "Rekap Nilai",    icon: "≋",  path: "/admin/rekap"   },
   { label: "Manajemen User", icon: "◉",  path: "/admin/users"   },
-{ label: "Manajemen Token", icon: "⟐",  path: "/admin/token"   },
+  { label: "Manajemen Token", icon: "⟐",  path: "/admin/token"   },
 ]
 const G = {
   teal:   "linear-gradient(135deg,#0ea5e9,#0d9488)",
@@ -101,7 +112,19 @@ export default function AdminRekapPage() {
   const [sidebarOpen,   setSidebarOpen  ] = useState(false)
   const [pdfLoading,    setPdfLoading   ] = useState(false)
 
+  // ── delete & selection state ──
+  const [selectedIds,   setSelectedIds  ] = useState<Set<number>>(new Set())
+  const [deleteModal,   setDeleteModal  ] = useState<DeleteModalState | null>(null)
+  const [toast,         setToast        ] = useState<{ text: string; type: "success" | "error" } | null>(null)
+
   useEffect(() => { init() }, [])
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToast({ text, type })
+    setTimeout(() => {
+      setToast(null)
+    }, 3500)
+  }
 
   async function init() {
     const { data: authData } = await supabase.auth.getUser()
@@ -188,6 +211,8 @@ export default function AdminRekapPage() {
       if (!map.has(key)) {
         map.set(key, {
           paket: item.paket || "-",
+          package_id: item.package_id,
+          ids: [],
           mapel: [], total: 0, rata: 0,
           tanggal: item.tanggal,
           user_id: item.user_id,
@@ -197,7 +222,8 @@ export default function AdminRekapPage() {
         })
       }
       const entry = map.get(key)!
-      entry.mapel.push({ kategori: item.kategori, skor: item.skor })
+      entry.ids.push(item.id)
+      entry.mapel.push({ id: item.id, kategori: item.kategori, skor: item.skor })
       entry.total += item.skor
     })
 
@@ -215,6 +241,119 @@ export default function AdminRekapPage() {
   const totalSiswa      = new Set(filtered.map((x) => x.user_id)).size
   const rataNilai       = filtered.length === 0 ? 0 : Math.round(filtered.reduce((a, b) => a + b.skor, 0) / filtered.length)
   const nilaiTertinggi  = filtered.length === 0 ? 0 : Math.max(...filtered.map((x) => x.skor))
+
+  // ── Selection & Deletion Handlers ──
+  const isAllFilteredSelected = filtered.length > 0 && filtered.every((item) => selectedIds.has(item.id))
+  const isSomeFilteredSelected = filtered.some((item) => selectedIds.has(item.id))
+
+  const toggleSelectAll = () => {
+    if (isAllFilteredSelected) {
+      const next = new Set(selectedIds)
+      filtered.forEach((item) => next.delete(item.id))
+      setSelectedIds(next)
+    } else {
+      const next = new Set(selectedIds)
+      filtered.forEach((item) => next.add(item.id))
+      setSelectedIds(next)
+    }
+  }
+
+  const toggleSelectOne = (id: number) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    setSelectedIds(next)
+  }
+
+  const promptDeleteSingle = (item: Rekap) => {
+    setDeleteModal({
+      open: true,
+      title: "Hapus Hasil Simulasi?",
+      desc: `Apakah Anda yakin ingin menghapus data hasil simulasi "${item.kategori}" untuk siswa "${item.profiles.nama}" (Skor: ${item.skor})? Data yang dihapus tidak dapat dikembalikan.`,
+      count: 1,
+      ids: [item.id],
+      isDeleting: false,
+    })
+  }
+
+  const promptDeleteBatch = () => {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    setDeleteModal({
+      open: true,
+      title: "Hapus Data Terpilih?",
+      desc: `Apakah Anda yakin ingin menghapus ${ids.length} data hasil simulasi yang dipilih? Tindakan ini permanen dan tidak dapat dibatalkan.`,
+      count: ids.length,
+      ids,
+      isDeleting: false,
+    })
+  }
+
+  const promptDeletePaket = (summary: PaketSummary) => {
+    setDeleteModal({
+      open: true,
+      title: `Hapus Semua Hasil ${summary.paket}?`,
+      desc: `Apakah Anda yakin ingin menghapus seluruh (${summary.ids.length}) hasil ujian pada paket "${summary.paket}" milik "${summary.nama}"?`,
+      count: summary.ids.length,
+      ids: summary.ids,
+      isDeleting: false,
+    })
+  }
+
+  const promptDeletePaketItem = (mapelItem: { id: number; kategori: string; skor: number }, studentName: string, paketName: string) => {
+    setDeleteModal({
+      open: true,
+      title: `Hapus Hasil ${mapelItem.kategori}?`,
+      desc: `Apakah Anda yakin ingin menghapus hasil mapel "${mapelItem.kategori}" (skor: ${mapelItem.skor}) pada "${paketName}" milik "${studentName}"?`,
+      count: 1,
+      ids: [mapelItem.id],
+      isDeleting: false,
+    })
+  }
+
+  const executeDelete = async () => {
+    if (!deleteModal || deleteModal.ids.length === 0) return
+    setDeleteModal((prev) => (prev ? { ...prev, isDeleting: true } : null))
+
+    const idsToDelete = deleteModal.ids
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch("/api/admin/rekap/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token || ""}`,
+        },
+        body: JSON.stringify({ ids: idsToDelete }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || result.error) {
+        throw new Error(result.error || "Gagal menghapus data di database")
+      }
+
+      setData((prev) => prev.filter((item) => !idsToDelete.includes(item.id)))
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        idsToDelete.forEach((id) => next.delete(id))
+        return next
+      })
+
+      showToast(`Berhasil menghapus ${result.count ?? idsToDelete.length} data hasil simulasi`, "success")
+    } catch (err: any) {
+      console.error("Gagal menghapus data:", err)
+      showToast("Gagal menghapus data: " + (err?.message || "Terjadi kesalahan"), "error")
+    } finally {
+      setDeleteModal(null)
+    }
+  }
 
   // ─── PDF asli (vector, digambar langsung pakai jsPDF) ───────────────
   // Menyamai pendekatan halaman siswa: bukan lagi HTML yang didownload,
@@ -512,14 +651,14 @@ export default function AdminRekapPage() {
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
-{/* Brand */}
-<div className="px-5 pt-6 pb-4 flex items-center justify-center" style={{ borderBottom: "1px solid rgba(56,189,248,.1)" }}>
-  <img
-    src="/logo-lampung-cerdas.png"
-    alt="Lampung Cerdas"
-    className="h-12 w-auto object-contain"
-  />
-</div>
+        {/* Brand */}
+        <div className="px-5 pt-6 pb-4 flex items-center justify-center" style={{ borderBottom: "1px solid rgba(56,189,248,.1)" }}>
+          <img
+            src="/logo-lampung-cerdas.png"
+            alt="Lampung Cerdas"
+            className="h-12 w-auto object-contain"
+          />
+        </div>
 
         {/* Admin badge */}
         <div className="px-3 pt-4 pb-2">
@@ -693,8 +832,37 @@ export default function AdminRekapPage() {
             </button>
           </div>
 
+          {/* ── BATCH ACTION BAR (Table Mode) ── */}
+          {selectedIds.size > 0 && viewMode === "table" && (
+            <div className="fade-up bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 border border-slate-800">
+              <div className="flex items-center gap-2.5 text-xs font-medium">
+                <span className="w-6 h-6 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold">
+                  {selectedIds.size}
+                </span>
+                <span className="text-slate-200">data hasil simulasi dipilih</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={promptDeleteBatch}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-900/30 transition flex items-center gap-1.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Hapus ({selectedIds.size}) Data
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── VIEW TOGGLE ── */}
-          <div className="fade-up d3 flex gap-1.5">
+          <div className="fade-up d3 flex gap-1.5 items-center">
             {(["table", "paket"] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
@@ -721,8 +889,21 @@ export default function AdminRekapPage() {
                 <table className="w-full min-w-[780px]">
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "1px solid rgba(15,23,42,.08)" }}>
-                      {["No", "Siswa", "Paket", "Mapel", "Nilai", "Tanggal"].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      <th className="w-10 px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isAllFilteredSelected}
+                          ref={(input) => {
+                            if (input) {
+                              input.indeterminate = !isAllFilteredSelected && isSomeFilteredSelected
+                            }
+                          }}
+                          onChange={toggleSelectAll}
+                          className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
+                        />
+                      </th>
+                      {["No", "Siswa", "Paket", "Mapel", "Nilai", "Tanggal", "Aksi"].map((h) => (
+                        <th key={h} className={`px-4 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${h === "Aksi" ? "text-right" : "text-left"}`}>
                           {h}
                         </th>
                       ))}
@@ -731,7 +912,7 @@ export default function AdminRekapPage() {
                   <tbody className="divide-y divide-slate-100">
                     {filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-14 text-center">
+                        <td colSpan={8} className="px-4 py-14 text-center">
                           <p className="text-3xl mb-2">📭</p>
                           <p className="text-sm text-slate-500">Tidak ada data</p>
                           <p className="text-xs text-slate-400 mt-1">
@@ -741,7 +922,17 @@ export default function AdminRekapPage() {
                       </tr>
                     ) : (
                       filtered.map((item, i) => (
-                        <tr key={item.id} className="rk-card-row transition">
+                        <tr key={item.id} className={`rk-card-row transition ${selectedIds.has(item.id) ? "bg-sky-50/50" : ""}`}>
+
+                          {/* Checkbox */}
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(item.id)}
+                              onChange={() => toggleSelectOne(item.id)}
+                              className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
+                            />
+                          </td>
 
                           {/* No */}
                           <td className="px-4 py-3 text-xs text-slate-400 font-medium">
@@ -787,6 +978,19 @@ export default function AdminRekapPage() {
                               day: "numeric", month: "short", year: "numeric",
                               hour: "2-digit", minute: "2-digit",
                             })}
+                          </td>
+
+                          {/* Aksi */}
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => promptDeleteSingle(item)}
+                              title="Hapus data hasil ini"
+                              className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
                           </td>
 
                         </tr>
@@ -844,7 +1048,7 @@ export default function AdminRekapPage() {
                       {/* Mapel pills (desktop) */}
                       <div className="hidden md:flex gap-1.5 flex-wrap justify-end">
                         {summary.mapel.map((m) => (
-                          <div key={m.kategori} className="flex items-center gap-1 rounded-lg px-2.5 py-1" style={{ background: "#f1f5f9" }}>
+                          <div key={m.id} className="flex items-center gap-1 rounded-lg px-2.5 py-1" style={{ background: "#f1f5f9" }}>
                             <span className="text-[10px] text-slate-500">{m.kategori}</span>
                             <span className="text-[10px] font-semibold" style={{ color: "#0369a1" }}>{m.skor}</span>
                           </div>
@@ -867,9 +1071,14 @@ export default function AdminRekapPage() {
                     {/* Expanded */}
                     {isExpanded && (
                       <div className="px-4 pb-4 pt-3" style={{ borderTop: "1px solid rgba(15,23,42,.06)" }}>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
-                          Detail per mapel
-                        </p>
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                            Detail per mapel
+                          </p>
+                          <span className="text-[11px] text-slate-400">
+                            Arahkan kursor pada kartu mapel untuk menghapus per mapel
+                          </span>
+                        </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                           {summary.mapel.map((m) => {
@@ -881,8 +1090,22 @@ export default function AdminRekapPage() {
                               : "#f43f5e"
 
                             return (
-                              <div key={m.kategori} className="rounded-xl p-3" style={{ background: "#f8fafc", border: "1px solid rgba(15,23,42,.06)" }}>
-                                <p className="text-[11px] font-medium text-slate-500 mb-1 truncate">{m.kategori}</p>
+                              <div key={m.id} className="rounded-xl p-3 relative group" style={{ background: "#f8fafc", border: "1px solid rgba(15,23,42,.06)" }}>
+                                <div className="flex items-center justify-between gap-1 mb-1">
+                                  <p className="text-[11px] font-medium text-slate-500 truncate">{m.kategori}</p>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      promptDeletePaketItem(m, summary.nama, summary.paket)
+                                    }}
+                                    title="Hapus hasil mapel ini"
+                                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
                                 <p className="text-2xl font-bold mb-2" style={{ color: barColor }}>{m.skor}</p>
                                 <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#e2e8f0" }}>
                                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
@@ -893,9 +1116,9 @@ export default function AdminRekapPage() {
                         </div>
 
                         {/* Summary row */}
-                        <div className="mt-3 flex items-center justify-between rounded-xl px-4 py-3"
+                        <div className="mt-3 flex items-center justify-between flex-wrap gap-3 rounded-xl px-4 py-3"
                           style={{ background: "rgba(14,165,233,.06)", border: "1px solid rgba(14,165,233,.15)" }}>
-                          <div className="flex gap-5">
+                          <div className="flex gap-5 flex-wrap">
                             {[
                               { label: "Total skor",   val: summary.total        },
                               { label: "Rata-rata",     val: summary.rata         },
@@ -907,11 +1130,25 @@ export default function AdminRekapPage() {
                               </div>
                             ))}
                           </div>
-                          <p className="text-[11px]" style={{ color: "#0284c7" }}>
-                            {new Date(summary.tanggal).toLocaleDateString("id-ID", {
-                              day: "numeric", month: "long", year: "numeric",
-                            })}
-                          </p>
+                          <div className="flex items-center gap-3">
+                            <p className="text-[11px]" style={{ color: "#0284c7" }}>
+                              {new Date(summary.tanggal).toLocaleDateString("id-ID", {
+                                day: "numeric", month: "long", year: "numeric",
+                              })}
+                            </p>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                promptDeletePaket(summary)
+                              }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition flex items-center gap-1.5 shadow-sm"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Hapus Semua Hasil Paket Ini
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -923,6 +1160,56 @@ export default function AdminRekapPage() {
 
         </div>
       </main>
+
+      {/* ── DELETE CONFIRMATION MODAL ── */}
+      {deleteModal?.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 scale-100 transition-all">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+              🗑️
+            </div>
+            <h3 className="text-center text-lg font-bold text-slate-800">
+              {deleteModal.title}
+            </h3>
+            <p className="text-center text-xs text-slate-500 mt-2 leading-relaxed">
+              {deleteModal.desc}
+            </p>
+
+            <div className="mt-6 flex items-center gap-3">
+              <button
+                disabled={deleteModal.isDeleting}
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 h-10 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                disabled={deleteModal.isDeleting}
+                onClick={executeDelete}
+                className="flex-1 h-10 rounded-xl text-sm font-medium text-white bg-red-600 hover:bg-red-700 shadow-md shadow-red-500/20 transition flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {deleteModal.isDeleting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Menghapus...
+                  </>
+                ) : (
+                  "Ya, Hapus Data"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOAST NOTIFICATION ── */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border bg-slate-900 text-white text-xs font-medium">
+          <span>{toast.type === "success" ? "✅" : "⚠️"}</span>
+          <span>{toast.text}</span>
+        </div>
+      )}
+
     </div>
   )
 }
@@ -976,4 +1263,4 @@ function NilaiBadge({ skor }: { skor: number }) {
       {skor}
     </span>
   )
-}
+}
