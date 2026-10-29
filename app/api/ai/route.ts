@@ -269,7 +269,7 @@ BUAT PEMBAHASAN LENGKAP MENGGUNAKAN FORMAT MARKDOWN, dengan struktur berikut (in
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4.1-nano",
+        model: "gpt-5.4-nano",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
